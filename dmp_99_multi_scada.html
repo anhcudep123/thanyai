@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SONG TU x DMPES - MULTI SCADA V14</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- MQTT library (Paho Client) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { background-color: #0f172a; color: #e0e0e0; font-family: 'Roboto Mono', monospace; }
+        .font-digital { font-family: 'Orbitron', sans-serif; letter-spacing: 1px; }
+        
+        /* Hiệu ứng Glow cho nút */
+        .btn-glow { transition: all 0.3s ease; }
+        .btn-glow:hover:not(:disabled) { box-shadow: 0 0 12px currentColor; transform: translateY(-1px); }
+        .btn-glow:active:not(:disabled) { transform: translateY(1px); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Trạng thái mạng */
+        .ping-dot { width: 10px; height: 10px; border-radius: 50%; transition: all 0.3s; }
+        .status-online { background: #10b981; box-shadow: 0 0 10px #10b981; }
+        .status-offline { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        .status-waiting { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; animation: pulse 1.5s infinite; }
+
+        .scale-card { transition: all 0.3s ease; }
+        .scale-offline { opacity: 0.6; filter: grayscale(80%); }
+    </style>
+</head>
+<body class="select-none min-h-screen flex flex-col bg-slate-950 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
+
+    <!-- HEADER (Responsive) -->
+    <header class="bg-slate-900/95 border-b border-slate-700 p-3 sm:p-4 sticky top-0 z-50 shadow-xl backdrop-blur-sm">
+        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <!-- Logo & Brand -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
+                <div class="p-2 bg-emerald-600/20 text-emerald-400 rounded-lg border border-emerald-500/30">
+                    <i data-lucide="network" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wider text-emerald-400 font-digital" style="text-shadow: 0 0 10px rgba(52, 211, 153, 0.4);">
+                        SONG TU <span class="text-slate-500">x</span> DMPES
+                    </h1>
+                    <p class="text-[10px] text-gray-400 tracking-widest uppercase">Multi-Scale SCADA IOT V14.0</p>
+                </div>
+            </div>
+            
+            <!-- Global Control & Setup -->
+            <div class="flex flex-wrap items-center justify-center gap-3 bg-slate-800/80 p-2 rounded-xl border border-slate-700 w-full md:w-auto">
+                <div class="flex items-center gap-2 px-2">
+                    <label class="text-xs text-slate-400 font-bold">SỐ LƯỢNG CÂN:</label>
+                    <input type="number" id="cfg-count" value="12" min="1" max="100" class="w-16 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-center text-emerald-400 font-bold outline-none focus:border-emerald-500 transition-colors">
+                </div>
+                
+                <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
+                
+                <button onclick="ScadaApp.initGrid()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors">
+                    <i data-lucide="grid-3x3" class="w-4 h-4 inline-block mr-1"></i> TẠO LƯỚI
+                </button>
+
+                <button onclick="ScadaApp.toggleConnect()" id="btn-master-conn" class="btn-glow bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded text-sm font-bold flex items-center gap-2 shadow-lg">
+                    <i data-lucide="wifi" id="icon-conn" class="w-4 h-4"></i> <span id="txt-conn">KẾT NỐI SERVER</span>
+                </button>
+            </div>
+
+            <!-- Clock & Status -->
+            <div class="flex items-center gap-4 text-right hidden lg:flex">
+                <div class="flex flex-col items-end">
+                    <span class="font-bold text-white tracking-widest" id="clock">00:00:00</span>
+                    <span class="text-[10px] text-emerald-500 flex items-center gap-1">
+                        <span class="ping-dot status-offline" id="global-status-dot"></span>
+                        <span id="global-status-txt">OFFLINE</span>
+                    </span>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- CONTENT (Dynamic Grid) -->
+    <main class="flex-1 max-w-[1600px] mx-auto w-full p-4 sm:p-6 overflow-y-auto">
+        
+        <!-- Dashboard Statistics -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-blue-500/20 text-blue-400 rounded-lg"><i data-lucide="server"></i></div>
+                <div><p class="text-xs text-slate-400 font-bold">BROKER</p><p class="text-sm font-mono text-white">broker.emqx.io</p></div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-emerald-500/20 text-emerald-400 rounded-lg"><i data-lucide="link"></i></div>
+                <div><p class="text-xs text-slate-400 font-bold">ACTIVE SCALES</p><p class="text-xl font-digital text-emerald-400" id="stat-active">0</p></div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-purple-500/20 text-purple-400 rounded-lg"><i data-lucide="weight"></i></div>
+                <div><p class="text-xs text-slate-400 font-bold">TOTAL WEIGHT</p><p class="text-xl font-digital text-purple-400" id="stat-total">0 kg</p></div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-800 transition-colors" onclick="ScadaApp.sendGlobalCommand('zero')">
+                <div class="p-3 bg-rose-500/20 text-rose-400 rounded-lg"><i data-lucide="crosshair"></i></div>
+                <div><p class="text-xs text-rose-400 font-bold">GLOBAL COMMAND</p><p class="text-sm font-bold text-white">ZERO ALL SCALES</p></div>
+            </div>
+        </div>
+
+        <!-- The Scales Grid -->
+        <div id="scales-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+            <!-- JavaScript sẽ render các Scale Cards vào đây -->
+        </div>
+
+    </main>
+
+    <script>
+        // Khởi tạo icon
+        lucide.createIcons();
+        
+        // Đồng hồ
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('vi-VN'); }, 1000);
+
+        // ==========================================
+        // SCADA APPLICATION LOGIC
+        // ==========================================
+        const ScadaApp = (() => {
+            // Cấu hình Broker công cộng (Khớp với Code ESP32)
+            const MQTT_CONFIG = {
+                HOST: "broker.emqx.io",
+                PORT: 8084, // Port WSS (WebSockets Secure)
+                TOPIC_SUB: "dmp99/+/data", // Subscribe tất cả topic có dạng dmp99/{id}/data
+                TOPIC_PUB_PREFIX: "dmp99/"
+            };
+
+            let client = null;
+            let isConnected = false;
+            let scaleCount = 12;
+            
+            // Lưu trữ trạng thái của từng cân để check Timeout (Offline)
+            // Cấu trúc: { "scale1": { lastSeen: 16123..., total: 500 }, "scale2": ... }
+            let scalesData = {}; 
+            let watchdogTimer = null;
+
+            // --- 1. KHỞI TẠO LƯỚI GIAO DIỆN ---
+            function initGrid() {
+                const countInput = parseInt(document.getElementById('cfg-count').value);
+                if (countInput > 0 && countInput <= 100) scaleCount = countInput;
+
+                const container = document.getElementById('scales-container');
+                container.innerHTML = ''; // Xóa lưới cũ
+                scalesData = {}; // Reset data
+
+                for (let i = 1; i <= scaleCount; i++) {
+                    const scaleId = `scale${i}`;
+                    scalesData[scaleId] = { lastSeen: 0, total: 0, isOnline: false };
+
+                    const card = document.createElement('div');
+                    card.id = `card-${scaleId}`;
+                    card.className = "bg-slate-900/80 border-2 border-slate-700/50 rounded-2xl overflow-hidden shadow-xl flex flex-col scale-card scale-offline relative";
+                    
+                    card.innerHTML = `
+                        <!-- Hiệu ứng nháy khi có data -->
+                        <div class="absolute inset-0 bg-emerald-500/10 opacity-0 transition-opacity duration-200 pointer-events-none" id="flash-${scaleId}"></div>
+                        
+                        <!-- Header Card -->
+                        <div class="bg-slate-800/80 p-3 border-b border-slate-700 flex justify-between items-center z-10">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="scale-3d" class="w-5 h-5 text-slate-400"></i>
+                                <span class="font-bold text-sm text-white tracking-wider">TRẠM CÂN ${i}</span>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-950 px-2 py-1 rounded-md border border-slate-700">
+                                <div class="ping-dot status-offline" id="dot-${scaleId}"></div>
+                                <span class="text-[10px] font-bold text-slate-400 w-12 text-center" id="status-${scaleId}">OFFLINE</span>
+                            </div>
+                        </div>
+
+                        <!-- Màn hình hiển thị số -->
+                        <div class="p-6 bg-black/40 flex-1 flex flex-col justify-center items-center relative z-10 border-b border-slate-800">
+                            <div class="absolute top-2 right-3 text-lg font-bold text-emerald-600/50">kg</div>
+                            <div class="absolute top-2 left-3 flex items-center gap-1" id="stab-${scaleId}-container">
+                                <div class="w-2 h-2 rounded-full bg-slate-700" id="stab-icon-${scaleId}"></div>
+                                <span class="text-[9px] text-slate-500 font-bold">STABLE</span>
+                            </div>
+                            <div class="text-6xl sm:text-7xl font-digital text-slate-600 transition-colors duration-300 tracking-tight" id="weight-${scaleId}">
+                                0.0
+                            </div>
+                        </div>
+
+                        <!-- Thống kê -->
+                        <div class="grid grid-cols-2 bg-slate-900 z-10">
+                            <div class="p-3 border-r border-slate-700 text-center">
+                                <p class="text-[10px] text-slate-500 font-bold mb-1">TỔNG KHỐI LƯỢNG</p>
+                                <p class="text-lg font-mono text-cyan-400 font-bold" id="total-${scaleId}">0</p>
+                            </div>
+                            <div class="p-3 text-center">
+                                <p class="text-[10px] text-slate-500 font-bold mb-1">SỐ VÉ (MẺ)</p>
+                                <p class="text-lg font-mono text-purple-400 font-bold" id="count-${scaleId}">0</p>
+                            </div>
+                        </div>
+
+                        <!-- Nút Điều Khiển -->
+                        <div class="grid grid-cols-3 gap-px bg-slate-700 z-10 border-t border-slate-700">
+                            <button onclick="ScadaApp.sendCommand('${scaleId}', 'accum')" class="bg-slate-800 hover:bg-cyan-900 text-cyan-400 py-3 text-[10px] font-bold uppercase transition-colors flex flex-col items-center gap-1 disabled:opacity-50" id="btn-acc-${scaleId}" disabled>
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> ACCUM
+                            </button>
+                            <button onclick="ScadaApp.sendCommand('${scaleId}', 'zero')" class="bg-slate-800 hover:bg-emerald-900 text-emerald-400 py-3 text-[10px] font-bold uppercase transition-colors flex flex-col items-center gap-1 disabled:opacity-50" id="btn-zer-${scaleId}" disabled>
+                                <i data-lucide="crosshair" class="w-4 h-4"></i> ZERO
+                            </button>
+                            <button onclick="ScadaApp.sendCommand('${scaleId}', 'clear')" class="bg-slate-800 hover:bg-rose-900 text-rose-400 py-3 text-[10px] font-bold uppercase transition-colors flex flex-col items-center gap-1 disabled:opacity-50" id="btn-clr-${scaleId}" disabled>
+                                <i data-lucide="trash-2" class="w-4 h-4"></i> CLEAR
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                }
+                lucide.createIcons();
+                updateDashboardStats();
+            }
+
+            // --- 2. KẾT NỐI MQTT ---
+            function toggleConnect() {
+                if (isConnected) {
+                    client.disconnect();
+                } else {
+                    const clientId = "SCADA_WEB_" + Math.random().toString(16).substr(2, 8);
+                    client = new Paho.MQTT.Client(MQTT_CONFIG.HOST, MQTT_CONFIG.PORT, clientId);
+                    
+                    client.onConnectionLost = onConnectionLost;
+                    client.onMessageArrived = onMessageArrived;
+
+                    const btn = document.getElementById('btn-master-conn');
+                    btn.classList.replace('bg-emerald-600', 'bg-amber-500');
+                    btn.classList.replace('hover:bg-emerald-500', 'hover:bg-amber-400');
+                    document.getElementById('icon-conn').setAttribute('data-lucide', 'loader-2');
+                    document.getElementById('icon-conn').classList.add('animate-spin');
+                    document.getElementById('txt-conn').innerText = "ĐANG KẾT NỐI...";
+                    lucide.createIcons();
+
+                    client.connect({ 
+                        onSuccess: onConnectSuccess, 
+                        onFailure: onConnectFailure, 
+                        useSSL: true 
+                    });
+                }
+            }
+
+            function onConnectSuccess() {
+                isConnected = true;
+                console.log("MQTT Connected!");
+                
+                // Đăng ký nhận dữ liệu từ TẤT CẢ các cân
+                client.subscribe(MQTT_CONFIG.TOPIC_SUB);
+                
+                // Cập nhật UI Nút kết nối
+                const btn = document.getElementById('btn-master-conn');
+                btn.classList.replace('bg-amber-500', 'bg-rose-600');
+                btn.classList.replace('hover:bg-amber-400', 'hover:bg-rose-500');
+                document.getElementById('icon-conn').setAttribute('data-lucide', 'power-off');
+                document.getElementById('icon-conn').classList.remove('animate-spin');
+                document.getElementById('txt-conn').innerText = "NGẮT KẾT NỐI";
+                lucide.createIcons();
+
+                // Cập nhật Global Status
+                const dot = document.getElementById('global-status-dot');
+                dot.className = "ping-dot status-online";
+                document.getElementById('global-status-txt').innerText = "ONLINE";
+                document.getElementById('global-status-txt').className = "text-[10px] text-emerald-500";
+
+                // Bật Watchdog kiểm tra thiết bị offline
+                if(watchdogTimer) clearInterval(watchdogTimer);
+                watchdogTimer = setInterval(checkOfflineDevices, 2000);
+            }
+
+            function onConnectFailure(err) {
+                alert("Lỗi kết nối tới Server EMQX: " + err.errorMessage);
+                resetConnectBtnUI();
+            }
+
+            function onConnectionLost(responseObject) {
+                isConnected = false;
+                if (responseObject.errorCode !== 0) {
+                    console.log("Connection Lost: " + responseObject.errorMessage);
+                }
+                resetConnectBtnUI();
+                clearInterval(watchdogTimer);
+                
+                // Cho toàn bộ cân về trạng thái Offline
+                Object.keys(scalesData).forEach(id => setScaleOffline(id));
+            }
+
+            function resetConnectBtnUI() {
+                const btn = document.getElementById('btn-master-conn');
+                btn.className = "btn-glow bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded text-sm font-bold flex items-center gap-2 shadow-lg";
+                document.getElementById('icon-conn').setAttribute('data-lucide', 'wifi');
+                document.getElementById('icon-conn').classList.remove('animate-spin');
+                document.getElementById('txt-conn').innerText = "KẾT NỐI SERVER";
+                lucide.createIcons();
+
+                const dot = document.getElementById('global-status-dot');
+                dot.className = "ping-dot status-offline";
+                document.getElementById('global-status-txt').innerText = "OFFLINE";
+                document.getElementById('global-status-txt').className = "text-[10px] text-red-500";
+            }
+
+            // --- 3. XỬ LÝ DỮ LIỆU ĐẾN TỪ ESP32 ---
+            function onMessageArrived(message) {
+                // Topic dạng: dmp99/scale1/data
+                const topicParts = message.destinationName.split('/');
+                if (topicParts.length !== 3 || topicParts[2] !== 'data') return;
+                
+                const scaleId = topicParts[1]; // => "scale1"
+                
+                // Bỏ qua nếu trạm cân này không nằm trong vùng giám sát (Vượt quá số lượng khai báo)
+                if (!scalesData[scaleId]) return;
+
+                try {
+                    // Dữ liệu từ code ESP32 của bạn: {"net":123,"total":456,"count":2}
+                    const payload = JSON.parse(message.payloadString);
+                    
+                    // Cập nhật Timestamp
+                    scalesData[scaleId].lastSeen = Date.now();
+                    scalesData[scaleId].total = payload.total;
+                    
+                    if (!scalesData[scaleId].isOnline) {
+                        setScaleOnline(scaleId);
+                    }
+
+                    // Render UI
+                    const wEl = document.getElementById(`weight-${scaleId}`);
+                    const tEl = document.getElementById(`total-${scaleId}`);
+                    const cEl = document.getElementById(`count-${scaleId}`);
+                    const flash = document.getElementById(`flash-${scaleId}`);
+                    const stabIcon = document.getElementById(`stab-icon-${scaleId}`);
+
+                    wEl.innerText = payload.net;
+                    tEl.innerText = payload.total;
+                    cEl.innerText = payload.count;
+
+                    // Nháy nền
+                    flash.style.opacity = "1";
+                    setTimeout(() => flash.style.opacity = "0", 150);
+
+                    // Hiển thị trạng thái ổn định (Giả lập ngẫu nhiên hoặc lấy từ JSON nếu bạn có truyền "s":1)
+                    // Vì code hiện tại của bạn không push biến isStable lên topic dmp99/scale1/data, nên tôi sẽ tạo hiệu ứng chớp xanh
+                    stabIcon.className = "w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]";
+                    setTimeout(() => { stabIcon.className = "w-2 h-2 rounded-full bg-slate-700"; }, 200);
+
+                    updateDashboardStats();
+
+                } catch (e) {
+                    console.error("Parse JSON error for " + scaleId, e);
+                }
+            }
+
+            // --- 4. TRẠNG THÁI & ĐIỀU KHIỂN ---
+            function setScaleOnline(id) {
+                scalesData[id].isOnline = true;
+                const card = document.getElementById(`card-${id}`);
+                card.classList.remove('scale-offline', 'border-slate-700/50');
+                card.classList.add('border-emerald-500/50');
+
+                document.getElementById(`dot-${id}`).className = "ping-dot status-online";
+                document.getElementById(`status-${id}`).innerText = "ONLINE";
+                document.getElementById(`status-${id}`).className = "text-[10px] font-bold text-emerald-400 w-12 text-center";
+                document.getElementById(`weight-${id}`).classList.replace('text-slate-600', 'text-emerald-400');
+
+                // Mở khóa nút bấm
+                document.getElementById(`btn-acc-${id}`).disabled = false;
+                document.getElementById(`btn-zer-${id}`).disabled = false;
+                document.getElementById(`btn-clr-${id}`).disabled = false;
+            }
+
+            function setScaleOffline(id) {
+                scalesData[id].isOnline = false;
+                const card = document.getElementById(`card-${id}`);
+                card.classList.add('scale-offline', 'border-slate-700/50');
+                card.classList.remove('border-emerald-500/50');
+
+                document.getElementById(`dot-${id}`).className = "ping-dot status-offline";
+                document.getElementById(`status-${id}`).innerText = "OFFLINE";
+                document.getElementById(`status-${id}`).className = "text-[10px] font-bold text-slate-500 w-12 text-center";
+                document.getElementById(`weight-${id}`).classList.replace('text-emerald-400', 'text-slate-600');
+
+                // Khóa nút bấm
+                document.getElementById(`btn-acc-${id}`).disabled = true;
+                document.getElementById(`btn-zer-${id}`).disabled = true;
+                document.getElementById(`btn-clr-${id}`).disabled = true;
+            }
+
+            function checkOfflineDevices() {
+                const now = Date.now();
+                Object.keys(scalesData).forEach(id => {
+                    // Nếu quá 3 giây không có dữ liệu -> Đánh dấu Offline
+                    if (scalesData[id].isOnline && (now - scalesData[id].lastSeen > 3000)) {
+                        setScaleOffline(id);
+                        updateDashboardStats();
+                    }
+                });
+            }
+
+            function updateDashboardStats() {
+                let active = 0;
+                let sumTotal = 0;
+                Object.values(scalesData).forEach(data => {
+                    if (data.isOnline) active++;
+                    sumTotal += data.total;
+                });
+                
+                document.getElementById('stat-active').innerText = `${active} / ${scaleCount}`;
+                document.getElementById('stat-total').innerText = `${sumTotal} kg`;
+            }
+
+            function sendCommand(scaleId, cmdStr) {
+                if (!isConnected) return;
+                
+                // Topic đích: dmp99/scale{id}/cmd (VD: dmp99/scale1/cmd)
+                const topic = `${MQTT_CONFIG.TOPIC_PUB_PREFIX}${scaleId}/cmd`;
+                const message = new Paho.MQTT.Message(cmdStr);
+                message.destinationName = topic;
+                message.qos = 1;
+                client.send(message);
+
+                console.log(`Sent [${cmdStr}] to ${topic}`);
+
+                // Hiệu ứng bấm nút
+                const btnMap = { 'accum': 'acc', 'zero': 'zer', 'clear': 'clr' };
+                const btnId = `btn-${btnMap[cmdStr]}-${scaleId}`;
+                const btn = document.getElementById(btnId);
+                if(btn) {
+                    const originalBg = btn.className;
+                    btn.className = originalBg + " ring-2 ring-white";
+                    setTimeout(() => { btn.className = originalBg; }, 200);
+                }
+            }
+
+            function sendGlobalCommand(cmdStr) {
+                if (!isConnected || !confirm(`CẢNH BÁO: Bạn có chắc chắn muốn gửi lệnh ${cmdStr.toUpperCase()} tới TẤT CẢ các trạm cân đang Online?`)) return;
+                
+                Object.keys(scalesData).forEach(id => {
+                    if(scalesData[id].isOnline) sendCommand(id, cmdStr);
+                });
+            }
+
+            // Expose public methods
+            return {
+                initGrid,
+                toggleConnect,
+                sendCommand,
+                sendGlobalCommand
+            };
+        })();
+
+        // BOOTSTRAP APP
+        window.onload = () => {
+            ScadaApp.initGrid(); // Khởi tạo lưới 12 cân mặc định
+        };
+    </script>
+</body>
+</html>
