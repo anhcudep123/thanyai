@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IND360 rateControl - Loss-in-Weight SCADA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;700;800&display=swap');
+        
+        :root {
+            --mt-bg-dark: #121826;
+            --mt-panel: #1e293b;
+            --mt-blue: #0ea5e9;
+            --mt-green: #10b981;
+            --mt-red: #ef4444;
+            --mt-yellow: #f59e0b;
+            --lcd-color: #e2e8f0;
+        }
+
+        body {
+            background-color: var(--mt-bg-dark);
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        .scada-panel {
+            background-color: var(--mt-panel);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .lcd-display {
+            font-family: 'Share Tech Mono', monospace;
+            background: #0b0f19;
+            border: 1px solid #334155;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+            border-radius: 8px;
+        }
+
+        /* LED Indicator */
+        .led-indicator {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #334155;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+            transition: all 0.2s ease;
+        }
+        .led-green.on { background-color: var(--mt-green); box-shadow: 0 0 10px var(--mt-green); }
+        .led-yellow.on { background-color: var(--mt-yellow); box-shadow: 0 0 10px var(--mt-yellow); }
+        .led-blue.on { background-color: var(--mt-blue); box-shadow: 0 0 10px var(--mt-blue); }
+        .led-red.on { background-color: var(--mt-red); box-shadow: 0 0 10px var(--mt-red); }
+
+        /* Screw Feeder Animation */
+        @keyframes rotate-screw {
+            from { transform: translateX(0); }
+            to { transform: translateX(-20px); }
+        }
+        .screw-thread {
+            stroke-dasharray: 20 20;
+            animation: rotate-screw linear infinite;
+            animation-play-state: paused;
+        }
+        .screw-thread.running {
+            animation-play-state: running;
+        }
+
+        /* Material Flow Animation */
+        @keyframes flow-down {
+            from { stroke-dashoffset: 24; }
+            to { stroke-dashoffset: 0; }
+        }
+        .material-flow {
+            stroke-dasharray: 8 8;
+            animation: flow-down 0.5s linear infinite;
+            display: none;
+        }
+        .material-flow.active { display: block; }
+
+        input[type="number"], select {
+            background: #0f172a;
+            border: 1px solid #475569;
+            color: #38bdf8;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-family: 'Share Tech Mono', monospace;
+            width: 100%;
+        }
+        input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: var(--mt-blue);
+        }
+
+        .btn-hard {
+            background: linear-gradient(to bottom, #334155, #1e293b);
+            border: 1px solid #475569;
+            box-shadow: 0 4px 0 #0f172a, 0 5px 10px rgba(0,0,0,0.5);
+            transition: all 0.1s;
+        }
+        .btn-hard:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #0f172a, inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .btn-start { background: linear-gradient(to bottom, #059669, #047857); border-color: #065f46; box-shadow: 0 4px 0 #064e3b; }
+        .btn-stop { background: linear-gradient(to bottom, #dc2626, #b91c1c); border-color: #991b1b; box-shadow: 0 4px 0 #7f1d1d; }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen flex flex-col">
+
+    <!-- HEADER -->
+    <header class="flex justify-between items-center mb-6 bg-[#1e293b] p-4 rounded-xl border border-[#334155] shadow-lg">
+        <div class="flex items-center gap-4">
+            <div class="bg-sky-600 text-white font-extrabold px-3 py-1.5 rounded uppercase tracking-wider text-sm">METTLER TOLEDO</div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-100">IND360 rateControl</h1>
+                <p class="text-[11px] text-slate-400 font-mono">Loss-in-Weight Feeder System</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                <div id="led-network" class="led-indicator led-green on"></div>
+                <span class="text-xs font-mono text-emerald-400" id="lbl-ip">192.168.2.120: API Ready</span>
+            </div>
+            <div class="text-right border-l border-slate-700 pl-4">
+                <div id="sys-time" class="font-mono text-lg font-bold text-sky-400">00:00:00</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN SCADA GRID -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+        
+        <!-- LEFT: PHYSICAL SYSTEM DIAGRAM (SVG) -->
+        <div class="col-span-1 lg:col-span-4 scada-panel p-5 flex flex-col items-center relative">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest absolute top-4 left-4">Sơ đồ máy (P&ID)</h2>
+            
+            <div class="mt-8 relative w-full h-[400px] flex justify-center">
+                <svg width="280" height="380" viewBox="0 0 280 380" class="absolute">
+                    <!-- REFILL VALVE & SILO -->
+                    <path d="M100,0 L180,0 L180,40 L100,40 Z" fill="#334155" stroke="#475569" stroke-width="2"/>
+                    <text x="140" y="25" fill="#94a3b8" font-size="10" text-anchor="middle" font-weight="bold">SILO</text>
+                    
+                    <!-- REFILL VALVE -->
+                    <path d="M140,40 L120,70 L160,70 Z" fill="#0f172a" stroke="#64748b"/>
+                    <path d="M140,100 L120,70 L160,70 Z" fill="#0f172a" stroke="#64748b"/>
+                    <rect id="valve-refill" x="125" y="65" width="30" height="10" fill="#475569" rx="2"/>
+                    <text x="180" y="75" fill="#cbd5e1" font-size="10" font-weight="bold">DO2: VAN NẠP</text>
+                    
+                    <!-- REFILL FLOW -->
+                    <line id="flow-refill" x1="140" y1="100" x2="140" y2="150" stroke="#38bdf8" stroke-width="15" class="material-flow"/>
+
+                    <!-- WEIGH HOPPER (PHỄU CÂN) -->
+                    <!-- Load cells -->
+                    <rect x="50" y="160" width="15" height="10" fill="#b91c1c" rx="2"/>
+                    <rect x="215" y="160" width="15" height="10" fill="#b91c1c" rx="2"/>
+                    <path d="M60,110 L220,110 L180,260 L100,260 Z" fill="rgba(30, 41, 59, 0.8)" stroke="#94a3b8" stroke-width="2"/>
+                    
+                    <!-- Material inside Hopper -->
+                    <path id="hopper-fill" d="M70,115 L210,115 L180,260 L100,260 Z" fill="#0284c7" opacity="0.8" style="transform-origin: bottom center; transition: transform 0.1s;"/>
+                    
+                    <text x="140" y="180" fill="#f8fafc" font-size="14" font-weight="bold" font-family="'Share Tech Mono'" text-anchor="middle" id="svg-weight">0.00 kg</text>
+
+                    <!-- SCREW FEEDER (TRỤC VÍT TẢI) -->
+                    <rect x="80" y="260" width="140" height="30" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+                    <line id="screw-line" x1="80" y1="275" x2="220" y2="275" stroke="#94a3b8" stroke-width="20" class="screw-thread"/>
+                    
+                    <!-- MOTOR -->
+                    <rect x="30" y="250" width="50" height="50" fill="#1e293b" stroke="#38bdf8" stroke-width="2" rx="5"/>
+                    <circle cx="55" cy="275" r="15" fill="#0f172a" stroke="#38bdf8"/>
+                    <text x="55" y="278" fill="#38bdf8" font-size="10" font-weight="bold" text-anchor="middle">M</text>
+
+                    <!-- DISCHARGE FLOW -->
+                    <path d="M190,290 L220,290 L220,330 L190,330 Z" fill="#334155"/>
+                    <line id="flow-discharge" x1="205" y1="310" x2="205" y2="370" stroke="#0284c7" stroke-width="12" class="material-flow"/>
+                </svg>
+            </div>
+
+            <!-- IO Status -->
+            <div class="w-full grid grid-cols-2 gap-3 mt-auto border-t border-slate-700 pt-4">
+                <div class="flex items-center gap-2">
+                    <div id="led-motor" class="led-indicator led-green"></div>
+                    <span class="text-[10px] text-slate-300">DO1: MOTOR XẢ</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="led-valve" class="led-indicator led-blue"></div>
+                    <span class="text-[10px] text-slate-300">DO2: VAN NẠP (REFILL)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="led-alarm" class="led-indicator led-red"></div>
+                    <span class="text-[10px] text-slate-300">DO3: ALARM/LỖI</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="led-complete" class="led-indicator led-yellow"></div>
+                    <span class="text-[10px] text-slate-300">DO4: BATCH COMPLETE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER: DIGITAL DISPLAYS & SIGNAL ANALYZER -->
+        <div class="col-span-1 lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- MAIN DASHBOARD -->
+            <div class="scada-panel p-5">
+                <div class="flex justify-between items-end mb-2">
+                    <h2 class="text-lg font-bold text-sky-400">ĐIỀU KHIỂN LƯU LƯỢNG (RATE CONTROL)</h2>
+                    <span id="badge-state" class="bg-slate-700 text-slate-300 px-3 py-1 rounded text-xs font-bold tracking-widest border border-slate-600">IDLE</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <!-- Flow Rate -->
+                    <div class="lcd-display p-4 relative">
+                        <span class="absolute top-2 left-3 text-[10px] text-slate-400 font-sans font-bold">LƯU LƯỢNG THỰC TẾ</span>
+                        <div class="text-right mt-3">
+                            <span id="val-actual-rate" class="text-5xl text-emerald-400">0.0</span>
+                            <span class="text-xl text-slate-500">kg/h</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-slate-500 mt-2 font-sans border-t border-slate-800 pt-1">
+                            <span>MỤC TIÊU (SP)</span>
+                            <span id="val-target-rate" class="text-sky-400 font-bold font-mono">500.0 kg/h</span>
+                        </div>
+                    </div>
+
+                    <!-- Hopper Weight -->
+                    <div class="lcd-display p-4 relative">
+                        <span class="absolute top-2 left-3 text-[10px] text-slate-400 font-sans font-bold">TRỌNG LƯỢNG PHỄU</span>
+                        <div class="text-right mt-3">
+                            <span id="val-weight" class="text-5xl text-white">100.0</span>
+                            <span class="text-xl text-slate-500">kg</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-slate-500 mt-2 font-sans border-t border-slate-800 pt-1">
+                            <span>TRẠNG THÁI</span>
+                            <span id="val-stable" class="text-emerald-400 font-bold font-mono">~ STABLE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PID Output & Refill Status Bar -->
+                <div class="mt-5 bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-inner">
+                    <div class="flex justify-between text-xs font-bold text-slate-400 mb-2 uppercase">
+                        <span>PID Output (Control Var)</span>
+                        <span id="val-cv" class="text-yellow-400 font-mono text-sm">0.0 %</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden border border-slate-600">
+                        <div id="bar-cv" class="bg-gradient-to-r from-yellow-500 to-orange-500 h-full w-0 transition-all duration-100"></div>
+                    </div>
+                    
+                    <!-- Batch Progress (Hidden in Continuous mode) -->
+                    <div id="batch-container" class="mt-4 hidden border-t border-slate-800 pt-4">
+                        <div class="flex justify-between text-xs font-bold text-slate-400 mb-2 uppercase">
+                            <span>Tiến độ mẻ (Batch Dispensed)</span>
+                            <span class="text-sky-400 font-mono text-sm"><span id="val-batch-act">0</span> / <span id="val-batch-sp">2000</span> kg</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-6 rounded-full overflow-hidden border border-slate-600 relative">
+                            <div id="bar-batch" class="bg-sky-500 h-full w-0 transition-all duration-200"></div>
+                            <div class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white shadow-black" id="lbl-batch-pct">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIGNAL ANALYZER (LIVE CHART) -->
+            <div class="scada-panel p-4 flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-bold text-slate-300 uppercase"><i class="fa-solid fa-chart-line mr-2 text-sky-400"></i>Signal Analyzer</h3>
+                    <div class="flex gap-3 text-[10px] font-bold">
+                        <span class="text-emerald-400">■ Thực tế (Act)</span>
+                        <span class="text-slate-400">-- Mục tiêu (SP)</span>
+                    </div>
+                </div>
+                <div class="flex-1 bg-black rounded-lg border border-slate-700 p-2 relative">
+                    <!-- Overlay Refill Mask -->
+                    <div id="chart-blind-mask" class="absolute inset-2 bg-blue-900/20 border border-blue-500/50 hidden flex items-center justify-center z-10">
+                        <span class="text-blue-300 font-bold uppercase tracking-widest text-sm bg-black/50 px-3 py-1 rounded">Blind Phase (Refilling)</span>
+                    </div>
+                    <canvas id="rateChart" class="w-full h-[180px]"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: SETTINGS & CONTROLS -->
+        <div class="col-span-1 lg:col-span-3 flex flex-col gap-4">
+            
+            <!-- OPERATION CONTROLS -->
+            <div class="scada-panel p-4">
+                <h3 class="text-xs font-bold text-slate-400 uppercase border-b border-slate-700 pb-2 mb-4">Lệnh Điều Khiển</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-start" class="btn-hard btn-start text-white font-bold py-4 rounded-lg flex flex-col items-center">
+                        <i class="fa-solid fa-play text-xl mb-1"></i>
+                        <span>START</span>
+                    </button>
+                    <button id="btn-stop" class="btn-hard btn-stop text-white font-bold py-4 rounded-lg flex flex-col items-center">
+                        <i class="fa-solid fa-stop text-xl mb-1"></i>
+                        <span>STOP</span>
+                    </button>
+                    <button id="btn-zero" class="btn-hard text-slate-300 font-bold py-3 rounded-lg col-span-2 flex items-center justify-center gap-2">
+                        <span class="text-xl font-mono">>0<</span> ZERO SCALE
+                    </button>
+                </div>
+            </div>
+
+            <!-- PARAMETERS -->
+            <div class="scada-panel p-4 flex-1">
+                <h3 class="text-xs font-bold text-slate-400 uppercase border-b border-slate-700 pb-2 mb-4">Tham số Cài đặt (Parameters)</h3>
+                
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <label class="text-[10px] text-slate-500 font-bold uppercase">Chế độ hoạt động (Work Mode)</label>
+                        <select id="inp-mode" class="mt-1">
+                            <option value="cont">Continuous (Liên tục)</option>
+                            <option value="batch">Batch (Theo mẻ)</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-bold uppercase text-sky-400">Target Rate (kg/h)</label>
+                            <input type="number" id="inp-target-rate" value="500" step="10">
+                        </div>
+                        <div id="wrap-batch" class="opacity-30 pointer-events-none">
+                            <label class="text-[10px] text-slate-500 font-bold uppercase text-yellow-400">Batch Target (kg)</label>
+                            <input type="number" id="inp-batch-target" value="2000" step="10" disabled>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-700 pt-3 mt-1">
+                        <label class="text-[10px] text-slate-500 font-bold uppercase mb-2 block">Tham số Bù liệu (Refill Limits)</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[9px] text-slate-400">Dưới Mức (Lower) kg</label>
+                                <input type="number" id="inp-refill-low" value="20" step="1">
+                            </div>
+                            <div>
+                                <label class="text-[9px] text-slate-400">Ngắt Bơm (Upper) kg</label>
+                                <input type="number" id="inp-refill-high" value="120" step="1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-700 pt-3 mt-1">
+                        <label class="text-[10px] text-slate-500 font-bold uppercase mb-2 block">PID Tuning</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="text-[9px] text-slate-400">Kp</label><input type="number" id="inp-kp" value="0.2" step="0.1"></div>
+                            <div><label class="text-[9px] text-slate-400">Ki</label><input type="number" id="inp-ki" value="0.05" step="0.01"></div>
+                            <div><label class="text-[9px] text-slate-400">Kd</label><input type="number" id="inp-kd" value="0.01" step="0.01"></div>
+                        </div>
+                    </div>
+
+                    <button id="btn-save-cfg" class="mt-4 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold py-2 rounded transition">
+                        ÁP DỤNG CẤU HÌNH GỬI XUỐNG ESP32
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-600 text-white px-4 py-3 rounded-lg shadow-2xl transition-opacity opacity-0 pointer-events-none z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-info text-sky-400 text-xl"></i>
+        <div>
+            <h4 class="text-sm font-bold">System Info</h4>
+            <p id="toast-msg" class="text-xs text-slate-300">Message</p>
+        </div>
+    </div>
+
+    <script>
+        const APP = {
+            // States
+            isRunning: false,
+            state: 'IDLE', // IDLE, RUNNING, REFILLING, BATCH_COMPLETE
+            
+            // Physical properties
+            hopperMaxCap: 150.0,
+            weight: 120.0,
+            maxMotorCapacityKgh: 1200.0, // 100% CV = 1200 kg/h
+            refillPumpCapacity: 50.0,    // kg/s
+            
+            // Control variables
+            cv: 0.0,          // Control Variable 0-100%
+            lockedCV: 0.0,    // CV stored during blind phase
+            actualRate: 0.0,  // kg/h
+            rateBuffer: [],   // Moving average buffer
+            
+            // Parameters
+            mode: 'cont',     // 'cont' or 'batch'
+            targetRate: 500.0,
+            batchTarget: 2000.0,
+            batchDispensed: 0.0,
+            batchStartWeight: 0.0,
+            refillLow: 20.0,
+            refillHigh: 120.0,
+            
+            // PID
+            Kp: 0.2, Ki: 0.05, Kd: 0.01,
+            pidIntegral: 0,
+            prevError: 0,
+
+            // Time keeping
+            lastTime: 0,
+            
+            // Chart Data
+            historyData: [],
+            maxHistory: 100 // Points on X axis
+        };
+
+        // DOM Elements
+        const DOM = {
+            btnStart: document.getElementById('btn-start'),
+            btnStop: document.getElementById('btn-stop'),
+            btnZero: document.getElementById('btn-zero'),
+            btnSave: document.getElementById('btn-save-cfg'),
+            inpMode: document.getElementById('inp-mode'),
+            
+            valWeight: document.getElementById('val-weight'),
+            valActRate: document.getElementById('val-actual-rate'),
+            valTarRate: document.getElementById('val-target-rate'),
+            valCV: document.getElementById('val-cv'),
+            barCV: document.getElementById('bar-cv'),
+            badgeState: document.getElementById('badge-state'),
+            
+            svgWeight: document.getElementById('svg-weight'),
+            hopperFill: document.getElementById('hopper-fill'),
+            screwLine: document.getElementById('screw-line'),
+            flowDisc: document.getElementById('flow-discharge'),
+            flowRefill: document.getElementById('flow-refill'),
+            valveRefill: document.getElementById('valve-refill'),
+            
+            ledMotor: document.getElementById('led-motor'),
+            ledValve: document.getElementById('led-valve'),
+            ledComplete: document.getElementById('led-complete'),
+            
+            batchContainer: document.getElementById('batch-container'),
+            wrapBatch: document.getElementById('wrap-batch'),
+            valBatchAct: document.getElementById('val-batch-act'),
+            valBatchSp: document.getElementById('val-batch-sp'),
+            barBatch: document.getElementById('bar-batch'),
+            lblBatchPct: document.getElementById('lbl-batch-pct'),
+            
+            chartCanvas: document.getElementById('rateChart'),
+            blindMask: document.getElementById('chart-blind-mask')
+        };
+
+        const ctx = DOM.chartCanvas.getContext('2d');
+
+        function initEvents() {
+            DOM.btnStart.onclick = () => {
+                if(APP.state === 'IDLE' || APP.state === 'BATCH_COMPLETE') {
+                    APP.state = 'RUNNING';
+                    APP.isRunning = true;
+                    if(APP.mode === 'batch') {
+                        APP.batchDispensed = 0;
+                        APP.batchStartWeight = APP.weight;
+                    }
+                    APP.pidIntegral = 0; // Reset windup
+                    showToast('Bắt đầu quá trình xả liệu.');
+                }
+            };
+
+            DOM.btnStop.onclick = () => {
+                APP.state = 'IDLE';
+                APP.isRunning = false;
+                APP.cv = 0;
+                showToast('Dừng hệ thống khẩn cấp.');
+            };
+
+            DOM.btnZero.onclick = () => {
+                if(APP.isRunning) {
+                    showToast('Không thể Zero khi cân đang chạy!', true);
+                } else {
+                    APP.weight = 0;
+                    showToast('Đã thực hiện Zero Cân.');
+                }
+            };
+
+            DOM.inpMode.onchange = (e) => {
+                APP.mode = e.target.value;
+                if(APP.mode === 'batch') {
+                    DOM.batchContainer.classList.remove('hidden');
+                    DOM.wrapBatch.classList.remove('opacity-30', 'pointer-events-none');
+                    document.getElementById('inp-batch-target').disabled = false;
+                } else {
+                    DOM.batchContainer.classList.add('hidden');
+                    DOM.wrapBatch.classList.add('opacity-30', 'pointer-events-none');
+                    document.getElementById('inp-batch-target').disabled = true;
+                }
+            };
+
+            DOM.btnSave.onclick = () => {
+                APP.targetRate = parseFloat(document.getElementById('inp-target-rate').value);
+                APP.batchTarget = parseFloat(document.getElementById('inp-batch-target').value);
+                APP.refillLow = parseFloat(document.getElementById('inp-refill-low').value);
+                APP.refillHigh = parseFloat(document.getElementById('inp-refill-high').value);
+                APP.Kp = parseFloat(document.getElementById('inp-kp').value);
+                APP.Ki = parseFloat(document.getElementById('inp-ki').value);
+                APP.Kd = parseFloat(document.getElementById('inp-kd').value);
+                DOM.valTarRate.innerText = APP.targetRate.toFixed(1) + ' kg/h';
+                DOM.valBatchSp.innerText = APP.batchTarget;
+                showToast('Đã lưu cấu hình và gửi API xuống ESP32.');
+            };
+
+            // Resize canvas
+            DOM.chartCanvas.width = DOM.chartCanvas.parentElement.clientWidth;
+            DOM.chartCanvas.height = DOM.chartCanvas.parentElement.clientHeight;
+            
+            // Init history data
+            for(let i=0; i<APP.maxHistory; i++) APP.historyData.push({ act: 0, sp: 0 });
+            
+            // Clock
+            setInterval(() => {
+                document.getElementById('sys-time').innerText = new Date().toLocaleTimeString('en-GB');
+            }, 1000);
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.style.borderColor = isError ? '#ef4444' : '#38bdf8';
+            document.querySelector('.fa-circle-info').style.color = isError ? '#ef4444' : '#38bdf8';
+            
+            toast.classList.remove('opacity-0');
+            setTimeout(() => { toast.classList.add('opacity-0'); }, 3000);
+        }
+
+        function runSimulation(timestamp) {
+            if (!APP.lastTime) APP.lastTime = timestamp;
+            const dt = (timestamp - APP.lastTime) / 1000.0; // seconds
+            APP.lastTime = timestamp;
+
+            if(dt > 0) {
+                // 1. REFILL LOGIC (Van nạp)
+                if (APP.state === 'RUNNING' && APP.weight <= APP.refillLow) {
+                    APP.state = 'REFILLING';
+                    APP.lockedCV = APP.cv; // Khóa PID (Volumetric mode)
+                    showToast('Đang nạp lại liệu (Blind Phase)...');
+                } else if (APP.state === 'REFILLING' && APP.weight >= APP.refillHigh) {
+                    // Trong thực tế sẽ delay vài giây để bồn ổn định, ở đây giả lập ngay
+                    APP.state = 'RUNNING';
+                    if(APP.mode === 'batch') APP.batchStartWeight = APP.weight; // Reset gốc tính mẻ
+                    showToast('Nạp liệu hoàn tất. Mở lại vòng lặp PID.');
+                }
+
+                // 2. DISCHARGE PHYSICS (Xả liệu)
+                let currentFlowKgS = 0;
+                if (APP.state === 'RUNNING' || APP.state === 'REFILLING') {
+                    // Tốc độ xả thực tế phụ thuộc %CV của motor và độ trễ cơ học
+                    let theoreticalRateKgh = (APP.cv / 100.0) * APP.maxMotorCapacityKgh;
+                    // Thêm nhiễu hệ thống (noise)
+                    let noise = (Math.random() - 0.5) * 20; 
+                    currentFlowKgS = (theoreticalRateKgh + noise) / 3600.0;
+                    
+                    if(currentFlowKgS < 0) currentFlowKgS = 0;
+                    APP.weight -= currentFlowKgS * dt;
+                    if(APP.weight < 0) APP.weight = 0;
+                }
+
+                // 3. REFILL PHYSICS (Bơm liệu vào phễu)
+                if (APP.state === 'REFILLING') {
+                    APP.weight += APP.refillPumpCapacity * dt;
+                }
+
+                // 4. RATE CALCULATION (Tính lưu lượng thực tế)
+                // dW/dt
+                let instRateKgh = currentFlowKgS * 3600.0;
+                // Moving average filter
+                APP.rateBuffer.push(instRateKgh);
+                if(APP.rateBuffer.length > 10) APP.rateBuffer.shift();
+                APP.actualRate = APP.rateBuffer.reduce((a,b)=>a+b,0) / APP.rateBuffer.length;
+
+                if(APP.state === 'REFILLING' || APP.state === 'IDLE' || APP.state === 'BATCH_COMPLETE') {
+                    APP.actualRate = 0; // Đang mù hoặc tắt thì không báo lưu lượng
+                }
+
+                // 5. PID CONTROLLER
+                if (APP.state === 'RUNNING') {
+                    let error = APP.targetRate - APP.actualRate;
+                    APP.pidIntegral += error * dt;
+                    
+                    // Anti-windup
+                    if(APP.pidIntegral > 500) APP.pidIntegral = 500;
+                    if(APP.pidIntegral < -500) APP.pidIntegral = -500;
+
+                    let derivative = (error - APP.prevError) / dt;
+                    APP.prevError = error;
+
+                    APP.cv = (APP.Kp * error) + (APP.Ki * APP.pidIntegral) + (APP.Kd * derivative);
+                    
+                    // Constrain 0-100%
+                    if(APP.cv > 100.0) APP.cv = 100.0;
+                    if(APP.cv < 0.0) APP.cv = 0.0;
+
+                    // Batch Cut-off Logic
+                    if (APP.mode === 'batch') {
+                        APP.batchDispensed += currentFlowKgS * dt;
+                        if (APP.batchDispensed >= APP.batchTarget) {
+                            APP.state = 'BATCH_COMPLETE';
+                            APP.isRunning = false;
+                            APP.cv = 0;
+                            showToast('Hoàn thành mẻ cân!');
+                        } else if (APP.batchDispensed >= APP.batchTarget - 5) {
+                            // Dribble feed (Chạy tinh cuối mẻ)
+                            APP.cv = APP.cv * 0.3; 
+                        }
+                    }
+                } else if (APP.state === 'REFILLING') {
+                    APP.cv = APP.lockedCV; // Volumetric mode
+                } else {
+                    APP.cv = 0;
+                }
+
+                // 6. Update Chart Data
+                APP.historyData.push({ act: APP.actualRate, sp: APP.targetRate });
+                if(APP.historyData.length > APP.maxHistory) APP.historyData.shift();
+
+                updateUI();
+                drawChart();
+            }
+
+            requestAnimationFrame(runSimulation);
+        }
+
+        function updateUI() {
+            // Displays
+            DOM.valWeight.innerText = APP.weight.toFixed(1);
+            DOM.svgWeight.innerHTML = APP.weight.toFixed(1) + ' kg';
+            DOM.valActRate.innerText = APP.actualRate.toFixed(1);
+            DOM.valCV.innerText = APP.cv.toFixed(1) + ' %';
+            DOM.barCV.style.width = APP.cv + '%';
+
+            // SVG Hopper Fill (scale from 0 to 1)
+            let fillPct = APP.weight / APP.hopperMaxCap;
+            if(fillPct > 1) fillPct = 1;
+            DOM.hopperFill.style.transform = `scaleY(${fillPct})`;
+
+            // State Badge
+            DOM.badgeState.innerText = APP.state;
+            DOM.badgeState.className = "px-3 py-1 rounded text-xs font-bold tracking-widest border " +
+                (APP.state === 'RUNNING' ? "bg-emerald-900/50 text-emerald-400 border-emerald-600" :
+                 APP.state === 'REFILLING' ? "bg-blue-900/50 text-blue-400 border-blue-600 animate-pulse" :
+                 APP.state === 'BATCH_COMPLETE' ? "bg-yellow-900/50 text-yellow-400 border-yellow-600" :
+                 "bg-slate-800 text-slate-400 border-slate-600");
+
+            // LEDs & Animation
+            if(APP.cv > 0) {
+                DOM.ledMotor.classList.add('on');
+                DOM.screwLine.classList.add('running');
+                DOM.flowDisc.classList.add('active');
+            } else {
+                DOM.ledMotor.classList.remove('on');
+                DOM.screwLine.classList.remove('running');
+                DOM.flowDisc.classList.remove('active');
+            }
+
+            if(APP.state === 'REFILLING') {
+                DOM.ledValve.classList.add('on');
+                DOM.flowRefill.classList.add('active');
+                DOM.valveRefill.setAttribute('fill', '#0ea5e9'); // Open
+                DOM.blindMask.classList.remove('hidden');
+            } else {
+                DOM.ledValve.classList.remove('on');
+                DOM.flowRefill.classList.remove('active');
+                DOM.valveRefill.setAttribute('fill', '#475569'); // Close
+                DOM.blindMask.classList.add('hidden');
+            }
+
+            if(APP.state === 'BATCH_COMPLETE') DOM.ledComplete.classList.add('on');
+            else DOM.ledComplete.classList.remove('on');
+
+            // Batch progress
+            if(APP.mode === 'batch') {
+                DOM.valBatchAct.innerText = APP.batchDispensed.toFixed(1);
+                let pct = (APP.batchDispensed / APP.batchTarget) * 100;
+                if(pct > 100) pct = 100;
+                DOM.barBatch.style.width = pct + '%';
+                DOM.lblBatchPct.innerText = pct.toFixed(0) + '%';
+            }
+        }
+
+        function drawChart() {
+            const w = DOM.chartCanvas.width;
+            const h = DOM.chartCanvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // Grid lines
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            for(let i=1; i<4; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, h * (i/4));
+                ctx.lineTo(w, h * (i/4));
+                ctx.stroke();
+            }
+
+            // Find Max Y (autoscale)
+            let maxY = APP.targetRate * 1.5; 
+            if(maxY < 100) maxY = 100;
+
+            const xStep = w / (APP.maxHistory - 1);
+
+            // Draw SP Line (Dashed)
+            ctx.beginPath();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2;
+            for(let i=0; i<APP.historyData.length; i++) {
+                let x = i * xStep;
+                let y = h - (APP.historyData[i].sp / maxY) * h;
+                if(i===0) ctx.moveTo(x,y);
+                else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+
+            // Draw Act Line (Solid Green)
+            ctx.beginPath();
+            ctx.strokeStyle = '#10b981';
+            ctx.setLineDash([]);
+            ctx.lineWidth = 2;
+            for(let i=0; i<APP.historyData.length; i++) {
+                let x = i * xStep;
+                let y = h - (APP.historyData[i].act / maxY) * h;
+                if(i===0) ctx.moveTo(x,y);
+                else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+        }
+
+        // Bootstrap
+        initEvents();
+        requestAnimationFrame(runSimulation);
+    </script>
+</body>
+</html>
