@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TANTRA LAN V8.0 - KẾT NỐI 2 MÁY TÍNH</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #00ff41; --dark-bg: #0a0a0a; --panel-bg: #111111; --border: #333; }
+        body { background-color: var(--dark-bg); color: #e0e0e0; font-family: 'Roboto', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .font-digital { font-family: 'Orbitron', monospace; letter-spacing: 2px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: #000; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        .panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .weight-display { background: #000; color: var(--primary); text-shadow: 0 0 10px rgba(0, 255, 65, 0.4); border: 2px solid #222; position: relative; }
+        .input-field { width: 100%; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 6px 8px; font-size: 0.85rem; color: white; transition: border-color 0.2s; }
+        .input-field:focus { border-color: var(--primary); outline: none; }
+        .input-group-label { font-size: 0.7rem; color: #666; margin-bottom: 2px; text-transform: uppercase; font-weight: bold; }
+        .led { width: 10px; height: 10px; border-radius: 50%; background: #333; display: inline-block; margin-right: 5px; }
+        .led.on { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+        .led.error { background: #ff003c; box-shadow: 0 0 8px #ff003c; }
+        .modal-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); }
+        .role-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; cursor: pointer; border: 1px solid transparent; user-select: none; }
+        .role-operator { background: #003300; color: #00ff41; border-color: #00ff41; }
+        .role-supervisor { background: #330000; color: #ff003c; border-color: #ff003c; }
+        .autocomplete-items { position: absolute; border: 1px solid #444; z-index: 99; top: 100%; left: 0; right: 0; background-color: #1a1a1a; max-height: 150px; overflow-y: auto; }
+        .autocomplete-items div { padding: 5px; cursor: pointer; border-bottom: 1px solid #333; } .autocomplete-items div:hover { background: var(--primary); color: black; }
+        @media print { body > header, body > div.grid, body > div.modal-overlay { display: none !important; } #print-area { display: block !important; visibility: visible !important; position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; } }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header class="h-14 bg-[#111] border-b border-[#222] flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-network-wired text-2xl text-[#00ff41]"></i>
+            <div>
+                <h1 class="font-bold text-lg leading-none tracking-wide">TANTRA LAN <span class="text-xs text-blue-400 font-normal border border-blue-400 px-1 rounded">V8.0</span></h1>
+                <div class="text-[10px] text-gray-500">KẾT NỐI 2 MÁY TÍNH (TCP/IP)</div>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div id="role-display" class="role-badge role-operator" onclick="toggleRole()" title="Nhấn để đổi vai trò"><i class="fa-solid fa-user-tag"></i> <span id="role-text">TRẠM CÂN</span></div>
+
+            <!-- LAN STATUS -->
+            <div class="flex items-center gap-2 bg-[#1a1a1a] px-3 py-1 rounded text-xs border border-[#333] cursor-pointer" onclick="toggleSettings()" title="Bấm để nhập IP Máy chủ">
+                <div id="lan-led" class="led error"></div>
+                <span id="lan-text" class="text-gray-400">Chưa kết nối Server</span>
+            </div>
+
+            <button onclick="requestFullSync()" class="bg-[#222] hover:bg-blue-900 text-blue-500 px-3 py-1 rounded text-xs border border-[#333] transition flex items-center gap-1">
+                <i class="fa-solid fa-rotate" id="sync-icon"></i> Đồng bộ
+            </button>
+
+            <div class="h-6 w-[1px] bg-[#333]"></div>
+            <button onclick="openDataModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-database"></i></button>
+            <button onclick="openReportModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-chart-pie"></i></button>
+            <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-gear"></i></button>
+            <div class="text-right pl-2 border-l border-[#333]">
+                <div class="text-xs font-bold text-[#00f3ff]" id="clock">00:00</div>
+                <div class="text-[10px] text-gray-500" id="date">DD/MM</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GRID -->
+    <div class="flex-1 p-3 gap-3 grid grid-cols-12 overflow-hidden">
+        <!-- LEFT: CONTROLS -->
+        <div class="col-span-4 flex flex-col gap-3">
+            <div class="panel p-4 flex flex-col gap-2 relative">
+                <div class="flex justify-between text-xs text-gray-500 font-bold"><span>Khối lượng (kg)</span><span id="scale-mode" class="text-[#00ff41] animate-pulse">LIVE</span></div>
+                <div class="weight-display h-28 rounded flex items-center justify-end px-4 text-7xl font-digital"><span id="display-weight">0</span></div>
+                <div class="flex justify-between text-xs font-mono text-gray-500 mt-1"><span id="zero-indicator">ZERO</span><span id="stable-indicator">STABLE</span><span id="net-indicator">NET</span></div>
+                <div class="mt-2 grid grid-cols-2 gap-2">
+                     <button onclick="connectScale()" class="bg-[#222] hover:bg-[#333] text-[#00ff41] border border-[#333] py-2 rounded text-xs font-bold"><i class="fa-solid fa-plug"></i> KẾT NỐI CÂN</button>
+                     <button onclick="setZero()" class="bg-[#222] hover:bg-[#333] text-white border border-[#333] py-2 rounded text-xs font-bold"><i class="fa-solid fa-crosshairs"></i> ZERO</button>
+                </div>
+            </div>
+            <div class="panel p-4 flex-1 flex flex-col gap-3 overflow-y-auto">
+                <h3 class="text-sm font-bold text-[#00f3ff] border-b border-[#333] pb-1">THÔNG TIN PHIẾU CÂN</h3>
+                <div><div class="input-group-label">Biển số xe (*)</div><div class="flex"><input type="text" id="inp-plate" class="input-field rounded-r-none font-bold text-lg text-yellow-500 uppercase"><button class="bg-[#222] border border-l-0 border-[#333] px-3 rounded-r text-gray-400"><i class="fa-solid fa-camera"></i></button></div></div>
+                <div class="bg-[#181818] p-2 rounded border border-[#222]">
+                    <div class="grid grid-cols-3 gap-2 mb-2"><div class="col-span-1 relative"><div class="input-group-label">Mã KH</div><input type="text" id="inp-cust-code" class="input-field text-yellow-500 font-bold"></div><div class="col-span-2 relative"><div class="input-group-label">Tên Khách</div><input type="text" id="inp-cust-name" class="input-field"></div></div>
+                    <div><div class="input-group-label">Địa chỉ</div><input type="text" id="inp-address" class="input-field"></div>
+                </div>
+                <div class="bg-[#181818] p-2 rounded border border-[#222]">
+                    <div class="grid grid-cols-3 gap-2"><div class="col-span-2 relative"><div class="input-group-label">Hàng hóa</div><input type="text" id="inp-goods-name" class="input-field"></div><div class="col-span-1"><div class="input-group-label">Quy cách</div><input type="text" id="inp-goods-spec" class="input-field"></div></div>
+                </div>
+                <div class="p-2 bg-[#1a1a1a] rounded border border-[#333] flex justify-between items-center text-xs"><div>Trạng thái: <span id="weigh-type" class="font-bold text-white">TỰ ĐỘNG</span></div><div class="text-right">L1: <span id="ref-weight" class="font-bold text-yellow-500">---</span></div></div>
+                <div class="mt-auto grid grid-cols-2 gap-3 pt-2">
+                    <button onclick="saveWeight1()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm">CÂN VÀO (L1)</button>
+                    <button onclick="saveWeight2()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded text-sm opacity-50 cursor-not-allowed" id="btn-out" disabled>CÂN RA (L2)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER: LIST -->
+        <div class="col-span-5 flex flex-col gap-3">
+            <div class="panel flex-1 flex flex-col overflow-hidden">
+                <div class="p-3 border-b border-[#333] bg-[#151515] flex justify-between"><h3 class="text-sm font-bold text-yellow-500">XE TRONG BÃI (L1)</h3><span id="count-in-yard" class="text-xs bg-yellow-900/30 px-2 rounded">0</span></div>
+                <div class="overflow-auto flex-1"><table class="w-full table-custom border-collapse"><thead class="sticky top-0 z-10"><tr><th>Biển số</th><th>Khách hàng</th><th class="text-right">KL L1</th><th class="text-center">Tác vụ</th></tr></thead><tbody id="list-in-yard"></tbody></table></div>
+            </div>
+        </div>
+
+        <!-- RIGHT: HISTORY -->
+        <div class="col-span-3 flex flex-col gap-3">
+            <div class="panel flex-1 flex flex-col overflow-hidden">
+                <div class="p-3 border-b border-[#333] bg-[#151515]"><h3 class="text-sm font-bold text-gray-400">LỊCH SỬ GẦN ĐÂY</h3></div>
+                <div class="overflow-auto flex-1"><div id="history-list" class="flex flex-col gap-2 p-2"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center">
+        <div class="bg-[#111] border border-[#333] w-96 rounded-lg p-6">
+            <h2 class="text-lg font-bold mb-4 text-[#00ff41]">KẾT NỐI MẠNG LAN</h2>
+            <div class="space-y-4">
+                <div class="bg-blue-900/20 p-3 rounded border border-blue-800">
+                    <label class="block text-xs text-blue-400 font-bold mb-1">ĐỊA CHỈ IP MÁY CHỦ (SERVER)</label>
+                    <input type="text" id="ws-server-ip" class="input-field text-yellow-400 font-mono text-center text-lg" value="ws://localhost:8080">
+                    <p class="text-[10px] text-gray-400 mt-2 italic">
+                        1. Mở file "server.js" trên máy chủ để xem IP.<br>
+                        2. Nhập "ws://[IP_MAY_CHU]:8080" vào ô trên.<br>
+                        3. Nếu chạy trên cùng 1 máy thì để nguyên "localhost".
+                    </p>
+                </div>
+                <button onclick="initWebSocket()" class="w-full bg-blue-700 text-white py-3 rounded text-sm font-bold shadow-lg hover:bg-blue-600">LƯU & KẾT NỐI</button>
+
+                <hr class="border-[#333] my-4">
+
+                <div><label class="text-xs text-gray-500">Đầu cân</label><select id="sel-driver" class="input-field"><option value="universal">Universal</option><option value="mkdi01">MKDi01</option></select></div>
+                <div class="flex items-center gap-2"><input type="checkbox" id="chk-sim" onchange="toggleSim(this.checked)" class="accent-[#00ff41]"><label class="text-sm">Giả lập (Simulation)</label></div>
+            </div>
+            <div class="mt-6 text-right"><button onclick="toggleSettings()" class="px-4 py-2 bg-[#222] text-white rounded text-sm">Đóng</button></div>
+        </div>
+    </div>
+
+    <!-- Hidden Print Area -->
+    <div id="print-area" class="hidden"></div>
+
+    <!-- DATA & REPORT MODALS (Simplified for brevity) -->
+    <div id="data-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4"><div class="bg-[#111] border border-[#333] w-full max-w-lg rounded-lg p-6"><h2 class="text-lg font-bold mb-4 text-blue-500">QUẢN LÝ DỮ LIỆU</h2><div class="bg-[#1a1a1a] p-4 rounded border border-gray-700 mb-4"><h3 class="text-sm font-bold text-white mb-2">Nhập từ Excel/CSV</h3><input type="file" id="import-file" accept=".xlsx, .xls, .csv" class="block w-full text-xs text-gray-400 mb-2"><button onclick="importData()" class="w-full bg-blue-700 hover:bg-blue-600 text-white py-2 rounded text-sm font-bold">TIẾN HÀNH NHẬP</button></div><div class="grid grid-cols-2 gap-4 text-center"><div class="bg-[#1a1a1a] p-3 rounded"><div class="text-xs text-gray-500">Khách hàng</div><div class="text-xl font-bold text-white" id="count-customers">0</div></div><div class="bg-[#1a1a1a] p-3 rounded"><div class="text-xs text-gray-500">Hàng hóa</div><div class="text-xl font-bold text-white" id="count-goods">0</div></div></div><div class="mt-6 flex justify-end gap-2"><button onclick="closeDataModal()" class="px-4 py-2 bg-[#222] text-white text-sm rounded hover:bg-[#333]">Đóng</button></div></div></div>
+
+    <div id="report-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4"><div class="bg-[#0f0f0f] border border-[#333] w-full max-w-5xl rounded-lg h-[85vh] p-4"><div class="flex justify-between mb-4"><h2 class="text-lg font-bold text-yellow-500">BÁO CÁO</h2><button onclick="closeReportModal()"><i class="fa-solid fa-xmark text-white"></i></button></div><div class="grid grid-cols-5 gap-2 mb-4"><select id="rpt-type" class="input-field"><option value="general">Tổng hợp</option></select><input type="date" id="rpt-start" class="input-field"><input type="date" id="rpt-end" class="input-field"><button onclick="generateReport()" class="bg-blue-700 text-white rounded">Xem</button><button onclick="printReport()" class="bg-white text-black rounded">In</button></div><div class="h-[60vh] overflow-auto bg-[#0a0a0a]"><table class="w-full text-sm text-left"><thead class="bg-[#222] sticky top-0"><tr id="rpt-header"></tr></thead><tbody id="rpt-body"></tbody></table></div></div></div>
+<script>
+        // --- GLOBAL STATE ---
+        let wsClient = null;
+        let currentRole = 'operator';
+        let trucksInYard = [], history = [], customersDB = [], goodsDB = [];
+        let currentWeight = 0;
+        let isStableStatus = false; // Biến lưu trạng thái ổn định từ ESP32
+        let isSim = false, simInterval;
+        let esp32Interval = null; // Biến lưu vòng lặp gọi API ESP32
+        const MIN_WEIGHT_LIMIT = 50;
+        
+        // SỬA ĐỔI 1: Cập nhật địa chỉ API chuẩn của bạn
+        const ESP32_API_URL = "http://192.168.2.120/api/v1/scale/weight";
+
+        window.onload = () => {
+            updateClock(); setInterval(updateClock, 1000);
+
+            // Load saved IP or default
+            const savedIP = localStorage.getItem('wsServerIP');
+            if(savedIP) document.getElementById('ws-server-ip').value = savedIP;
+
+            initWebSocket(); // Try connection
+            initAutoCompletes();
+
+            const rStart = document.getElementById('rpt-start'); if(rStart) rStart.valueAsDate = new Date();
+            const rEnd = document.getElementById('rpt-end'); if(rEnd) rEnd.valueAsDate = new Date();
+        };
+
+        function updateClock() {
+            const c = document.getElementById('clock'), d = document.getElementById('date');
+            if(c) c.innerText = new Date().toLocaleTimeString();
+            if(d) d.innerText = new Date().toLocaleDateString();
+        }
+
+        // --- WEBSOCKET LAN ENGINE (Giữ nguyên) ---
+        function initWebSocket() {
+            const serverUrl = document.getElementById('ws-server-ip').value;
+            localStorage.setItem('wsServerIP', serverUrl);
+            setStatus('busy', 'Đang kết nối...');
+
+            try {
+                if(wsClient) wsClient.close();
+                wsClient = new WebSocket(serverUrl);
+
+                wsClient.onopen = () => {
+                    setStatus('on', 'Đã kết nối Server');
+                    document.getElementById('settings-modal').classList.add('hidden');
+                    sendData('REQ_FULL_SYNC', {});
+                };
+
+                wsClient.onclose = () => setStatus('error', 'Mất kết nối Server');
+                wsClient.onerror = (err) => setStatus('error', 'Lỗi kết nối (Kiểm tra IP)');
+
+                wsClient.onmessage = (event) => {
+                    try { processPacket(JSON.parse(event.data)); } catch(e) { console.error(e); }
+                };
+
+            } catch(e) { setStatus('error', 'URL sai'); }
+        }
+
+        function setStatus(state, text) {
+            const led = document.getElementById('lan-led'), txt = document.getElementById('lan-text');
+            if(led && txt) {
+                led.className = 'led ' + (state==='on'?'on':(state==='busy'?'busy':'error'));
+                txt.innerText = text;
+                txt.className = state==='on' ? 'text-[#00ff41] font-bold' : 'text-gray-400';
+            }
+        }
+
+        function sendData(type, data) {
+            if(wsClient && wsClient.readyState === WebSocket.OPEN) {
+                wsClient.send(JSON.stringify({ type, data }));
+            }
+        }
+
+        function processPacket(pkt) {
+            if(pkt.type === 'FULL_SYNC') {
+                trucksInYard = pkt.data.trucksInYard || [];
+                history = pkt.data.history || [];
+                customersDB = pkt.data.customers || [];
+                goodsDB = pkt.data.goods || [];
+            }
+            else if(pkt.type === 'UPDATE_YARD') { trucksInYard = pkt.data; }
+            else if(pkt.type === 'UPDATE_HISTORY') { history = pkt.data; }
+
+            renderYard(); renderHistory(); updateDataCounts();
+
+            if(pkt.type === 'DELETE_REQUEST') {
+                const list = pkt.isHistory ? history : trucksInYard;
+                const item = list.find(t => t.id === pkt.id);
+                if(item) {
+                    item.deleteStatus = pkt.status;
+                    if(pkt.isHistory) renderHistory(); else renderYard();
+                }
+            }
+        }
+
+        function requestFullSync() {
+            const icon = document.getElementById('sync-icon'); icon.classList.add('fa-spin');
+            sendData('REQ_FULL_SYNC', {});
+            setTimeout(() => icon.classList.remove('fa-spin'), 1000);
+        }
+
+        // --- BUSINESS LOGIC (Nghiệp vụ lưu phiếu) ---
+        function saveWeight1() {
+            if (!isSim && !isStableStatus) return alert("⚠️ Cân chưa ổn định! Vui lòng chờ.");
+            
+            const plate = document.getElementById('inp-plate').value.toUpperCase().trim();
+            if(!plate) return alert("Thiếu biển số!");
+
+            const ticket = {
+                id: Date.now(), plate,
+                custName: document.getElementById('inp-cust-name').value,
+                custCode: document.getElementById('inp-cust-code').value,
+                weight1: currentWeight, weight2: 0, net: 0, status: 'IN_YARD',
+                time1: new Date().toISOString()
+            };
+
+            if(ticket.custCode && !customersDB.find(c=>c.code===ticket.custCode)) {
+                customersDB.push({ code: ticket.custCode, name: ticket.custName });
+                sendData('MASTER_DATA_UPDATE', { kind: 'cust', data: customersDB });
+            }
+
+            trucksInYard.push(ticket);
+            sendData('UPDATE_YARD', trucksInYard);
+            renderYard(); clearForm();
+        }
+
+        function saveWeight2() {
+            if (!isSim && !isStableStatus) return alert("⚠️ Cân chưa ổn định! Vui lòng chờ.");
+
+            const plate = document.getElementById('inp-plate').value.toUpperCase().trim();
+            const idx = trucksInYard.findIndex(t => t.plate === plate);
+            if(idx === -1) return alert("Không tìm thấy xe!");
+
+            const t = trucksInYard[idx];
+            t.weight2 = currentWeight; t.net = Math.abs(t.weight1 - t.weight2);
+            t.time2 = new Date().toISOString(); t.status = 'COMPLETED';
+
+            trucksInYard.splice(idx, 1);
+            history.unshift(t);
+
+            sendData('UPDATE_YARD', trucksInYard);
+            sendData('UPDATE_HISTORY', history);
+
+            renderYard(); renderHistory(); clearForm(); printTicket(t);
+        }
+
+        function requestDelete(id, isHist) {
+            const list = isHist ? history : trucksInYard;
+            const item = list.find(t => t.id === id);
+            if(!item) return;
+
+            if(currentRole === 'operator') {
+                if(!item.deleteStatus) {
+                    if(confirm("Gửi yêu cầu xóa?")) sendData('DELETE_REQUEST', { id, status: 'pending', isHistory: isHist });
+                } else if(item.deleteStatus === 'approved') {
+                    if(confirm("XÓA VĨNH VIỄN?")) sendData('DELETE_EXECUTE', { id, isHistory: isHist });
+                } else { alert("Đang chờ duyệt..."); }
+            } else { 
+                if(item.deleteStatus === 'pending') {
+                    if(confirm("Duyệt xóa phiếu này?")) sendData('DELETE_REQUEST', { id, status: 'approved', isHistory: isHist });
+                }
+            }
+        }
+
+        // --- RENDER ---
+        function renderYard() {
+            const tb = document.getElementById('list-in-yard'); if(!tb) return;
+            tb.innerHTML = trucksInYard.map(t => {
+                let btn = '';
+                if(currentRole==='operator') {
+                    btn = t.deleteStatus==='approved' ? `<button onclick="requestDelete(${t.id},0)" class="text-green-500 font-bold">XÓA</button>` :
+                          t.deleteStatus==='pending' ? `<i class="fa-solid fa-hourglass-half text-yellow-500"></i>` :
+                          `<i onclick="requestDelete(${t.id},0)" class="fa-solid fa-trash text-gray-500 cursor-pointer"></i>`;
+                } else {
+                    btn = t.deleteStatus==='pending' ? `<button onclick="requestDelete(${t.id},0)" class="bg-red-600 px-2 rounded text-[10px] animate-bounce">DUYỆT</button>` : '';
+                }
+                const sel = currentRole==='operator' ? `<button onclick="selectTruck(${t.id})" class="text-xs bg-blue-900 px-2 rounded ml-2">L2</button>` : '';
+                return `<tr><td class="font-bold text-white">${t.plate}</td><td class="text-gray-400 text-xs">${t.custName||'-'}</td><td class="text-right text-[#00ff41]">${t.weight1.toLocaleString()}</td><td class="text-center flex justify-center items-center gap-2">${btn}${sel}</td></tr>`;
+            }).join('');
+            const c = document.getElementById('count-in-yard'); if(c) c.innerText = trucksInYard.length;
+        }
+
+        function renderHistory() {
+            const d = document.getElementById('history-list'); if(!d) return;
+            d.innerHTML = history.slice(0,15).map(t => {
+                let del = '';
+                if(currentRole==='operator') {
+                    del = t.deleteStatus==='approved' ? `<i onclick="requestDelete(${t.id},1)" class="fa-solid fa-check text-green-500 cursor-pointer ml-2"></i>` :
+                          t.deleteStatus==='pending' ? `<i class="fa-solid fa-clock text-yellow-500 ml-2"></i>` :
+                          `<i onclick="requestDelete(${t.id},1)" class="fa-solid fa-trash text-gray-600 cursor-pointer ml-2 hover:text-red-500"></i>`;
+                } else {
+                    del = t.deleteStatus==='pending' ? `<button onclick="requestDelete(${t.id},1)" class="ml-2 text-[10px] bg-red-600 rounded px-1">Duyệt?</button>` : '';
+                }
+                return `<div class="bg-[#1a1a1a] p-2 rounded border border-[#333] text-xs flex justify-between cursor-pointer" onclick="printTicketFromHistory(${t.id})"><div><span class="font-bold text-white">${t.plate}</span>${del}<div class="text-gray-500">${t.goodsName||'-'}</div></div><div class="text-right"><span class="text-[#00f3ff] font-bold">${t.net.toLocaleString()} kg</span><div class="text-[9px] text-gray-500">${new Date(t.time2).toLocaleDateString()}</div></div></div>`;
+            }).join('');
+        }
+
+        // --- GIAO TIẾP VỚI ĐẦU CÂN ESP32 (THÊM MỚI) ---
+        
+        // Hàm đọc dữ liệu từ ESP32
+        function fetchESP32Data() {
+            fetch(ESP32_API_URL)
+                .then(response => response.json())
+                .then(data => {
+                    // SỬA ĐỔI 2: Đọc dữ liệu từ key "net" thay vì "w"
+                    let weightVal = parseInt(data.net);
+                    currentWeight = weightVal;
+                    document.getElementById('display-weight').innerText = weightVal.toLocaleString();
+                    document.getElementById('display-weight').style.color = "#00ff41";
+
+                    // SỬA ĐỔI 3: Đọc dữ liệu trạng thái từ key "stable" thay vì "s"
+                    isStableStatus = data.stable;
+                    const stableInd = document.getElementById('stable-indicator');
+                    if (isStableStatus) {
+                        stableInd.style.color = '#00ff41'; // Sáng xanh
+                        stableInd.style.textShadow = '0 0 5px #00ff41';
+                    } else {
+                        stableInd.style.color = '#444'; // Tắt
+                        stableInd.style.textShadow = 'none';
+                    }
+
+                    // Đèn báo Zero
+                    const zeroInd = document.getElementById('zero-indicator');
+                    if (weightVal === 0 && isStableStatus) {
+                        zeroInd.style.color = '#00ff41';
+                    } else {
+                        zeroInd.style.color = '#444';
+                    }
+                })
+                .catch(error => {
+                    console.error("Lỗi kết nối WiFi Cân:", error);
+                    document.getElementById('display-weight').innerText = "ERR";
+                    document.getElementById('display-weight').style.color = "red";
+                    isStableStatus = false;
+                });
+        }
+
+        function connectScale() {
+            if (simInterval) clearInterval(simInterval);
+            isSim = false;
+            document.getElementById('chk-sim').checked = false;
+            document.getElementById('scale-mode').innerText = "WIFI ESP32";
+
+            alert("Bắt đầu lấy dữ liệu từ ESP32 tại: " + ESP32_API_URL);
+            
+            // Chạy vòng lặp gọi dữ liệu 300ms/lần
+            if (esp32Interval) clearInterval(esp32Interval);
+            esp32Interval = setInterval(fetchESP32Data, 300);
+        }
+
+        // Hàm Reset Zero gửi lệnh xuống ESP32
+        function setZero() {
+            if (isSim) {
+                currentWeight = 0; setWeight(0);
+            } else {
+                // SỬA ĐỔI 4: Gửi lệnh bằng cách thay 'weight' thành 'zero' trong URL
+                fetch(ESP32_API_URL.replace('/weight', '/zero'))
+                    .then(res => alert("Đã gửi lệnh ZERO xuống phần cứng!"))
+                    .catch(err => alert("Lỗi gửi lệnh: " + err));
+            }
+        }
+
+        // --- UTILS ---
+        function toggleRole() {
+            currentRole = currentRole === 'operator' ? 'supervisor' : 'operator';
+            document.getElementById('role-display').className = `role-badge role-${currentRole}`;
+            document.getElementById('role-text').innerText = currentRole === 'operator' ? 'TRẠM CÂN' : 'GIÁM SÁT';
+            renderYard(); renderHistory();
+        }
+        function selectTruck(id) {
+            const t = trucksInYard.find(x => x.id === id);
+            if(t) {
+                document.getElementById('inp-plate').value = t.plate;
+                document.getElementById('inp-cust-code').value = t.custCode||'';
+                document.getElementById('inp-cust-name').value = t.custName||'';
+                document.getElementById('ref-weight').innerText = t.weight1.toLocaleString();
+                document.getElementById('btn-out').disabled = false;
+                document.getElementById('btn-out').classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        function clearForm() {
+            document.querySelectorAll('.input-field').forEach(i => i.value = '');
+            document.getElementById('ref-weight').innerText = '---';
+            document.getElementById('btn-out').disabled = true;
+            document.getElementById('btn-out').classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        function toggleSettings() { document.getElementById('settings-modal').classList.toggle('hidden'); }
+        function setWeight(v) { currentWeight = v; document.getElementById('display-weight').innerText = v.toLocaleString(); }
+        
+        function startSimulation() { 
+            if (esp32Interval) clearInterval(esp32Interval); // Tắt kết nối ESP32 nếu bật giả lập
+            document.getElementById('scale-mode').innerText = "SIMULATION";
+            simInterval = setInterval(() => setWeight(Math.floor(currentWeight + (Math.random()-0.5)*10)), 200); 
+        }
+        function toggleSim(e) { isSim=e; if(isSim) { startSimulation(); document.getElementById('chk-sim').checked=true; } }
+
+        // --- AUTOCOMPLETE ---
+        function initAutoCompletes() {
+            const setup = (id, fn, valFn, fill) => {
+                const inp = document.getElementById(id); if(!inp) return;
+                inp.addEventListener('input', function() {
+                    const val = this.value.toUpperCase();
+                    const old = this.parentNode.querySelector('.autocomplete-items'); if(old) old.remove();
+                    if(!val) return;
+                    const div = document.createElement('div'); div.className = 'autocomplete-items'; this.parentNode.appendChild(div);
+                    const list = fn();
+                    for(let i=0; i<list.length; i++) {
+                        const txt = (list[i].name || list[i].code || '').toUpperCase();
+                        if(txt.includes(val)) {
+                            const d = document.createElement("div"); d.innerHTML = list[i].name || list[i].code;
+                            d.onclick = () => { inp.value=list[i].code||list[i].name; fill(list[i]); div.remove(); };
+                            div.appendChild(d);
+                            if(div.children.length > 5) break;
+                        }
+                    }
+                });
+            };
+            setup("inp-cust-code", ()=>customersDB, c=>c.code, fillCustomer);
+            setup("inp-cust-name", ()=>customersDB, c=>c.name, fillCustomer);
+            setup("inp-goods-name", ()=>goodsDB, g=>g.name, g=>{});
+            document.addEventListener("click", e=>{ if(!e.target.classList.contains('input-field')) document.querySelectorAll('.autocomplete-items').forEach(x=>x.remove()); });
+        }
+        function fillCustomer(c) {
+            document.getElementById('inp-cust-code').value=c.code||''; document.getElementById('inp-cust-name').value=c.name||'';
+            document.getElementById('inp-address').value=c.address||''; document.getElementById('inp-driver').value=c.driver||''; document.getElementById('inp-contact').value=c.contact||'';
+        }
+
+        // --- EXTRAS ---
+        function printTicket(d) {
+             const p = document.getElementById('print-area');
+             p.innerHTML = `<div style="font-family:'Courier New';padding:10px;text-align:center;"><h2>PHIẾU CÂN</h2><p>Biển số: ${d.plate}</p><p>Lần 1: ${d.weight1} kg</p><p>Lần 2: ${d.weight2} kg</p><p>NET: ${d.net} kg</p></div>`;
+             p.classList.remove('hidden'); setTimeout(()=>{window.print();p.classList.add('hidden');},500);
+        }
+        function openDataModal() { document.getElementById('data-modal').classList.remove('hidden'); updateDataCounts(); }
+        function closeDataModal() { document.getElementById('data-modal').classList.add('hidden'); }
+        function openReportModal() { document.getElementById('report-modal').classList.remove('hidden'); }
+        function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
+
+        function importData() {
+             const file = document.getElementById('import-file').files[0];
+             if(!file) return alert("Chọn file!");
+             const reader = new FileReader();
+             reader.onload = (e) => {
+                 const data = new Uint8Array(e.target.result);
+                 const wb = XLSX.read(data, {type: 'array'});
+                 const ws = wb.Sheets[wb.SheetNames[0]];
+                 const json = XLSX.utils.sheet_to_json(ws);
+                 json.forEach(row => {
+                     if(row['Mã KH']) customersDB.push({ code: row['Mã KH'], name: row['Tên KH'] });
+                     if(row['Tên hàng']) goodsDB.push({ name: row['Tên hàng'] });
+                 });
+                 sendData('MASTER_DATA_UPDATE', { kind: 'cust', data: customersDB });
+                 sendData('MASTER_DATA_UPDATE', { kind: 'goods', data: goodsDB });
+                 updateDataCounts(); alert("Nhập xong!");
+             };
+             reader.readAsArrayBuffer(file);
+        }
+
+        function updateDataCounts() {
+            const c = document.getElementById('count-customers'), g = document.getElementById('count-goods');
+            if(c) c.innerText = customersDB.length; if(g) g.innerText = goodsDB.length;
+        }
+        function generateReport() { /* Logic báo cáo */ }
+        function printReport() { window.print(); }
+        function exportReportToExcel() { alert("Excel OK"); }
+    </script>
+	
+</body>
+</html>
