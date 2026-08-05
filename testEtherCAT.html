@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống SCADA - ESP32</title>
+    <style>
+        /* --- CSS: Trang trí giao diện SCADA --- */
+        body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: #ffffff; padding: 20px; margin: 0; }
+        .container { max-width: 800px; margin: auto; }
+        .header { text-align: center; border-bottom: 2px solid #00ffcc; padding-bottom: 10px; margin-bottom: 20px; }
+        .card { background-color: #2d2d2d; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        .status-offline { color: #ff4c4c; font-weight: bold; }
+        .status-online { color: #00ffcc; font-weight: bold; }
+        input[type="text"] { padding: 8px; width: 200px; border-radius: 4px; border: none; }
+        button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        
+        /* Cột hiển thị và điều khiển */
+        .grid { display: flex; justify-content: space-between; gap: 20px; }
+        .panel { flex: 1; background-color: #383838; padding: 15px; border-radius: 8px; }
+        
+        .servo-control { margin-bottom: 15px; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        .value-display { font-size: 1.2em; color: #00ffcc; float: right;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>BẢNG ĐIỀU KHIỂN SCADA ESP32</h1>
+    </div>
+
+    <!-- Khu vực kết nối -->
+    <div class="card">
+        <h3>Cài đặt kết nối</h3>
+        <label>IP của ESP32: </label>
+        <input type="text" id="esp-ip" value="192.168.1.100" placeholder="Nhập IP ESP32...">
+        <button onclick="connectWebSocket()">Kết nối</button>
+        <p>Trạng thái: <span id="ws-status" class="status-offline">Đã ngắt kết nối</span></p>
+    </div>
+
+    <div class="grid">
+        <!-- Khu vực Giám sát (Nhận từ ESP32) -->
+        <div class="panel">
+            <h3>Giám sát (Dữ liệu từ ESP32)</h3>
+            <p>Servo 1: <span id="monitor-s1" class="value-display">0°</span></p>
+            <p>Servo 2: <span id="monitor-s2" class="value-display">0°</span></p>
+            <p>Servo 3: <span id="monitor-s3" class="value-display">0°</span></p>
+            <p>Servo 4: <span id="monitor-s4" class="value-display">0°</span></p>
+        </div>
+
+        <!-- Khu vực Điều khiển (Gửi xuống ESP32) -->
+        <div class="panel">
+            <h3>Điều khiển từ xa</h3>
+            
+            <div class="servo-control">
+                <label>Servo 1: <span id="val-s1">0</span>°</label>
+                <input type="range" id="slider-s1" min="0" max="180" value="0" oninput="updateSliderText(1)" onchange="sendControl(1)">
+            </div>
+            <div class="servo-control">
+                <label>Servo 2: <span id="val-s2">0</span>°</label>
+                <input type="range" id="slider-s2" min="0" max="180" value="0" oninput="updateSliderText(2)" onchange="sendControl(2)">
+            </div>
+            <div class="servo-control">
+                <label>Servo 3: <span id="val-s3">0</span>°</label>
+                <input type="range" id="slider-s3" min="0" max="180" value="0" oninput="updateSliderText(3)" onchange="sendControl(3)">
+            </div>
+            <div class="servo-control">
+                <label>Servo 4: <span id="val-s4">0</span>°</label>
+                <input type="range" id="slider-s4" min="0" max="180" value="0" oninput="updateSliderText(4)" onchange="sendControl(4)">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- JAVASCRIPT: Logic giao tiếp qua WebSockets ---
+    var websocket;
+
+    // Hàm gọi khi nhấn nút "Kết nối"
+    function connectWebSocket() {
+        var ip = document.getElementById("esp-ip").value;
+        var wsUrl = "ws://" + ip + ":81/"; // ESP32 thường dùng cổng 81 cho WebSocket
+
+        document.getElementById("ws-status").innerText = "Đang kết nối...";
+        document.getElementById("ws-status").className = "status-online";
+
+        // Khởi tạo WebSocket
+        websocket = new WebSocket(wsUrl);
+
+        // Sự kiện khi kết nối thành công
+        websocket.onopen = function(event) {
+            document.getElementById("ws-status").innerText = "Đã kết nối thành công!";
+            document.getElementById("ws-status").className = "status-online";
+        };
+
+        // Sự kiện khi mất kết nối
+        websocket.onclose = function(event) {
+            document.getElementById("ws-status").innerText = "Đã ngắt kết nối";
+            document.getElementById("ws-status").className = "status-offline";
+        };
+
+        // Sự kiện khi NHẬN DỮ LIỆU từ ESP32
+        // Giả định ESP32 gửi về chuỗi JSON: {"s1": 90, "s2": 45, "s3": 180, "s4": 0}
+        websocket.onmessage = function(event) {
+            console.log("Nhận từ ESP32: ", event.data);
+            try {
+                var data = JSON.parse(event.data);
+                if (data.s1 !== undefined) document.getElementById("monitor-s1").innerText = data.s1 + "°";
+                if (data.s2 !== undefined) document.getElementById("monitor-s2").innerText = data.s2 + "°";
+                if (data.s3 !== undefined) document.getElementById("monitor-s3").innerText = data.s3 + "°";
+                if (data.s4 !== undefined) document.getElementById("monitor-s4").innerText = data.s4 + "°";
+            } catch(e) {
+                console.error("Lỗi đọc dữ liệu: ", e);
+            }
+        };
+    }
+
+    // Hàm cập nhật chữ số khi kéo thả thanh trượt (chưa gửi đi)
+    function updateSliderText(servoNum) {
+        var val = document.getElementById("slider-s" + servoNum).value;
+        document.getElementById("val-s" + servoNum).innerText = val;
+    }
+
+    // Hàm GỬI DỮ LIỆU xuống ESP32 khi buông chuột khỏi thanh trượt
+    function sendControl(servoNum) {
+        var val = document.getElementById("slider-s" + servoNum).value;
+        
+        // Tạo một đối tượng JSON để gửi đi, ví dụ: {"servo": 1, "angle": 90}
+        var msg = {
+            servo: servoNum,
+            angle: parseInt(val)
+        };
+
+        // Kiểm tra xem đã kết nối WebSocket chưa thì mới gửi
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify(msg));
+            console.log("Đã gửi: ", JSON.stringify(msg));
+        } else {
+            alert("Vui lòng kết nối với ESP32 trước!");
+        }
+    }
+</script>
+
+</body>
+</html>
