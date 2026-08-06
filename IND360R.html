@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IND360 IoT SCADA - MQTT Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Nạp thư viện MQTT WebSocket Paho Client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;700;800&display=swap');
+        :root { --mt-bg-dark: #121826; --mt-panel: #1e293b; --mt-blue: #0ea5e9; --mt-green: #10b981; --mt-red: #ef4444; --mt-yellow: #f59e0b; }
+        body { background-color: var(--mt-bg-dark); color: #f8fafc; font-family: 'Inter', sans-serif; overflow-x: hidden; user-select: none; }
+        .scada-panel { background-color: var(--mt-panel); border: 1px solid #334155; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); }
+        .lcd-display { font-family: 'Share Tech Mono', monospace; background: #0b0f19; border: 1px solid #334155; box-shadow: inset 0 0 15px rgba(0,0,0,0.8); border-radius: 8px; }
+        .led-indicator { width: 14px; height: 14px; border-radius: 50%; background-color: #334155; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6); transition: all 0.2s ease; }
+        .led-green.on { background-color: var(--mt-green); box-shadow: 0 0 10px var(--mt-green); }
+        .led-blue.on { background-color: var(--mt-blue); box-shadow: 0 0 10px var(--mt-blue); }
+        .led-red.on { background-color: var(--mt-red); box-shadow: 0 0 10px var(--mt-red); }
+        @keyframes rotate-screw { from { transform: translateX(0); } to { transform: translateX(-20px); } }
+        .screw-thread { stroke-dasharray: 20 20; animation: rotate-screw linear infinite; animation-play-state: paused; }
+        .screw-thread.running { animation-play-state: running; }
+        @keyframes flow-down { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+        .material-flow { stroke-dasharray: 8 8; animation: flow-down 0.5s linear infinite; display: none; }
+        .material-flow.active { display: block; }
+        input, select { background: #0f172a; border: 1px solid #475569; color: #38bdf8; border-radius: 6px; padding: 6px 10px; font-family: 'Share Tech Mono', monospace; width: 100%; }
+        input:focus { outline: none; border-color: var(--mt-blue); }
+        .btn-hard { background: linear-gradient(to bottom, #334155, #1e293b); border: 1px solid #475569; box-shadow: 0 4px 0 #0f172a, 0 5px 10px rgba(0,0,0,0.5); transition: all 0.1s; }
+        .btn-hard:active { transform: translateY(4px); box-shadow: 0 0 0 #0f172a, inset 0 2px 5px rgba(0,0,0,0.5); }
+        .btn-start { background: linear-gradient(to bottom, #059669, #047857); border-color: #065f46; box-shadow: 0 4px 0 #064e3b; }
+        .btn-stop { background: linear-gradient(to bottom, #dc2626, #b91c1c); border-color: #991b1b; box-shadow: 0 4px 0 #7f1d1d; }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen flex flex-col">
+    <!-- HEADER -->
+    <header class="flex justify-between items-center mb-6 bg-[#1e293b] p-4 rounded-xl border border-[#334155] shadow-lg">
+        <div class="flex items-center gap-4">
+            <div class="bg-purple-600 text-white font-extrabold px-3 py-1.5 rounded uppercase tracking-wider text-sm border border-purple-400">IoT CLOUD</div>
+            <div><h1 class="text-xl font-bold text-slate-100">IND360 Global SCADA</h1><p class="text-[11px] text-slate-400 font-mono">MQTT Internet Broker: emqx.io</p></div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                <button onclick="toggleConnection()" id="btn-connect" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded font-bold transition">Kết nối Cloud</button>
+                <div id="led-network" class="led-indicator led-red on ml-2"></div>
+            </div>
+            <div class="text-right border-l border-slate-700 pl-4"><div id="sys-time" class="font-mono text-lg font-bold text-sky-400">00:00:00</div></div>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+        <!-- SVG DIAGRAM -->
+        <div class="col-span-1 lg:col-span-4 scada-panel p-5 flex flex-col items-center relative">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest absolute top-4 left-4">Sơ đồ máy (P&ID)</h2>
+            <div class="mt-8 relative w-full h-[400px] flex justify-center">
+                <svg width="280" height="380" viewBox="0 0 280 380" class="absolute">
+                    <path d="M100,0 L180,0 L180,40 L100,40 Z" fill="#334155" stroke="#475569" stroke-width="2"/>
+                    <text x="140" y="25" fill="#94a3b8" font-size="10" text-anchor="middle" font-weight="bold">SILO</text>
+                    <path d="M140,40 L120,70 L160,70 Z" fill="#0f172a" stroke="#64748b"/>
+                    <path d="M140,100 L120,70 L160,70 Z" fill="#0f172a" stroke="#64748b"/>
+                    <rect id="valve-refill" x="125" y="65" width="30" height="10" fill="#475569" rx="2"/>
+                    <line id="flow-refill" x1="140" y1="100" x2="140" y2="150" stroke="#38bdf8" stroke-width="15" class="material-flow"/>
+                    <rect x="50" y="160" width="15" height="10" fill="#b91c1c" rx="2"/>
+                    <rect x="215" y="160" width="15" height="10" fill="#b91c1c" rx="2"/>
+                    <path d="M60,110 L220,110 L180,260 L100,260 Z" fill="rgba(30, 41, 59, 0.8)" stroke="#94a3b8" stroke-width="2"/>
+                    <path id="hopper-fill" d="M70,115 L210,115 L180,260 L100,260 Z" fill="#0284c7" opacity="0.8" style="transform-origin: bottom center; transition: transform 0.1s;"/>
+                    <text x="140" y="180" fill="#f8fafc" font-size="14" font-weight="bold" font-family="'Share Tech Mono'" text-anchor="middle" id="svg-weight">0.00 kg</text>
+                    <rect x="80" y="260" width="140" height="30" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+                    <line id="screw-line" x1="80" y1="275" x2="220" y2="275" stroke="#94a3b8" stroke-width="20" class="screw-thread"/>
+                    <rect x="30" y="250" width="50" height="50" fill="#1e293b" stroke="#38bdf8" stroke-width="2" rx="5"/>
+                    <circle cx="55" cy="275" r="15" fill="#0f172a" stroke="#38bdf8"/>
+                    <text x="55" y="278" fill="#38bdf8" font-size="10" font-weight="bold" text-anchor="middle">M</text>
+                    <path d="M190,290 L220,290 L220,330 L190,330 Z" fill="#334155"/>
+                    <line id="flow-discharge" x1="205" y1="310" x2="205" y2="370" stroke="#0284c7" stroke-width="12" class="material-flow"/>
+                </svg>
+            </div>
+            <div class="w-full grid grid-cols-2 gap-3 mt-auto border-t border-slate-700 pt-4">
+                <div class="flex items-center gap-2"><div id="led-motor" class="led-indicator led-green"></div><span class="text-[10px] text-slate-300">DO1: MOTOR XẢ</span></div>
+                <div class="flex items-center gap-2"><div id="led-valve" class="led-indicator led-blue"></div><span class="text-[10px] text-slate-300">DO2: VAN NẠP</span></div>
+            </div>
+        </div>
+
+        <div class="col-span-1 lg:col-span-5 flex flex-col gap-4">
+            <div class="scada-panel p-5">
+                <div class="flex justify-between items-end mb-2 border-b border-slate-700 pb-2">
+                    <h2 class="text-lg font-bold text-sky-400">BẢNG ĐIỀU KHIỂN ĐÁM MÂY</h2>
+                    <span id="badge-state" class="bg-slate-800 text-slate-400 px-3 py-1 rounded text-xs font-bold tracking-widest border border-slate-600">OFFLINE</span>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div class="lcd-display p-4 relative">
+                        <span class="absolute top-2 left-3 text-[10px] text-slate-400 font-sans font-bold">LƯU LƯỢNG THỰC TẾ</span>
+                        <div class="text-right mt-6"><span id="val-actual-rate" class="text-5xl text-emerald-400">0.0</span><span class="text-xl text-slate-500">kg/h</span></div>
+                        <div class="flex justify-between items-center text-xs text-slate-500 mt-2 font-sans border-t border-slate-800 pt-2">
+                            <span>MỤC TIÊU</span><span id="val-target-rate" class="text-sky-400 font-bold font-mono text-sm">SP: 500.0 kg/h</span>
+                        </div>
+                    </div>
+                    <div class="lcd-display p-4 relative">
+                        <span class="absolute top-2 left-3 text-[10px] text-slate-400 font-sans font-bold">TRỌNG LƯỢNG PHỄU</span>
+                        <div class="text-right mt-6"><span id="val-weight" class="text-5xl text-white">0.0</span><span class="text-xl text-slate-500">kg</span></div>
+                        <div class="flex justify-between items-center text-xs text-slate-500 mt-2 font-sans border-t border-slate-800 pt-2">
+                            <span>TRẠNG THÁI</span><span id="val-stable" class="text-slate-500 font-bold font-mono">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-5 bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-inner">
+                    <div class="flex justify-between items-center text-xs font-bold text-slate-400 mb-2">
+                        <div class="uppercase"><span>PID Output (CV)</span></div>
+                        <span id="val-cv" class="text-yellow-400 font-mono text-sm">0.0 %</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden border border-slate-600">
+                        <div id="bar-cv" class="bg-gradient-to-r from-yellow-500 to-orange-500 h-full w-0 transition-all duration-100"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Signal Analyzer -->
+            <div class="scada-panel p-4 flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-bold text-slate-300 uppercase"><i class="fa-solid fa-chart-line mr-2 text-sky-400"></i>Cloud Signal Analyzer</h3>
+                </div>
+                <div class="flex-1 bg-black rounded-lg border border-slate-700 p-2 relative">
+                    <canvas id="rateChart" class="w-full h-[180px]"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: MQTT CONTROLS -->
+        <div class="col-span-1 lg:col-span-3 flex flex-col gap-4">
+            <div class="scada-panel p-4">
+                <h3 class="text-xs font-bold text-slate-400 uppercase border-b border-slate-700 pb-2 mb-4">Lệnh Điều Khiển</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-start" class="btn-hard btn-start text-white font-bold py-4 rounded-lg flex flex-col items-center">
+                        <i class="fa-solid fa-play text-xl mb-1"></i><span class="text-xs">START</span>
+                    </button>
+                    <button id="btn-stop" class="btn-hard btn-stop text-white font-bold py-4 rounded-lg flex flex-col items-center">
+                        <i class="fa-solid fa-stop text-xl mb-1"></i><span class="text-xs">STOP</span>
+                    </button>
+                    <button id="btn-zero" class="btn-hard text-slate-300 font-bold py-3 rounded-lg col-span-2 flex items-center justify-center gap-2">
+                        <span class="text-xl font-mono">>0<</span> ZERO SCALE
+                    </button>
+                </div>
+            </div>
+            
+            <div class="scada-panel p-4 flex-1">
+                <h3 class="text-xs font-bold text-slate-400 uppercase border-b border-slate-700 pb-2 mb-4">Tham số Cài đặt</h3>
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <label class="text-[10px] text-slate-500 font-bold uppercase text-sky-400">Target Rate</label>
+                        <input type="number" id="inp-target-rate" value="500" step="10">
+                    </div>
+                    <button id="btn-save-cfg" class="mt-4 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-2 rounded transition">
+                        GHI MỤC TIÊU VÀO ĐÁM MÂY
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-600 text-white px-4 py-3 rounded-lg shadow-2xl transition-opacity opacity-0 pointer-events-none z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-info text-sky-400 text-xl"></i>
+        <div><h4 class="text-sm font-bold">Cloud Info</h4><p id="toast-msg" class="text-xs text-slate-300">Message</p></div>
+    </div>
+
+    <script>
+        // --- KHAI BÁO MQTT THEO PHONG CÁCH PAHO ---
+        const MQTT_CONFIG = {
+            HOST: "broker.emqx.io",
+            PORT: 8084, // Port WSS chuẩn cho bảo mật HTTPS
+            TOPIC_SUB: "ind360/device1/status", // Nhận từ mạch
+            TOPIC_PUB: "ind360/device1/cmd"     // Gửi xuống mạch
+        };
+
+        let mqttClient = null;
+        let isConnected = false;
+        let watchdogTimer = null;
+        let lastSeen = 0;
+
+        const APP = { state: 'IDLE', weight: 0.0, cv: 0.0, actualRate: 0.0, targetRate: 500.0, isStable: true, hopperMaxCap: 150.0, historyData: [], maxHistory: 100 };
+        const DOM = { btnStart: document.getElementById('btn-start'), btnStop: document.getElementById('btn-stop'), btnZero: document.getElementById('btn-zero'), btnSave: document.getElementById('btn-save-cfg'), valWeight: document.getElementById('val-weight'), valActRate: document.getElementById('val-actual-rate'), valTarRate: document.getElementById('val-target-rate'), valCV: document.getElementById('val-cv'), barCV: document.getElementById('bar-cv'), badgeState: document.getElementById('badge-state'), valStable: document.getElementById('val-stable'), svgWeight: document.getElementById('svg-weight'), hopperFill: document.getElementById('hopper-fill'), screwLine: document.getElementById('screw-line'), flowDisc: document.getElementById('flow-discharge'), flowRefill: document.getElementById('flow-refill'), valveRefill: document.getElementById('valve-refill'), ledMotor: document.getElementById('led-motor'), ledValve: document.getElementById('led-valve'), ledNetwork: document.getElementById('led-network'), chartCanvas: document.getElementById('rateChart') };
+        const ctx = DOM.chartCanvas.getContext('2d');
+
+        function toggleConnection() {
+            const btn = document.getElementById('btn-connect');
+            if (isConnected) {
+                mqttClient.disconnect();
+            } else {
+                const clientId = "WEB_SCADA_" + Math.random().toString(16).substr(2, 8);
+                mqttClient = new Paho.MQTT.Client(MQTT_CONFIG.HOST, MQTT_CONFIG.PORT, clientId);
+                
+                mqttClient.onConnectionLost = onConnectionLost;
+                mqttClient.onMessageArrived = onMessageArrived;
+
+                btn.innerText = "Đang kết nối...";
+                btn.className = "bg-amber-500 text-white text-xs px-3 py-1.5 rounded font-bold transition";
+
+                mqttClient.connect({ onSuccess: onConnectSuccess, onFailure: onConnectFailure, useSSL: true });
+            }
+        }
+
+        function onConnectSuccess() {
+            isConnected = true;
+            showToast("Kết nối Cloud thành công!");
+            mqttClient.subscribe(MQTT_CONFIG.TOPIC_SUB); // Lắng nghe ESP32
+            
+            const btn = document.getElementById('btn-connect');
+            btn.innerText = "Ngắt kết nối";
+            btn.className = "bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-1.5 rounded font-bold transition";
+            
+            if(watchdogTimer) clearInterval(watchdogTimer);
+            watchdogTimer = setInterval(checkDeviceOnline, 2000);
+        }
+
+        function onConnectFailure(err) {
+            showToast("Kết nối thất bại: " + err.errorMessage, true);
+            setOfflineUI();
+        }
+
+        function onConnectionLost(res) {
+            isConnected = false;
+            setOfflineUI();
+            showToast("Mất kết nối với Broker", true);
+        }
+
+        function onMessageArrived(message) {
+            lastSeen = Date.now();
+            DOM.ledNetwork.classList.add('on', 'led-green');
+            DOM.ledNetwork.classList.remove('led-red');
+
+            try {
+                // Phân tích dữ liệu JSON do ESP32 gửi lên
+                const data = JSON.parse(message.payloadString);
+                
+                APP.weight = data.weight / 100.0; 
+                APP.actualRate = data.rate; 
+                APP.targetRate = data.target_rate; 
+                APP.cv = data.cv; 
+                APP.state = data.mode; 
+                APP.isStable = data.stable;
+                
+                APP.historyData.push({ act: APP.actualRate, sp: APP.targetRate });
+                if(APP.historyData.length > APP.maxHistory) APP.historyData.shift();
+                
+                updateUI(); 
+                drawChart();
+            } catch(e) { console.error(e); }
+        }
+
+        function checkDeviceOnline() {
+            // Nếu quá 3 giây không nhận được gói tin nào từ mạch ESP32 -> Mạch mất mạng
+            if (Date.now() - lastSeen > 3000) {
+                DOM.ledNetwork.classList.remove('on', 'led-green'); 
+                DOM.ledNetwork.classList.add('on', 'led-red');
+                DOM.badgeState.innerText = "DEVICE OFFLINE";
+                DOM.badgeState.className = "px-3 py-1 rounded text-xs font-bold border bg-red-900/50 text-red-400 border-red-600 animate-pulse";
+            }
+        }
+
+        // --- GỬI LỆNH QUA MQTT ĐỂ ĐIỀU KHIỂN ESP32 ---
+        function sendMqttCommand(payloadObj) {
+            if(!isConnected) { showToast("Cần kết nối Cloud trước!", true); return; }
+            const msgString = JSON.stringify(payloadObj);
+            const message = new Paho.MQTT.Message(msgString);
+            message.destinationName = MQTT_CONFIG.TOPIC_PUB;
+            mqttClient.send(message);
+        }
+
+        function initEvents() {
+            DOM.btnStart.onclick = () => { sendMqttCommand({ action: "start" }); showToast("Đã gửi lệnh START lên Cloud"); };
+            DOM.btnStop.onclick = () => { sendMqttCommand({ action: "stop" }); showToast("Đã gửi lệnh STOP lên Cloud"); };
+            DOM.btnZero.onclick = () => { sendMqttCommand({ action: "zero" }); showToast("Đã gửi lệnh ZERO lên Cloud"); };
+            DOM.btnSave.onclick = () => { 
+                let rate = document.getElementById('inp-target-rate').value; 
+                sendMqttCommand({ target: parseFloat(rate) }); 
+                showToast("Đã ghi Target Rate mới lên Cloud"); 
+            };
+            
+            DOM.chartCanvas.width = DOM.chartCanvas.parentElement.clientWidth; DOM.chartCanvas.height = DOM.chartCanvas.parentElement.clientHeight;
+            for(let i=0; i<APP.maxHistory; i++) APP.historyData.push({ act: 0, sp: 0 });
+            setInterval(() => { document.getElementById('sys-time').innerText = new Date().toLocaleTimeString('en-GB'); }, 1000);
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast'); document.getElementById('toast-msg').innerText = msg;
+            toast.style.borderColor = isError ? '#ef4444' : '#2dd4bf'; document.querySelector('.fa-circle-info').style.color = isError ? '#ef4444' : '#2dd4bf';
+            toast.classList.remove('opacity-0'); setTimeout(() => { toast.classList.add('opacity-0'); }, 3000);
+        }
+
+        function setOfflineUI() {
+            const btn = document.getElementById('btn-connect');
+            btn.innerText = "Kết nối Cloud";
+            btn.className = "bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded font-bold transition";
+            DOM.ledNetwork.classList.remove('on', 'led-green'); DOM.ledNetwork.classList.add('on', 'led-red');
+            DOM.badgeState.innerText = "CLOUD DISCONNECTED";
+            DOM.badgeState.className = "px-3 py-1 rounded text-xs font-bold tracking-widest border bg-red-900/50 text-red-400 border-red-600 animate-pulse";
+        }
+
+        function updateUI() {
+            DOM.valWeight.innerText = APP.weight.toFixed(1); DOM.svgWeight.innerHTML = APP.weight.toFixed(1) + ' kg';
+            DOM.valActRate.innerText = APP.actualRate.toFixed(1); DOM.valCV.innerText = APP.cv.toFixed(1) + ' %'; DOM.barCV.style.width = APP.cv + '%';
+            DOM.valTarRate.innerText = "SP: " + APP.targetRate.toFixed(1) + " kg/h";
+            DOM.valStable.innerText = APP.isStable ? "~ STABLE" : "MOTION"; DOM.valStable.style.color = APP.isStable ? "#34d399" : "#64748b";
+            let fillPct = APP.weight / APP.hopperMaxCap; if(fillPct > 1) fillPct = 1; DOM.hopperFill.style.transform = `scaleY(${fillPct})`;
+            DOM.badgeState.innerText = APP.state;
+            DOM.badgeState.className = "px-3 py-1 rounded text-xs font-bold tracking-widest border " + (APP.state === 'RUNNING' ? "bg-emerald-900/50 text-emerald-400 border-emerald-600" : APP.state === 'REFILLING' ? "bg-blue-900/50 text-blue-400 border-blue-600 animate-pulse" : "bg-slate-800 text-slate-400 border-slate-600");
+            
+            if(APP.cv > 0 && APP.state === 'RUNNING') { DOM.screwLine.classList.add('running'); DOM.flowDisc.classList.add('active'); } else { DOM.screwLine.classList.remove('running'); DOM.flowDisc.classList.remove('active'); }
+            if(APP.state === 'REFILLING') { DOM.flowRefill.classList.add('active'); DOM.valveRefill.setAttribute('fill', '#0ea5e9'); } else { DOM.flowRefill.classList.remove('active'); DOM.valveRefill.setAttribute('fill', '#475569'); }
+        }
+
+        function drawChart() {
+            const w = DOM.chartCanvas.width; const h = DOM.chartCanvas.height; ctx.clearRect(0, 0, w, h);
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+            for(let i=1; i<4; i++) { ctx.beginPath(); ctx.moveTo(0, h * (i/4)); ctx.lineTo(w, h * (i/4)); ctx.stroke(); }
+            let maxY = APP.targetRate * 1.5; if(maxY < 100) maxY = 100; const xStep = w / (APP.maxHistory - 1);
+            ctx.beginPath(); ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+            for(let i=0; i<APP.historyData.length; i++) { let x = i * xStep, y = h - (APP.historyData[i].sp / maxY) * h; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); } ctx.stroke();
+            ctx.beginPath(); ctx.strokeStyle = '#10b981'; ctx.setLineDash([]); ctx.lineWidth = 2;
+            for(let i=0; i<APP.historyData.length; i++) { let x = i * xStep, y = h - (APP.historyData[i].act / maxY) * h; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); } ctx.stroke();
+        }
+        
+        initEvents();
+    </script>
+</body>
+</html>
