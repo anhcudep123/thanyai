@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web SCADA Pro - VWCI20 Dual Scale (ESP32 Connected)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;800&display=swap');
+        
+        :root {
+            --bg-dark: #0f172a; --bg-panel: #1e293b; --primary: #3b82f6; --accent: #10b981; --danger: #ef4444; --warning: #f59e0b;
+        }
+        body { background-color: var(--bg-dark); color: #f8fafc; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .font-mono-num { font-family: 'Share Tech Mono', monospace; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        
+        /* LCD Style */
+        .lcd { background: #020617; border: 2px inset #334155; box-shadow: inset 0 0 10px #000; color: #00ff66; text-shadow: 0 0 5px #00ff66; }
+        
+        /* Status LED */
+        .led { width: 14px; height: 14px; border-radius: 50%; background: #334155; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+        .led.on.green { background: #10b981; box-shadow: 0 0 10px #10b981, inset 0 1px 2px #fff; }
+        .led.on.red { background: #ef4444; box-shadow: 0 0 10px #ef4444, inset 0 1px 2px #fff; }
+        
+        /* Tab transition */
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* HMI Input Style */
+        .hmi-input { background: #cbd5e1; color: #0f172a; font-weight: bold; text-align: center; border: 2px solid #94a3b8; border-radius: 4px; width: 100%; padding: 4px; font-family: 'Share Tech Mono'; }
+        .hmi-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.5); }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-64 bg-slate-900 border-r border-slate-700 flex flex-col justify-between z-20 shadow-2xl">
+        <div>
+            <div class="p-6 text-center border-b border-slate-800">
+                <h1 class="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">DMPES SCADA</h1>
+                <p class="text-[10px] text-slate-400 mt-1">VWCI20 - ESP32 Gateway</p>
+                <div class="mt-3 flex items-center justify-center gap-2">
+                    <div id="esp-status-led" class="led red on"></div>
+                    <span id="esp-status-text" class="text-xs font-bold text-rose-500">MẤT KẾT NỐI ESP32</span>
+                </div>
+            </div>
+            
+            <nav class="p-4 space-y-2">
+                <button onclick="switchTab('main')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 bg-blue-600 rounded-lg font-semibold text-white shadow-lg transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg> Màn Hình Chính</button>
+                <button onclick="switchTab('params')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-semibold text-slate-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg> T.Số Điều Khiển</button>
+                <button onclick="switchTab('calib')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-semibold text-slate-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg> Hiệu Chuẩn Cân</button>
+                <button onclick="switchTab('tools')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-semibold text-slate-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg> Công Cụ & I/O</button>
+                <button onclick="switchTab('data')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-semibold text-slate-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Dữ Liệu Chi Tiết</button>
+                <button onclick="switchTab('printer')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-semibold text-slate-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg> Máy In & Bill</button>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-slate-800">
+            <button onclick="AppCore.stop()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-lg shadow uppercase transition">DỪNG KHẨN CẤP</button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 p-6 overflow-y-auto bg-slate-900">
+
+        <!-- TAB 1: MÀN HÌNH CHÍNH (MAIN DASHBOARD) -->
+        <div id="tab-main" class="tab-content active h-full flex flex-col">
+            
+            <div class="flex justify-between items-center mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+                <div class="flex gap-4">
+                    <div class="bg-slate-900 px-4 py-2 rounded-lg border border-slate-700">
+                        <span class="text-[10px] text-slate-400 uppercase font-bold">Tổng Mẻ Toàn Hệ Thống</span>
+                        <div id="ui-main-total-bags" class="text-2xl font-mono-num text-yellow-400 font-bold">0</div>
+                    </div>
+                    <div class="bg-slate-900 px-4 py-2 rounded-lg border border-slate-700">
+                        <span class="text-[10px] text-slate-400 uppercase font-bold">Tổng Khối Lượng (kg)</span>
+                        <div id="ui-main-total-weight" class="text-2xl font-mono-num text-emerald-400 font-bold">0.00</div>
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="AppCore.start()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 py-3 rounded-lg shadow-lg uppercase transition">▶ CHẠY HỆ THỐNG</button>
+                    <button onclick="AppCore.clearData()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-lg shadow-lg uppercase transition">XÓA DỮ LIỆU</button>
+                </div>
+            </div>
+
+            <!-- SCALES CONTAINER -->
+            <div class="grid grid-cols-2 gap-6 flex-1">
+                <!-- SCALE 1 -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-xl p-5 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-blue-400">ĐẦU CÂN 1</h2>
+                        <span id="ui-s1-state" class="px-3 py-1 bg-slate-900 rounded text-xs font-bold text-slate-400 border border-slate-700">IDLE</span>
+                    </div>
+                    
+                    <div class="lcd text-6xl text-center py-6 rounded-xl font-mono-num tracking-widest mb-6" id="ui-s1-weight">0.00</div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <span class="text-xs text-slate-400 block mb-1">MẺ VỪA CÂN</span>
+                            <span id="ui-s1-last-weight" class="text-xl text-yellow-400 font-mono-num font-bold">0.00 kg</span>
+                        </div>
+                        <div class="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <span class="text-xs text-slate-400 block mb-1">SỐ MẺ</span>
+                            <span id="ui-s1-bags" class="text-xl text-blue-400 font-mono-num font-bold">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Valve Indicators -->
+                    <div class="mt-auto grid grid-cols-4 gap-2 text-center border-t border-slate-700 pt-4">
+                        <div><div class="text-[10px] text-slate-400 mb-1">CỬA LỚN</div><div id="ui-s1-led-fast" class="led mx-auto"></div></div>
+                        <div><div class="text-[10px] text-slate-400 mb-1">CỬA VỪA</div><div id="ui-s1-led-med" class="led mx-auto"></div></div>
+                        <div><div class="text-[10px] text-slate-400 mb-1">CỬA NHỎ</div><div id="ui-s1-led-slow" class="led mx-auto"></div></div>
+                        <div><div class="text-[10px] text-slate-400 mb-1">XẢ LIỆU</div><div id="ui-s1-led-disc" class="led mx-auto"></div></div>
+                    </div>
+                </div>
+
+                <!-- SCALE 2 -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-xl p-5 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-purple-400">ĐẦU CÂN 2</h2>
+                        <span id="ui-s2-state" class="px-3 py-1 bg-slate-900 rounded text-xs font-bold text-slate-400 border border-slate-700">IDLE</span>
+                    </div>
+                    
+                    <div class="lcd text-6xl text-center py-6 rounded-xl font-mono-num tracking-widest mb-6 text-purple-400" style="color: #c084fc; text-shadow: 0 0 10px #c084fc;" id="ui-s2-weight">0.00</div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <span class="text-xs text-slate-400 block mb-1">MẺ VỪA CÂN</span>
+                            <span id="ui-s2-last-weight" class="text-xl text-yellow-400 font-mono-num font-bold">0.00 kg</span>
+                        </div>
+                        <div class="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <span class="text-xs text-slate-400 block mb-1">SỐ MẺ</span>
+                            <span id="ui-s2-bags" class="text-xl text-purple-400 font-mono-num font-bold">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Valve Indicators -->
+                    <div class="mt-auto grid grid-cols-4 gap-2 text-center border-t border-slate-700 pt-4">
+                        <div><div class="text-[10px] text-slate-400 mb-1">CỬA LỚN</div><div id="ui-s2-led-fast" class="led mx-auto"></div></div>
+                        <div><div class="text-[10px] text-slate-400 mb-1">CỬA VỪA</div><div id="ui-s2-led-med" class="led mx-auto"></div></div>
+                        <div><div class="text-[10px] text-slate-400 mb-1">CỬA NHỎ</div><div id="ui-s2-led-slow" class="led mx-auto"></div></div>
+                        <div><div class="text-[10px] text-slate-400 mb-1">XẢ LIỆU</div><div id="ui-s2-led-disc" class="led mx-auto"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: THÔNG SỐ ĐIỀU KHIỂN CÂN -->
+        <div id="tab-params" class="tab-content h-full">
+            <h2 class="text-2xl font-bold mb-6 text-blue-400 border-b border-slate-700 pb-2">THÔNG SỐ ĐIỀU KHIỂN CHUNG</h2>
+            
+            <div class="grid grid-cols-3 lg:grid-cols-4 gap-4">
+                <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+                    <input type="number" id="p-tar" class="hmi-input text-2xl mb-2" value="25.00" step="0.01">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Khối Lượng Mục Tiêu (kg)</span>
+                </div>
+                <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+                    <input type="number" id="p-stab" class="hmi-input text-2xl mb-2" value="0.4" step="0.1">
+                    <span class="text-xs font-bold text-slate-400 uppercase">TG Chờ Ổn Định (s)</span>
+                </div>
+                <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+                    <input type="number" id="p-zero" class="hmi-input text-2xl mb-2" value="10" step="1">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Số Mẻ Kích Về 0</span>
+                </div>
+                <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+                    <input type="number" id="p-discw" class="hmi-input text-2xl mb-2" value="0.15" step="0.01">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Ngưỡng Xả Dưới (kg)</span>
+                </div>
+                <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+                    <input type="number" id="p-clost" class="hmi-input text-2xl mb-2" value="0.7" step="0.1">
+                    <span class="text-xs font-bold text-slate-400 uppercase">T/G Chờ Đóng Van (s)</span>
+                </div>
+                <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+                    <input type="number" id="p-pent" class="hmi-input text-2xl mb-2" value="0.5" step="0.1">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Hành Trình Pen (s)</span>
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end">
+                <button onclick="AppCore.saveParams()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-3 rounded shadow uppercase transition">LƯU CÀI ĐẶT ESP32</button>
+            </div>
+        </div>
+
+        <!-- TAB 3, 4, 5, 6 (GIỮ NGUYÊN GIAO DIỆN) -->
+        <!-- TAB 3: HIỆU CHUẨN CÂN -->
+        <div id="tab-calib" class="tab-content h-full">
+            <h2 class="text-2xl font-bold mb-6 text-emerald-400 border-b border-slate-700 pb-2">HIỆU CHUẨN (CALIB) CÂN</h2>
+            
+            <div class="grid grid-cols-3 gap-6">
+                <!-- CÁC BƯỚC HIỆU CHUẨN -->
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <h3 class="text-sm font-bold text-slate-300 mb-4 text-center">CÁC BƯỚC HIỆU CHUẨN TRỰC TIẾP</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold w-24">TẢI TỐI ĐA (F LOAD)</span>
+                            <input type="number" class="hmi-input flex-1 !bg-amber-200" value="100.00">
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold w-24">TẢI MẪU (S LOAD)</span>
+                            <input type="number" class="hmi-input flex-1 !bg-blue-200" value="20.00">
+                        </div>
+                        <button class="w-full bg-slate-600 hover:bg-blue-500 text-white font-bold py-3 rounded shadow transition">HIỆU CHUẨN 0 (CHƯA ĐẶT TẢI)</button>
+                        <button class="w-full bg-slate-600 hover:bg-amber-500 text-white font-bold py-3 rounded shadow transition">HIỆU CHUẨN TẢI (ĐÃ ĐẶT TẢI)</button>
+                    </div>
+                </div>
+
+                <!-- NHẬP SỐ NỘI (KHÔNG CALIB) -->
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <h3 class="text-sm font-bold text-slate-300 mb-4 text-center">NHẬP SỐ NỘI (KHÔNG CẦN TẢI)</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between bg-slate-900 p-2 border border-slate-700 rounded">
+                            <span class="text-xs font-bold text-slate-400">SỐ NỘI HIỆN TẠI</span>
+                            <span class="font-mono-num text-emerald-400 text-lg">123456</span>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 mb-1 block">NHẬP SỐ NỘI CALIB 0</label>
+                            <input type="number" class="hmi-input !bg-cyan-200" value="10000">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 mb-1 block">NHẬP SỐ NỘI CALIB TẢI</label>
+                            <input type="number" class="hmi-input !bg-orange-300" value="150000">
+                        </div>
+                        <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded shadow transition">GHI XUỐNG ĐẦU CÂN</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: CÔNG CỤ & I/O -->
+        <div id="tab-tools" class="tab-content h-full">
+            <h2 class="text-2xl font-bold mb-6 text-purple-400 border-b border-slate-700 pb-2">CÔNG CỤ & KIỂM TRA I/O</h2>
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 mb-6">
+                <h3 class="text-sm font-bold text-yellow-400 mb-4">TRẠNG THÁI NGÕ VÀO (INPUTS)</h3>
+                <div class="flex gap-4">
+                    <div class="flex items-center gap-2 bg-slate-900 p-3 rounded border border-slate-700"><div class="led"></div><span class="text-xs font-bold">IN1 (Chạy)</span></div>
+                    <div class="flex items-center gap-2 bg-slate-900 p-3 rounded border border-slate-700"><div class="led"></div><span class="text-xs font-bold">IN2 (Kẹp)</span></div>
+                    <div class="flex items-center gap-2 bg-slate-900 p-3 rounded border border-slate-700"><div class="led"></div><span class="text-xs font-bold">IN3</span></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <h3 class="text-sm font-bold text-blue-400 mb-4">TRẠNG THÁI NGÕ RA (OUTPUTS) - Click để test</h3>
+                <div class="grid grid-cols-4 gap-4">
+                    <button class="flex flex-col items-center justify-center p-4 bg-slate-700 hover:bg-slate-600 rounded border border-slate-600 transition">
+                        <div class="led red mb-2"></div><span class="text-xs font-bold">OUT 1 (Cửa Lớn)</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center p-4 bg-slate-700 hover:bg-slate-600 rounded border border-slate-600 transition">
+                        <div class="led red mb-2"></div><span class="text-xs font-bold">OUT 2 (Cửa Vừa)</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center p-4 bg-slate-700 hover:bg-slate-600 rounded border border-slate-600 transition">
+                        <div class="led red mb-2"></div><span class="text-xs font-bold">OUT 3 (Cửa Nhỏ)</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center p-4 bg-slate-700 hover:bg-slate-600 rounded border border-slate-600 transition">
+                        <div class="led blue mb-2"></div><span class="text-xs font-bold">OUT 4 (Cửa Xả)</span>
+                    </button>
+                    <button class="flex flex-col items-center justify-center p-4 bg-slate-700 hover:bg-slate-600 rounded border border-slate-600 transition">
+                        <div class="led green mb-2"></div><span class="text-xs font-bold">OUT 5 (Kẹp Bao)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: DỮ LIỆU CHI TIẾT -->
+        <div id="tab-data" class="tab-content h-full flex flex-col">
+            <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-2">
+                <h2 class="text-2xl font-bold text-emerald-400">DỮ LIỆU SẢN XUẤT CHI TIẾT</h2>
+                <div class="flex gap-3">
+                    <button onclick="AppCore.exportCSV()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded shadow flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> XUẤT FILE CSV</button>
+                </div>
+            </div>
+            
+            <div class="flex-1 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
+                <div class="overflow-y-auto flex-1 p-0">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-900 sticky top-0 shadow">
+                            <tr>
+                                <th class="p-4 text-xs font-bold text-slate-300 uppercase border-b border-slate-700">STT</th>
+                                <th class="p-4 text-xs font-bold text-slate-300 uppercase border-b border-slate-700">Thời Gian</th>
+                                <th class="p-4 text-xs font-bold text-slate-300 uppercase border-b border-slate-700">Nguồn</th>
+                                <th class="p-4 text-xs font-bold text-slate-300 uppercase border-b border-slate-700">Số Mẻ</th>
+                                <th class="p-4 text-xs font-bold text-emerald-400 uppercase border-b border-slate-700">Khối Lượng (kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-table-body" class="text-sm font-mono-num text-slate-300">
+                            <!-- JS will populate this -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: MÁY IN -->
+        <div id="tab-printer" class="tab-content h-full">
+            <h2 class="text-2xl font-bold mb-6 text-yellow-400 border-b border-slate-700 pb-2">THÔNG SỐ MÁY IN BLUETOOTH / WIFI</h2>
+            
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-3xl">
+                <div class="flex gap-4 mb-6">
+                    <button onclick="AppCore.connectBluetoothPrinter()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded shadow flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> 
+                        TÌM MÁY IN BLUETOOTH
+                    </button>
+                    <button onclick="window.print()" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-6 rounded shadow">IN QUA TRÌNH DUYỆT</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 mb-1 block">TÊN CÔNG TY</label>
+                        <input type="text" id="prn-company" class="hmi-input !text-left" value="DMPES TECHNOLOGY">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 mb-1 block">SỐ ĐIỆN THOẠI</label>
+                        <input type="text" id="prn-phone" class="hmi-input !text-left" value="0987654321">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 mb-1 block">TÊN NGƯỜI BÁN</label>
+                        <input type="text" id="prn-seller" class="hmi-input !text-left" value="ADMIN">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 mb-1 block">TÊN NGƯỜI MUA</label>
+                        <input type="text" id="prn-buyer" class="hmi-input !text-left" value="KHACH HANG">
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex items-center gap-4 border-t border-slate-700 pt-6">
+                    <span class="text-sm font-bold text-slate-300">Chế độ in:</span>
+                    <label class="flex items-center gap-2 text-sm text-slate-300"><input type="radio" name="print-mode" checked> In Từng Mẻ</label>
+                    <label class="flex items-center gap-2 text-sm text-slate-300"><input type="radio" name="print-mode"> In Tổng Kết</label>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- NOTIFICATION SYSTEM -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        // --- CẤU HÌNH KẾT NỐI ESP32 (WEBSOCKET) ---
+        const ESP32_IP = "192.168.1.200"; // Đổi thành IP thực tế của Gateway ECM50A-09
+        let ws;
+
+        // --- 1. UI NAVIGATION LOGIC ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-lg');
+                btn.classList.add('text-slate-300', 'hover:bg-slate-800');
+            });
+            event.currentTarget.classList.remove('text-slate-300', 'hover:bg-slate-800');
+            event.currentTarget.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-emerald-600' : 'bg-rose-600';
+            toast.className = `${bgColor} text-white px-6 py-3 rounded shadow-lg transition-all duration-300 opacity-0 translate-y-4 font-bold text-sm`;
+            toast.innerText = message;
+            document.getElementById('toast-container').appendChild(toast);
+            
+            setTimeout(() => { toast.classList.remove('opacity-0', 'translate-y-4'); }, 10);
+            setTimeout(() => { 
+                toast.classList.add('opacity-0', 'translate-y-4'); 
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- 2. DATA LOGGING & EXPORT SYSTEM ---
+        const DataLogger = {
+            records: [],
+            init: function() {
+                const saved = localStorage.getItem('dmpes_scada_data');
+                if (saved) { this.records = JSON.parse(saved); this.renderTable(); }
+            },
+            addRecord: function(batchNo, weight, source) {
+                const now = new Date();
+                const record = {
+                    id: this.records.length + 1,
+                    time: now.toLocaleTimeString('vi-VN', { hour12: false }) + " " + now.toLocaleDateString('vi-VN'),
+                    source: source,
+                    batch: batchNo,
+                    weight: weight.toFixed(2)
+                };
+                this.records.unshift(record); // Add to top
+                if (this.records.length > 1000) this.records.pop(); // Keep last 1000
+                localStorage.setItem('dmpes_scada_data', JSON.stringify(this.records));
+                this.renderTable();
+            },
+            clearAll: function() {
+                this.records = [];
+                localStorage.removeItem('dmpes_scada_data');
+                this.renderTable();
+                showToast('Đã xóa toàn bộ dữ liệu lịch sử!');
+            },
+            renderTable: function() {
+                const tbody = document.getElementById('data-table-body');
+                tbody.innerHTML = '';
+                this.records.forEach(r => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-700 border-b border-slate-700/50">
+                            <td class="p-3">${r.id}</td>
+                            <td class="p-3">${r.time}</td>
+                            <td class="p-3 text-sky-400 font-bold">${r.source}</td>
+                            <td class="p-3">${r.batch}</td>
+                            <td class="p-3 text-emerald-400 font-bold">${r.weight}</td>
+                        </tr>
+                    `;
+                });
+            },
+            exportToCSV: function() {
+                if(this.records.length === 0) { showToast('Không có dữ liệu để xuất!', 'error'); return; }
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+                csvContent += "STT,Thời Gian,Nguồn,Số Mẻ,Khối Lượng (kg)\n";
+                this.records.forEach(r => { csvContent += `${r.id},${r.time},${r.source},${r.batch},${r.weight}\n`; });
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `SCADA_Data_${new Date().getTime()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast('Đã xuất file CSV thành công!');
+            }
+        };
+
+        // --- 3. APP CORE & WEBSOCKET ENGINE ---
+        const AppCore = {
+            lastS1Bags: 0,
+            lastS2Bags: 0,
+
+            initWebSocket: function() {
+                ws = new WebSocket(`ws://${ESP32_IP}:81/`);
+                
+                ws.onopen = function() {
+                    document.getElementById('esp-status-led').className = "led green on";
+                    document.getElementById('esp-status-text').className = "text-xs font-bold text-emerald-400";
+                    document.getElementById('esp-status-text').innerText = "ESP32 ONLINE";
+                    showToast('Đã kết nối thành công tới Gateway ESP32!');
+                };
+                
+                ws.onclose = function() {
+                    document.getElementById('esp-status-led').className = "led red on";
+                    document.getElementById('esp-status-text').className = "text-xs font-bold text-rose-500";
+                    document.getElementById('esp-status-text').innerText = "MẤT KẾT NỐI ESP32";
+                    // Thử kết nối lại sau 3 giây
+                    setTimeout(AppCore.initWebSocket, 3000);
+                };
+                
+                ws.onerror = function(error) {
+                    console.log('WebSocket Error: ', error);
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Cập nhật UI Màn hình chính
+                        document.getElementById('ui-main-total-bags').innerText = data.global_bags;
+                        document.getElementById('ui-main-total-weight').innerText = data.global_weight.toFixed(2);
+                        
+                        // Cập nhật Đầu cân 1
+                        document.getElementById('ui-s1-weight').innerText = data.s1.w.toFixed(2);
+                        document.getElementById('ui-s1-last-weight').innerText = data.s1.last.toFixed(2) + " kg";
+                        document.getElementById('ui-s1-bags').innerText = data.s1.bags;
+                        
+                        // Cập nhật Đầu cân 2
+                        document.getElementById('ui-s2-weight').innerText = data.s2.w.toFixed(2);
+                        document.getElementById('ui-s2-last-weight').innerText = data.s2.last.toFixed(2) + " kg";
+                        document.getElementById('ui-s2-bags').innerText = data.s2.bags;
+
+                        // Logic ghi nhận lịch sử (Chỉ lưu khi số mẻ tăng lên)
+                        if (data.s1.bags > AppCore.lastS1Bags && AppCore.lastS1Bags > 0) {
+                            DataLogger.addRecord(data.s1.bags, data.s1.last, "Cân 1");
+                        }
+                        if (data.s2.bags > AppCore.lastS2Bags && AppCore.lastS2Bags > 0) {
+                            DataLogger.addRecord(data.s2.bags, data.s2.last, "Cân 2");
+                        }
+                        
+                        AppCore.lastS1Bags = data.s1.bags;
+                        AppCore.lastS2Bags = data.s2.bags;
+
+                    } catch (e) {
+                        console.error("Lỗi phân tích dữ liệu JSON: ", e);
+                    }
+                };
+            },
+
+            // Các hàm gửi lệnh xuống ESP32
+            start: function() {
+                if(ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ cmd: "START", id: 1 }));
+                    ws.send(JSON.stringify({ cmd: "START", id: 2 }));
+                    showToast('Đã gửi lệnh CHẠY hệ thống xuống ESP32');
+                } else { showToast('Lỗi: Chưa kết nối ESP32!', 'error'); }
+            },
+            
+            stop: function() {
+                if(ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ cmd: "STOP", id: 1 }));
+                    ws.send(JSON.stringify({ cmd: "STOP", id: 2 }));
+                    showToast('Đã gửi lệnh DỪNG hệ thống xuống ESP32', 'error');
+                } else { showToast('Lỗi: Chưa kết nối ESP32!', 'error'); }
+            },
+            
+            clearData: function() {
+                if(confirm("Bạn có chắc chắn muốn xóa toàn bộ dữ liệu (Số mẻ, Tổng khối lượng và Bảng chi tiết)?")) {
+                    DataLogger.clearAll();
+                    if(ws && ws.readyState === WebSocket.OPEN) {
+                        // Gửi lệnh kích về 0 (Zero) xuống đầu cân
+                        ws.send(JSON.stringify({ cmd: "ZERO", id: 1 }));
+                        ws.send(JSON.stringify({ cmd: "ZERO", id: 2 }));
+                        showToast('Đã gửi lệnh KÍCH VỀ 0 xuống các đầu cân');
+                    }
+                }
+            },
+            
+            saveParams: function() {
+                let targetWeight = parseFloat(document.getElementById('p-tar').value);
+                if(ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ cmd: "SET_PARAM", id: 1, target: targetWeight }));
+                    ws.send(JSON.stringify({ cmd: "SET_PARAM", id: 2, target: targetWeight }));
+                    showToast(`Đã lưu thông số. Target mới: ${targetWeight}kg`);
+                } else { showToast('Lỗi: Chưa kết nối ESP32!', 'error'); }
+            },
+
+            exportCSV: function() { DataLogger.exportToCSV(); },
+            
+            connectBluetoothPrinter: async function() {
+                try {
+                    showToast('Đang quét thiết bị Bluetooth...');
+                    const device = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+                    });
+                    showToast(`Đã kết nối máy in: ${device.name}`);
+                } catch(e) {
+                    showToast('Lỗi Bluetooth: ' + e.message, 'error');
+                }
+            }
+        };
+
+        // Initialize on load
+        window.onload = function() {
+            DataLogger.init();
+            AppCore.initWebSocket();
+        }
+    </script>
+</body>
+</html>
