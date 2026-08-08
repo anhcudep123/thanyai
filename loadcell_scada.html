@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loadcell SCADA - Web Serial</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f3; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: auto; }
+        .header { text-align: center; margin-bottom: 20px; background: #2c3e50; color: white; padding: 15px; border-radius: 8px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        h3 { margin-top: 0; color: #2980b9; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        .data-box { font-size: 3em; font-weight: bold; color: #c0392b; text-align: center; margin: 20px 0; }
+        .status { text-align: center; font-size: 1.2em; font-weight: bold; }
+        .stable { color: #27ae60; } .unstable { color: #f39c12; }
+        button { background: #2980b9; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 1em; width: 100%; margin-bottom: 10px; font-weight: bold; transition: 0.3s;}
+        button:hover { background: #34495e; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn-connect { background: #27ae60; } .btn-connect:hover { background: #2ecc71; }
+        .btn-zero { background: #c0392b; } .btn-zero:hover { background: #e74c3c; }
+        input { width: 100%; padding: 10px; box-sizing: border-box; margin-bottom: 15px; border: 1px solid #bdc3c7; border-radius: 5px; font-size: 1em; }
+        .log-box { width: 100%; height: 100px; background: #333; color: #0f0; font-family: monospace; padding: 10px; box-sizing: border-box; overflow-y: scroll; font-size: 0.9em; border-radius: 5px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">Trạm Đọc Loadcell Số (Web Serial)</h2>
+            <p style="margin: 5px 0 0 0;">Kết nối trực tiếp cáp USB-RS485 qua Trình duyệt</p>
+        </div>
+        
+        <button id="btnConnect" class="btn-connect">🔌 KẾT NỐI CỔNG COM</button>
+
+        <div class="grid">
+            <div class="card" style="grid-column: span 2;">
+                <h3>Biểu Đồ Khối Lượng</h3>
+                <canvas id="weightChart" height="80"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Trạng Thái Đọc</h3>
+                <p>Địa chỉ đang giao tiếp: <span id="lbl_addr">1</span> (Hex: <span id="lbl_addr_hex">0x41</span>)</p>
+                <div class="data-box" id="lbl_weight">---</div>
+                <div class="status" id="lbl_status">Đang chờ kết nối...</div>
+                <button class="btn-zero" id="btnZero" disabled>SET ZERO (Thiết lập điểm 0)</button>
+            </div>
+
+            <div class="card">
+                <h3>Bảng Điều Khiển Cài Đặt</h3>
+                <label>Địa chỉ đích (Dec 1-31):</label>
+                <input type="number" id="inp_target_addr" value="1" min="1" max="31">
+                
+                <button id="btnFind" disabled>TÌM LOADCELL (Broadcast)</button>
+                
+                <hr style="border: 0; border-top: 1px dashed #ccc; margin: 15px 0;">
+                <label>Ghi địa chỉ mới (Dec 1-31):</label>
+                <input type="number" id="inp_new_addr" placeholder="Ví dụ: 2">
+                <button id="btnSetAddr" disabled>LƯU ĐỊA CHỈ MỚI</button>
+            </div>
+            
+            <div class="card" style="grid-column: span 2;">
+                <h3>Log Hệ Thống</h3>
+                <div class="log-box" id="logBox"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CẤU HÌNH BIỂU ĐỒ ---
+        const ctx = document.getElementById('weightChart').getContext('2d');
+        const weightChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Giá trị nội (Internal Code)', data: [], borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.2)', borderWidth: 2, fill: true, tension: 0.1 }] },
+            options: { animation: false, scales: { x: { display: false } } }
+        });
+
+        // --- BIẾN TOÀN CỤC WEB SERIAL ---
+        let port;
+        let reader;
+        let writer;
+        let keepReading = true;
+        let readInterval;
+        let rxBuffer = [];
+
+        // --- CÁC HÀM TIỆN ÍCH ---
+        function logMsg(msg) {
+            const logBox = document.getElementById('logBox');
+            logBox.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // Tính BCC: Cộng các byte, AND 0x7F, nếu bằng 0x02 hoặc 0x0D thì +1
+        function calculateBCC(dataArray) {
+            let sum = 0;
+            for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+            let bcc = sum & 0x7F; // Lấy 7 bit thấp[cite: 1]
+            if(bcc === 0x02 || bcc === 0x0D) bcc += 1; // Tránh ký tự điều khiển[cite: 1]
+            return bcc;
+        }
+
+        function hexCharToInt(charHex) {
+            return parseInt(String.fromCharCode(charHex), 16);
+        }
+
+        // --- KẾT NỐI VÀ XỬ LÝ SERIAL ---
+        document.getElementById('btnConnect').addEventListener('click', async () => {
+            if (!('serial' in navigator)) {
+                alert("Trình duyệt của bạn không hỗ trợ Web Serial API. Vui lòng dùng Google Chrome hoặc Edge.");
+                return;
+            }
+
+            try {
+                if(!port) {
+                    port = await navigator.serial.requestPort();
+                    // Cấu hình 9600, 8N1 theo tài liệu Loadcell[cite: 1]
+                    await port.open({ baudRate: 9600, dataBits: 8, stopBits: 1, parity: "none" }); 
+                    
+                    logMsg("Đã kết nối cổng COM thành công.");
+                    document.getElementById('btnConnect').innerText = "Đã Kết Nối";
+                    document.getElementById('btnConnect').style.background = "#2ecc71";
+                    
+                    // Mở khóa các nút
+                    document.getElementById('btnZero').disabled = false;
+                    document.getElementById('btnFind').disabled = false;
+                    document.getElementById('btnSetAddr').disabled = false;
+
+                    writer = port.writable.getWriter();
+                    keepReading = true;
+                    
+                    // Khởi động luồng đọc và luồng hỏi vòng (polling)
+                    readLoop();
+                    startPolling();
+                }
+            } catch (err) {
+                logMsg("Lỗi kết nối: " + err.message);
+            }
+        });
+
+        // Hàm hỏi vòng định kỳ (gửi lệnh đọc)
+        function startPolling() {
+            readInterval = setInterval(async () => {
+                let targetAddrDec = parseInt(document.getElementById('inp_target_addr').value) || 1;
+                let addrHex = 0x40 + targetAddrDec; // 1 -> 0x41[cite: 1]
+                
+                document.getElementById('lbl_addr').innerText = targetAddrDec;
+                document.getElementById('lbl_addr_hex').innerText = "0x" + addrHex.toString(16).toUpperCase();
+
+                // Lệnh đọc: STX R D S n BCC CR[cite: 1]
+                let cmd = [0xFF, 0x02, 0x52, 0x44, 0x53, addrHex];
+                let bcc = calculateBCC(cmd.slice(2)); 
+                cmd.push(bcc, 0x0D);
+                
+                await sendBytes(cmd);
+            }, 200); // Đọc mỗi 200ms
+        }
+
+        // Gửi mảng byte xuống cổng Serial
+        async function sendBytes(bytesArray) {
+            if(writer) {
+                const data = new Uint8Array(bytesArray);
+                await writer.write(data);
+            }
+        }
+
+        // Luồng đọc dữ liệu liên tục
+        async function readLoop() {
+            while (port.readable && keepReading) {
+                reader = port.readable.getReader();
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        if (value) {
+                            for (let i = 0; i < value.length; i++) {
+                                let b = value[i];
+                                rxBuffer.push(b);
+                                
+                                // Nếu gặp CR (0x0D) là kết thúc một khung truyền[cite: 1]
+                                if (b === 0x0D) {
+                                    processFrame(rxBuffer);
+                                    rxBuffer = []; // Xóa buffer sau khi xử lý
+                                }
+                                if(rxBuffer.length > 100) rxBuffer = []; // Chống tràn
+                            }
+                        }
+                    }
+                } catch (error) {
+                    logMsg("Lỗi đọc dữ liệu: " + error);
+                } finally {
+                    reader.releaseLock();
+                }
+            }
+        }
+
+        // Xử lý khung truyền nhận được
+        function processFrame(buffer) {
+            // Định dạng trả về: STX A D X1 X2 X3 X4 X5 X6 BCC CR[cite: 1]
+            if (buffer.length >= 12 && (buffer[0] === 0xFF || buffer[0] === 0x02)) {
+                // Tìm vị trí ký tự 'D' (0x44)
+                let d_idx = buffer.indexOf(0x44);
+                if(d_idx >= 2 && (d_idx + 6) < buffer.length) {
+                    let x1 = buffer[d_idx + 1];
+                    let x2 = buffer[d_idx + 2];
+                    let x3 = buffer[d_idx + 3];
+                    let x4 = buffer[d_idx + 4];
+                    let x5 = buffer[d_idx + 5];
+                    let x6 = buffer[d_idx + 6];
+
+                    // X1-X5 là giá trị mã nội (Hex ASCII). X1 là thấp, X5 là cao[cite: 1]
+                    let val = (hexCharToInt(x5) << 16) | 
+                              (hexCharToInt(x4) << 12) | 
+                              (hexCharToInt(x3) << 8) | 
+                              (hexCharToInt(x2) << 4) | 
+                              hexCharToInt(x1);
+                    
+                    // Cập nhật UI
+                    document.getElementById('lbl_weight').innerText = val;
+                    
+                    // X6 = 0x38 thường biểu thị trạng thái ổn định[cite: 1]
+                    let isStable = (x6 === 0x38);
+                    let statusEl = document.getElementById('lbl_status');
+                    if (isStable) {
+                        statusEl.innerText = "ỔN ĐỊNH";
+                        statusEl.className = "status stable";
+                    } else {
+                        statusEl.innerText = "DAO ĐỘNG";
+                        statusEl.className = "status unstable";
+                    }
+
+                    // Cập nhật biểu đồ
+                    let now = new Date();
+                    weightChart.data.labels.push(now.getSeconds());
+                    weightChart.data.datasets[0].data.push(val);
+                    if (weightChart.data.labels.length > 40) {
+                        weightChart.data.labels.shift();
+                        weightChart.data.datasets[0].data.shift();
+                    }
+                    weightChart.update();
+                }
+            }
+        }
+
+        // --- SỰ KIỆN NÚT BẤM (CÀI ĐẶT) ---
+        
+        // 1. SET ZERO
+        document.getElementById('btnZero').addEventListener('click', async () => {
+            let targetAddrDec = parseInt(document.getElementById('inp_target_addr').value) || 1;
+            let addrHex = 0x40 + targetAddrDec;
+            // Lệnh Set Zero: 02 30 2F 33 [Addr] [BCC] 0D[cite: 1]
+            let cmd = [0x02, 0x30, 0x2F, 0x33, addrHex];
+            let bcc = calculateBCC(cmd.slice(1));
+            cmd.push(bcc, 0x0D);
+            await sendBytes(cmd);
+            logMsg(`Đã gửi lệnh SET ZERO tới địa chỉ ${targetAddrDec}`);
+        });
+
+        // 2. TÌM LOADCELL
+        document.getElementById('btnFind').addEventListener('click', async () => {
+            // Lệnh đọc địa chỉ: Dùng địa chỉ broadcast 0x40[cite: 1]
+            let cmd = [0xFF, 0x02, 0x52, 0x44, 0x53, 0x40, 0x29, 0x0D]; //[cite: 1]
+            await sendBytes(cmd);
+            logMsg(`Đã gửi lệnh TÌM LOADCELL. Đang chờ phản hồi...`);
+        });
+
+        // 3. SET ADDRESS
+        document.getElementById('btnSetAddr').addEventListener('click', async () => {
+            let newAddrDec = parseInt(document.getElementById('inp_new_addr').value);
+            if(!newAddrDec || newAddrDec < 1 || newAddrDec > 31) {
+                alert("Vui lòng nhập địa chỉ hợp lệ từ 1-31");
+                return;
+            }
+            let newAddrHex = 0x40 + newAddrDec;
+            // Lệnh ghi địa chỉ: STX S N M [n] BCC CR[cite: 1]
+            let cmd = [0xFF, 0x02, 0x53, 0x4E, 0x4D, newAddrHex];
+            let bcc = calculateBCC(cmd.slice(2));
+            cmd.push(bcc, 0x0D);
+            await sendBytes(cmd);
+            logMsg(`Đã gửi lệnh ĐỔI ĐỊA CHỈ thành ${newAddrDec}`);
+        });
+    </script>
+</body>
+</html>
