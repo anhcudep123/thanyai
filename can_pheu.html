@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VWCI20 REST SCADA SYSTEM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        :root { --bg-main: #0a0c16; --bg-panel: #121625; --neon-green: #00ff66; --neon-red: #ff3333; --neon-yellow: #ffcc00; --neon-blue: #00ccff; }
+        body { background-color: var(--bg-main); color: #e2e8f0; font-family: system-ui, sans-serif; }
+        .lcd-display { font-family: 'Share Tech Mono', monospace; background: #030303; color: var(--neon-red); text-shadow: 0 0 10px rgba(255, 51, 51, 0.7); border: 2px solid #2d3748; box-shadow: inset 0 0 12px #000; }
+        .led { width: 12px; height: 12px; border-radius: 50%; background-color: #222530; box-shadow: inset 0 0 4px #000; transition: all 0.15s ease-in-out; }
+        .led.green.on { background-color: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+        .led.red.on { background-color: var(--neon-red); box-shadow: 0 0 8px var(--neon-red); }
+        .led.yellow.on { background-color: var(--neon-yellow); box-shadow: 0 0 8px var(--neon-yellow); }
+        .led.blue.on { background-color: var(--neon-blue); box-shadow: 0 0 8px var(--neon-blue); }
+        .scada-panel { background-color: var(--bg-panel); border: 1px solid #1e293b; border-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); }
+        input[type="number"], input[type="text"], select { background: #090d16; border: 1px solid #334155; color: var(--neon-green); font-family: 'Share Tech Mono', monospace; font-size: 1rem; text-align: right; padding: 4px 8px; border-radius: 6px; width: 100%; }
+        input[type="text"] { text-align: left; }
+        input[type="number"]:focus, input[type="text"]:focus, select:focus { outline: none; border-color: var(--neon-blue); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0c16; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4">
+
+    <!-- CẤU HÌNH API -->
+    <div class="w-full max-w-7xl flex flex-row items-center gap-4 mb-4 scada-panel p-3">
+        <label class="text-sm font-bold text-slate-400">ĐỊA CHỈ IP ESP32:</label>
+        <input id="api-ip" type="text" class="w-64" value="http://192.168.2.118" placeholder="http://192.168.2.118">
+        <span class="text-xs text-slate-500 italic">Nhập địa chỉ IP hiển thị trên Serial Monitor</span>
+    </div>
+
+    <!-- HEADER SYSTEM BAR -->
+    <div class="w-full max-w-7xl flex flex-col lg:flex-row justify-between items-center mb-6 scada-panel p-5 gap-4">
+        <div>
+            <h1 class="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 tracking-wider">VWCI20 BAGGING SCADA</h1>
+            <p class="text-xs text-slate-400 font-medium">Hệ Thống Trạm Cân Đóng Bao Tự Động (Chế độ Local REST)</p>
+        </div>
+        
+        <div class="flex gap-6 px-6 py-2 bg-[#090d16] border border-slate-800 rounded-lg">
+            <div class="text-center border-r border-slate-800 pr-6">
+                <span class="text-[10px] text-slate-400 block font-semibold">TỔNG KHỐI LƯỢNG (kg)</span>
+                <span id="global-total-weight" class="text-xl font-bold text-emerald-400 font-mono tracking-wider">0.00</span>
+            </div>
+            <div class="text-center">
+                <span class="text-[10px] text-slate-400 block font-semibold">TỔNG SỐ BAO</span>
+                <span id="global-total-bags" class="text-xl font-bold text-yellow-400 font-mono tracking-wider">0</span>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center justify-center">
+            <button onclick="sendAction('/webStart')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded shadow transition text-xs">START</button>
+            <button onclick="sendAction('/webStop')" class="bg-rose-700 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded shadow transition text-xs">STOP</button>
+            <button onclick="sendAction('/webZero')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded shadow transition text-xs">ZERO</button>
+            <button onclick="sendAction('/saveTotals')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded shadow transition text-xs ml-2">LƯU DỮ LIỆU</button>
+            <button onclick="clearAllData()" class="bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition text-xs">XÓA DỮ LIỆU</button>
+        </div>
+    </div>
+
+    <!-- MAIN GRID CONTAINER -->
+    <div class="w-full max-w-7xl grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+        
+        <!-- SCALE 1: HARDWARE REALTIME DATA -->
+        <div class="scada-panel p-5 flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                    <h2 class="text-base font-bold text-blue-400 uppercase">CÂN THỰC TẾ</h2>
+                    <span id="s1-state-badge" class="px-2.5 py-1 text-xs font-extrabold rounded bg-slate-800 text-slate-400">IDLE</span>
+                </div>
+                
+                <div class="bg-black p-4 rounded-lg border border-slate-800 shadow-inner mb-4">
+                    <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
+                        <span>NET WEIGHT (kg)</span>
+                    </div>
+                    <div id="s1-lcd" class="lcd-display text-5xl p-3 rounded text-right tracking-widest font-mono">0.00</div>
+                    
+                    <div class="grid grid-cols-4 gap-2 mt-4 text-center">
+                        <div class="bg-slate-900 p-1.5 rounded border border-slate-800"><span class="text-[9px] text-slate-500 block">DO1 (THÔ)</span><div class="flex justify-center mt-1"><div id="s1-led-do1" class="led red"></div></div></div>
+                        <div class="bg-slate-900 p-1.5 rounded border border-slate-800"><span class="text-[9px] text-slate-500 block">DO2 (TINH)</span><div class="flex justify-center mt-1"><div id="s1-led-do2" class="led red"></div></div></div>
+                        <div class="bg-slate-900 p-1.5 rounded border border-slate-800"><span class="text-[9px] text-slate-500 block">DO3 (KẸP)</span><div class="flex justify-center mt-1"><div id="s1-led-do3" class="led red"></div></div></div>
+                        <div class="bg-slate-900 p-1.5 rounded border border-slate-800"><span class="text-[9px] text-slate-500 block">DO4 (XẢ)</span><div class="flex justify-center mt-1"><div id="s1-led-do4" class="led blue"></div></div></div>
+                    </div>
+                </div>
+
+                <div class="bg-[#0b0e17] p-3.5 rounded-lg border border-slate-800 mb-4">
+                    <h3 class="text-xs text-blue-400 font-bold mb-3 uppercase border-b border-slate-800 pb-1.5">Cấu hình Setpoint</h3>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex flex-col"><label class="text-[10px] text-slate-500 mb-1">Mục Tiêu (g)</label><input id="cfg-target" type="number" value=""></div>
+                        <div class="flex flex-col"><label class="text-[10px] text-slate-500 mb-1">Trừ Thô (g)</label><input id="cfg-fastOffset" type="number" value=""></div>
+                        <div class="flex flex-col"><label class="text-[10px] text-slate-500 mb-1">Trừ Tinh (g)</label><input id="cfg-flight" type="number" value=""></div>
+                        <div class="flex flex-col"><label class="text-[10px] text-slate-500 mb-1">STAB (ms)</label><input id="cfg-stab" type="number" value=""></div>
+                    </div>
+                    <button onclick="saveSystemConfig()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded mt-3 transition">Cập Nhật & Lưu Xuống ESP32</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL: I/O VÀ CHẾ ĐỘ -->
+        <div class="scada-panel p-5 flex flex-col justify-start">
+            <h3 class="text-xs text-slate-300 font-bold mb-3 uppercase border-b border-slate-800 pb-2">TÍN HIỆU NGÕ VÀO (INPUTS)</h3>
+            <div class="bg-black p-4 rounded-lg border border-slate-800 shadow-inner mb-6">
+                <div class="grid grid-cols-2 gap-4 text-xs text-slate-300 font-mono">
+                    <div class="flex items-center gap-2"><div id="di-0" class="led green"></div> <span>DI1: Nút START</span></div>
+                    <div class="flex items-center gap-2"><div id="di-1" class="led red"></div> <span>DI2: STOP Khẩn</span></div>
+                    <div class="flex items-center gap-2"><div id="di-2" class="led yellow"></div> <span>DI3: Nút Xả Cơ</span></div>
+                    <div class="flex items-center gap-2"><div id="di-3" class="led blue"></div> <span>DI4: Cảm Biến</span></div>
+                </div>
+            </div>
+            <div id="scada-toast" class="text-xs text-center text-emerald-400 font-semibold h-4 mb-4"></div>
+            <div class="bg-[#0b0e17] p-4 rounded-lg border border-slate-800 text-center">
+                <span class="text-[10px] text-slate-400 font-bold block mb-2 uppercase">CHẾ ĐỘ HIỆN TẠI</span>
+                <span id="current-mode" class="text-xl font-bold text-sky-400 uppercase tracking-widest">AUTO</span>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: LỊCH SỬ CÂN (BỘ NHỚ TRÌNH DUYỆT) -->
+        <div class="scada-panel p-5 flex flex-col h-[520px]">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                <h2 class="text-base font-bold text-sky-400 uppercase">LỊCH SỬ CÂN (LIST)</h2>
+                <span class="px-2 py-1 bg-slate-800 rounded text-[10px] text-slate-400">Đã lưu Browser</span>
+            </div>
+            
+            <div class="overflow-y-auto pr-2 flex-grow">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="text-[10px] text-slate-500 bg-black sticky top-0">
+                        <tr>
+                            <th class="p-2 border-b border-slate-800">STT</th>
+                            <th class="p-2 border-b border-slate-800">THỜI GIAN</th>
+                            <th class="p-2 border-b border-slate-800 text-right">TL (kg)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-list" class="font-mono">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let localRecords = JSON.parse(localStorage.getItem('vwci_records')) || [];
+        let lastBagsCount = -1; 
+        
+        // Hàm hỗ trợ lấy IP của API
+        function getApiUrl(endpoint) {
+            let baseUrl = document.getElementById('api-ip').value;
+            // Xóa dấu / dư thừa ở cuối nếu có
+            if(baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+            return baseUrl + endpoint;
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-list');
+            tbody.innerHTML = '';
+            localRecords.forEach(r => {
+                let row = `<tr class="border-b border-slate-800/50 hover:bg-slate-800/30">
+                    <td class="p-2">${r.stt}</td>
+                    <td class="p-2 text-slate-400">${r.time}</td>
+                    <td class="p-2 text-right text-emerald-400 font-bold">${parseFloat(r.weight).toFixed(2)}</td>
+                </tr>`;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+        renderHistoryTable(); 
+
+        function showMessage(msg) {
+            let toast = document.getElementById('scada-toast');
+            toast.innerText = msg;
+            setTimeout(() => { if(toast.innerText === msg) toast.innerText = ''; }, 3000);
+        }
+
+        function sendAction(endpoint) {
+            fetch(getApiUrl(endpoint))
+                .then(() => showMessage("Đã gửi lệnh thành công!"))
+                .catch(err => showMessage("Lỗi kết nối API!"));
+        }
+
+        function clearAllData() {
+            if(confirm("Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu (Kể cả Flash và Lịch sử web)?")) {
+                localStorage.removeItem('vwci_records');
+                localRecords = [];
+                renderHistoryTable();
+                fetch(getApiUrl('/clearTotals'))
+                    .then(() => showMessage("Đã xóa sạch toàn bộ dữ liệu!"))
+                    .catch(e => showMessage("Lỗi kết nối!"));
+            }
+        }
+
+        function saveSystemConfig() {
+            let target = document.getElementById('cfg-target').value;
+            let fastOffset = document.getElementById('cfg-fastOffset').value;
+            let flight = document.getElementById('cfg-flight').value;
+            let stab = document.getElementById('cfg-stab').value;
+            let url = `/saveConfig?target=${target}&fastOffset=${fastOffset}&flight=${flight}&stab=${stab}`;
+            fetch(getApiUrl(url))
+                .then(() => showMessage("Đã lưu cấu hình!"))
+                .catch(err => showMessage("Lỗi kết nối!"));
+        }
+
+        // TÁCH LUỒNG 1: QUÉT NHANH KHỐI LƯỢNG 20 LẦN/GIÂY (50ms)
+        setInterval(function() {
+            if(!document.hidden) {
+                fetch(getApiUrl('/getFastData'))
+                    .then(res => res.json())
+                    .then(d => {
+                        document.getElementById('s1-lcd').innerText = d.w;
+                    }).catch(() => {});
+            }
+        }, 50); //[cite: 3]
+
+        // TÁCH LUỒNG 2: QUÉT TRẠNG THÁI VÀ ĐÈN LED (500ms)
+        setInterval(function() {
+            if(!document.hidden) {
+                fetch(getApiUrl('/updateData'))
+                    .then(res => res.json())
+                    .then(d => {
+                        document.getElementById('s1-state-badge').innerText = d.stateTxt;
+                        document.getElementById('s1-state-badge').style.background = d.stateClr;
+                        document.getElementById('global-total-bags').innerText = d.bags;
+                        document.getElementById('global-total-weight').innerText = d.accumulated.toFixed(2);
+                        document.getElementById('current-mode').innerText = d.modeTxt;
+                        
+                        if(document.activeElement !== document.getElementById('cfg-target')) document.getElementById('cfg-target').value = d.targetWeight;
+                        if(document.activeElement !== document.getElementById('cfg-fastOffset')) document.getElementById('cfg-fastOffset').value = d.fastOffset;
+                        if(document.activeElement !== document.getElementById('cfg-flight')) document.getElementById('cfg-flight').value = d.flight;
+                        if(document.activeElement !== document.getElementById('cfg-stab')) document.getElementById('cfg-stab').value = d.stab;
+
+                        d.relays[0] ? document.getElementById('s1-led-do1').classList.add('on') : document.getElementById('s1-led-do1').classList.remove('on');
+                        d.relays[1] ? document.getElementById('s1-led-do2').classList.add('on') : document.getElementById('s1-led-do2').classList.remove('on');
+                        d.relays[2] ? document.getElementById('s1-led-do3').classList.add('on') : document.getElementById('s1-led-do3').classList.remove('on');
+                        d.relays[3] ? document.getElementById('s1-led-do4').classList.add('on') : document.getElementById('s1-led-do4').classList.remove('on');
+                        !d.inputs[0] ? document.getElementById('di-0').classList.add('on') : document.getElementById('di-0').classList.remove('on');
+                        !d.inputs[1] ? document.getElementById('di-1').classList.add('on') : document.getElementById('di-1').classList.remove('on');
+                        !d.inputs[2] ? document.getElementById('di-2').classList.add('on') : document.getElementById('di-2').classList.remove('on');
+                        !d.inputs[3] ? document.getElementById('di-3').classList.add('on') : document.getElementById('di-3').classList.remove('on');
+
+                        if (lastBagsCount !== -1 && d.bags > lastBagsCount) {
+                            let timeStr = new Date().toLocaleTimeString('vi-VN');
+                            localRecords.unshift({stt: d.bags, time: timeStr, weight: d.lastBagWeight});
+                            if (localRecords.length > 100) localRecords.pop(); 
+                            localStorage.setItem('vwci_records', JSON.stringify(localRecords));
+                            renderHistoryTable();
+                        }
+                        lastBagsCount = d.bags;
+                    })
+                    .catch(() => {});
+            }
+        }, 500); //[cite: 3]
+    </script>
+</body>
+</html>
