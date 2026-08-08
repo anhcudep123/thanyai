@@ -27,10 +27,10 @@
 <body class="min-h-screen flex flex-col items-center p-4">
 
     <!-- CẤU HÌNH API -->
-    <div class="w-full max-w-7xl flex flex-row items-center gap-4 mb-4 scada-panel p-3">
+    <div class="w-full max-w-7xl flex flex-row items-center gap-4 mb-4 scada-panel p-3 border-l-4 border-blue-500">
         <label class="text-sm font-bold text-slate-400">ĐỊA CHỈ IP ESP32:</label>
-        <input id="api-ip" type="text" class="w-64" value="http://192.168.2.118" placeholder="http://192.168.2.118">
-        <span class="text-xs text-slate-500 italic">Nhập địa chỉ IP hiển thị trên Serial Monitor</span>
+        <input id="api-ip" type="text" class="w-64 font-bold text-white" value="http://192.168.2.118" placeholder="http://192.168.x.x">
+        <span class="text-xs text-emerald-400 font-bold" id="conn-status">Đang kết nối...</span>
     </div>
 
     <!-- HEADER SYSTEM BAR -->
@@ -143,10 +143,12 @@
         let localRecords = JSON.parse(localStorage.getItem('vwci_records')) || [];
         let lastBagsCount = -1; 
         
-        // Hàm hỗ trợ lấy IP của API
+        // HÀM TỰ ĐỘNG LẤY ĐỊA CHỈ IP TỪ Ô NHẬP LIỆU
         function getApiUrl(endpoint) {
-            let baseUrl = document.getElementById('api-ip').value;
-            // Xóa dấu / dư thừa ở cuối nếu có
+            let baseUrl = document.getElementById('api-ip').value.trim();
+            if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+                baseUrl = 'http://' + baseUrl;
+            }
             if(baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
             return baseUrl + endpoint;
         }
@@ -208,7 +210,7 @@
                         document.getElementById('s1-lcd').innerText = d.w;
                     }).catch(() => {});
             }
-        }, 50); //[cite: 3]
+        }, 50);
 
         // TÁCH LUỒNG 2: QUÉT TRẠNG THÁI VÀ ĐÈN LED (500ms)
         setInterval(function() {
@@ -216,38 +218,63 @@
                 fetch(getApiUrl('/updateData'))
                     .then(res => res.json())
                     .then(d => {
-                        document.getElementById('s1-state-badge').innerText = d.stateTxt;
-                        document.getElementById('s1-state-badge').style.background = d.stateClr;
-                        document.getElementById('global-total-bags').innerText = d.bags;
-                        document.getElementById('global-total-weight').innerText = d.accumulated.toFixed(2);
-                        document.getElementById('current-mode').innerText = d.modeTxt;
+                        // Cập nhật trạng thái kết nối thành công
+                        document.getElementById('conn-status').innerText = "Đã kết nối";
+                        document.getElementById('conn-status').className = "text-xs text-emerald-400 font-bold";
+
+                        // Hiển thị trạng thái chung
+                        document.getElementById('s1-state-badge').innerText = d.stateTxt || "N/A";
+                        document.getElementById('s1-state-badge').style.background = d.stateClr || "#475569";
+                        document.getElementById('global-total-bags').innerText = d.bags || 0;
                         
-                        if(document.activeElement !== document.getElementById('cfg-target')) document.getElementById('cfg-target').value = d.targetWeight;
-                        if(document.activeElement !== document.getElementById('cfg-fastOffset')) document.getElementById('cfg-fastOffset').value = d.fastOffset;
-                        if(document.activeElement !== document.getElementById('cfg-flight')) document.getElementById('cfg-flight').value = d.flight;
-                        if(document.activeElement !== document.getElementById('cfg-stab')) document.getElementById('cfg-stab').value = d.stab;
+                        let acc = d.accumulated || 0;
+                        document.getElementById('global-total-weight').innerText = parseFloat(acc).toFixed(2);
+                        document.getElementById('current-mode').innerText = d.modeTxt || "N/A";
+                        
+                        // Cập nhật dữ liệu vào Form Cài đặt (Hỗ trợ chống lỗi phân biệt hoa/thường)
+                        if(document.activeElement !== document.getElementById('cfg-target')) 
+                            document.getElementById('cfg-target').value = d.targetWeight || d.targetweight || 0;
+                        if(document.activeElement !== document.getElementById('cfg-fastOffset')) 
+                            document.getElementById('cfg-fastOffset').value = d.fastOffset || d.fastoffset || 0;
+                        if(document.activeElement !== document.getElementById('cfg-flight')) 
+                            document.getElementById('cfg-flight').value = d.flight || 0;
+                        if(document.activeElement !== document.getElementById('cfg-stab')) 
+                            document.getElementById('cfg-stab').value = d.stab || 0;
 
-                        d.relays[0] ? document.getElementById('s1-led-do1').classList.add('on') : document.getElementById('s1-led-do1').classList.remove('on');
-                        d.relays[1] ? document.getElementById('s1-led-do2').classList.add('on') : document.getElementById('s1-led-do2').classList.remove('on');
-                        d.relays[2] ? document.getElementById('s1-led-do3').classList.add('on') : document.getElementById('s1-led-do3').classList.remove('on');
-                        d.relays[3] ? document.getElementById('s1-led-do4').classList.add('on') : document.getElementById('s1-led-do4').classList.remove('on');
-                        !d.inputs[0] ? document.getElementById('di-0').classList.add('on') : document.getElementById('di-0').classList.remove('on');
-                        !d.inputs[1] ? document.getElementById('di-1').classList.add('on') : document.getElementById('di-1').classList.remove('on');
-                        !d.inputs[2] ? document.getElementById('di-2').classList.add('on') : document.getElementById('di-2').classList.remove('on');
-                        !d.inputs[3] ? document.getElementById('di-3').classList.add('on') : document.getElementById('di-3').classList.remove('on');
+                        // Điều khiển Đèn LED Relays
+                        if (d.relays && d.relays.length >= 4) {
+                            d.relays[0] ? document.getElementById('s1-led-do1').classList.add('on') : document.getElementById('s1-led-do1').classList.remove('on');
+                            d.relays[1] ? document.getElementById('s1-led-do2').classList.add('on') : document.getElementById('s1-led-do2').classList.remove('on');
+                            d.relays[2] ? document.getElementById('s1-led-do3').classList.add('on') : document.getElementById('s1-led-do3').classList.remove('on');
+                            d.relays[3] ? document.getElementById('s1-led-do4').classList.add('on') : document.getElementById('s1-led-do4').classList.remove('on');
+                        }
 
+                        // Điều khiển Đèn LED Inputs (Mức thấp LOW = ON)
+                        if (d.inputs && d.inputs.length >= 4) {
+                            !d.inputs[0] ? document.getElementById('di-0').classList.add('on') : document.getElementById('di-0').classList.remove('on');
+                            !d.inputs[1] ? document.getElementById('di-1').classList.add('on') : document.getElementById('di-1').classList.remove('on');
+                            !d.inputs[2] ? document.getElementById('di-2').classList.add('on') : document.getElementById('di-2').classList.remove('on');
+                            !d.inputs[3] ? document.getElementById('di-3').classList.add('on') : document.getElementById('di-3').classList.remove('on');
+                        }
+
+                        // LƯU LỊCH SỬ KHI CÓ MẺ CÂN MỚI
                         if (lastBagsCount !== -1 && d.bags > lastBagsCount) {
                             let timeStr = new Date().toLocaleTimeString('vi-VN');
-                            localRecords.unshift({stt: d.bags, time: timeStr, weight: d.lastBagWeight});
+                            let lastWeight = d.lastBagWeight || 0;
+                            localRecords.unshift({stt: d.bags, time: timeStr, weight: lastWeight});
                             if (localRecords.length > 100) localRecords.pop(); 
                             localStorage.setItem('vwci_records', JSON.stringify(localRecords));
                             renderHistoryTable();
                         }
-                        lastBagsCount = d.bags;
+                        lastBagsCount = d.bags || 0;
                     })
-                    .catch(() => {});
+                    .catch(() => {
+                        // Báo lỗi nếu mất mạng
+                        document.getElementById('conn-status').innerText = "Mất kết nối!";
+                        document.getElementById('conn-status').className = "text-xs text-red-500 font-bold";
+                    });
             }
-        }, 500); //[cite: 3]
+        }, 500);
     </script>
 </body>
 </html>
