@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCADA CLOUD CONTROLLER VWCI20</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: { colors: { scada: { bg: '#111827', card: '#1F2937', blue: '#2563EB', emerald: '#10B981', amber: '#F59E0B', red: '#EF4444', purple: '#8B5CF6' } } }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome & Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Các thư viện JS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        body { background-color: #111827; color: #F3F4F6; font-family: 'Segoe UI', sans-serif; }
+        .lcd-text { font-family: 'Share Tech Mono', monospace; text-shadow: 0 0 10px currentColor; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1F2937; }
+        ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 3px; }
+        
+        /* CSS DÀNH RIÊNG CHO MÁY IN NHIỆT 80MM */
+        @media print {
+            body * { visibility: hidden; }
+            #print-section, #print-section * { visibility: visible; }
+            #print-section {
+                position: absolute; left: 0; top: 0; 
+                width: 78mm; padding: 2mm; color: #000 !important; background: #fff !important;
+                font-family: 'Courier New', Courier, monospace !important; font-size: 12px !important;
+            }
+            .print-border { border-bottom: 1px dashed #000; margin: 5px 0; }
+        }
+    </style>
+</head>
+<body x-data="scadaSystem()" x-init="initSystem()" class="h-screen flex flex-col overflow-hidden">
+    
+    <!-- KHUNG IN ẤN (Chỉ hiện khi in) -->
+    <div id="print-section" class="hidden">
+        <div class="text-center font-bold text-lg mb-1" x-text="company.name"></div>
+        <div class="text-center text-xs mb-1" x-text="'ĐC: ' + company.address"></div>
+        <div class="text-center text-xs mb-2" x-text="'SĐT: ' + company.phone"></div>
+        <div class="print-border"></div>
+        <div class="text-center font-bold text-base my-2">PHIẾU CÂN HÀNG</div>
+        <div class="text-xs mb-1">Mã Phiếu: <span x-text="printData.id"></span></div>
+        <div class="text-xs mb-1">Ngày In : <span x-text="printData.time"></span></div>
+        <div class="text-xs mb-1">Khách   : <span x-text="customer.name"></span></div>
+        <div class="print-border"></div>
+        <div class="flex justify-between font-bold text-sm my-2">
+            <span>TRỌNG LƯỢNG:</span>
+            <span x-text="parseFloat(printData.weight).toFixed(2) + ' kg'"></span>
+        </div>
+        <div class="print-border"></div>
+        <div class="text-center text-xs mt-4">Người cân</div>
+        <div class="text-center text-xs mt-8">(Ký, ghi rõ họ tên)</div>
+    </div>
+
+    <!-- Header SCADA -->
+    <header class="h-14 border-b border-gray-700 flex items-center justify-between px-6 bg-gray-900">
+        <div class="flex items-center space-x-6 text-sm">
+            <!-- 3 KÊNH MQTT ĐỘC LẬP -->
+            <div class="flex flex-col gap-1 bg-gray-800 px-2 py-1 rounded border border-gray-700" title="Trạng thái 3 Kênh MQTT">
+                <div class="flex items-center text-[10px] text-gray-400 gap-1"><div :class="mqttStatus.fast ? 'bg-scada-blue shadow-[0_0_5px_#2563EB]' : 'bg-gray-600'" class="w-2 h-2 rounded-full"></div> CH1: FAST DATA</div>
+                <div class="flex items-center text-[10px] text-gray-400 gap-1"><div :class="mqttStatus.slow ? 'bg-scada-emerald shadow-[0_0_5px_#10B981]' : 'bg-gray-600'" class="w-2 h-2 rounded-full"></div> CH2: SLOW DATA</div>
+                <div class="flex items-center text-[10px] text-gray-400 gap-1"><div :class="mqttStatus.cmd ? 'bg-scada-amber shadow-[0_0_5px_#F59E0B]' : 'bg-gray-600'" class="w-2 h-2 rounded-full"></div> CH3: COMMAND</div>
+            </div>
+            <span class="text-gray-400">User: <strong class="text-white">Admin</strong></span>
+        </div>
+        <div class="text-lg font-bold lcd-text text-scada-amber" x-text="timeString"></div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-scada-card border-r border-gray-700 flex flex-col pt-4">
+            <div class="px-4 mb-4 border-b border-gray-700 pb-4">
+                <h1 class="text-lg font-bold text-scada-emerald tracking-wide">VWCI20 SYSTEM</h1>
+                <p class="text-xs text-gray-400 mt-1">Trạm Cân Đa Kênh MQTT</p>
+            </div>
+            <nav class="flex-1 overflow-y-auto py-2">
+                <template x-for="menu in menus" :key="menu.id">
+                    <button @click="activeTab = menu.id" 
+                            :class="activeTab === menu.id ? 'bg-gray-700 border-l-4 border-scada-emerald text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                            class="w-full flex items-center px-4 py-3 text-sm transition-colors text-left">
+                        <i :class="menu.icon" class="w-6 text-center mr-2"></i>
+                        <span x-text="menu.name"></span>
+                    </button>
+                </template>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-4 lg:p-6 bg-scada-bg">
+            
+            <!-- TAB 1: Dashboard Cân -->
+            <div x-show="activeTab === 1" class="space-y-6">
+                <!-- Toolbar -->
+                <div class="flex flex-wrap gap-4 items-center justify-between">
+                    <div class="flex gap-4 p-3 bg-scada-card border border-gray-700 rounded-lg">
+                        <div class="text-center px-4 border-r border-gray-600">
+                            <p class="text-xs text-gray-400 uppercase">Tổng mẻ</p>
+                            <p class="text-2xl font-bold text-white" x-text="systemStats.totalBatches"></p>
+                        </div>
+                        <div class="text-center px-4">
+                            <p class="text-xs text-gray-400 uppercase">Tổng khối lượng (kg)</p>
+                            <p class="text-2xl font-bold text-scada-emerald" x-text="systemStats.totalWeight.toFixed(2)"></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="sendCommand('START')" class="bg-scada-emerald text-white px-6 py-2 rounded font-bold shadow-lg hover:bg-emerald-600"><i class="fas fa-play mr-2"></i> START</button>
+                        <button @click="sendCommand('STOP')" class="bg-scada-red text-white px-6 py-2 rounded font-bold shadow-[0_0_15px_#EF4444]"><i class="fas fa-stop mr-2"></i> STOP</button>
+                        <button @click="sendCommand('ZERO')" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600"><i class="fas fa-compress-arrows-alt"></i> ZERO</button>
+                    </div>
+                </div>
+
+                <!-- Màn hình cân -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-8 bg-scada-card border border-gray-700 rounded-xl p-5 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-2 h-full" :style="'background-color:' + s1.statusColor"></div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold text-scada-blue">ĐẦU CÂN VWCI20</h2>
+                            <span class="px-3 py-1 rounded text-xs font-bold text-white border" :style="'background-color:' + s1.statusColor" x-text="s1.status"></span>
+                        </div>
+                        
+                        <div class="bg-black border-2 border-gray-600 rounded-lg p-6 mb-6 flex justify-between items-end">
+                            <div class="text-7xl md:text-9xl lcd-text text-scada-blue tracking-wider" x-text="s1.weight.toFixed(2)"></div>
+                            <div class="text-2xl text-gray-400 pb-2">kg</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div class="text-center bg-gray-900 p-3 rounded border border-gray-700"><p class="text-xs text-gray-400">Mục tiêu (g)</p><p class="text-lg font-bold text-white" x-text="config.target"></p></div>
+                            <div class="text-center bg-gray-900 p-3 rounded border border-gray-700"><p class="text-xs text-gray-400">Mẻ vừa cân (kg)</p><p class="text-lg font-bold text-scada-emerald" x-text="s1.lastBatch.toFixed(2)"></p></div>
+                            <div class="text-center bg-gray-900 p-3 rounded border border-gray-700"><p class="text-xs text-gray-400">Trừ Thô (g)</p><p class="text-lg font-bold text-scada-amber" x-text="config.fastOffset"></p></div>
+                            <div class="text-center bg-gray-900 p-3 rounded border border-gray-700"><p class="text-xs text-gray-400">Chế độ</p><p class="text-sm font-bold mt-1 text-scada-purple" x-text="s1.mode"></p></div>
+                        </div>
+
+                        <!-- Trạng thái Rơ-le -->
+                        <div class="p-4 bg-gray-900 rounded-lg border border-gray-700">
+                            <h3 class="text-xs text-gray-400 mb-4 text-center font-bold">TRẠNG THÁI RƠ-LE ĐẦU RA (DO)</h3>
+                            <div class="flex justify-around">
+                                <div class="flex flex-col items-center"><div :class="valves.fast ? 'bg-scada-emerald shadow-[0_0_10px_#10B981]' : 'bg-gray-700'" class="w-8 h-8 rounded-full mb-2"></div><span class="text-xs font-bold text-gray-300">DO1: Nạp Thô</span></div>
+                                <div class="flex flex-col items-center"><div :class="valves.slow ? 'bg-scada-amber shadow-[0_0_10px_#F59E0B]' : 'bg-gray-700'" class="w-8 h-8 rounded-full mb-2"></div><span class="text-xs font-bold text-gray-300">DO2: Nạp Tinh</span></div>
+                                <div class="flex flex-col items-center"><div :class="valves.clamp ? 'bg-scada-purple shadow-[0_0_10px_#8B5CF6]' : 'bg-gray-700'" class="w-8 h-8 rounded-full mb-2"></div><span class="text-xs font-bold text-gray-300">DO3: Kẹp Bao</span></div>
+                                <div class="flex flex-col items-center"><div :class="valves.discharge ? 'bg-scada-blue shadow-[0_0_10px_#2563EB]' : 'bg-gray-700'" class="w-8 h-8 rounded-full mb-2"></div><span class="text-xs font-bold text-gray-300">DO4: Xả Liệu</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tín Hiệu Đầu Vào -->
+                    <div class="lg:col-span-4 bg-scada-card border border-gray-700 rounded-xl p-5 flex flex-col">
+                        <h3 class="text-sm font-bold text-white mb-4 border-b border-gray-700 pb-2"><i class="fas fa-sign-in-alt mr-2"></i> TÍN HIỆU NGÕ VÀO (DI)</h3>
+                        <div class="space-y-4 mb-6">
+                            <div class="flex justify-between items-center bg-gray-900 p-4 rounded border border-gray-700"><span class="text-sm text-gray-300">DI1: Nút START</span><div :class="inputs.start ? 'bg-scada-emerald' : 'bg-gray-700'" class="w-4 h-4 rounded-full"></div></div>
+                            <div class="flex justify-between items-center bg-gray-900 p-4 rounded border border-gray-700"><span class="text-sm text-gray-300">DI2: STOP Khẩn</span><div :class="inputs.stop ? 'bg-scada-red' : 'bg-gray-700'" class="w-4 h-4 rounded-full"></div></div>
+                            <div class="flex justify-between items-center bg-gray-900 p-4 rounded border border-gray-700"><span class="text-sm text-gray-300">DI3: Xả Cơ</span><div :class="inputs.manual ? 'bg-scada-amber' : 'bg-gray-700'" class="w-4 h-4 rounded-full"></div></div>
+                            <div class="flex justify-between items-center bg-gray-900 p-4 rounded border border-gray-700"><span class="text-sm text-gray-300">DI4: Cảm Biến</span><div :class="inputs.sensor ? 'bg-scada-blue' : 'bg-gray-700'" class="w-4 h-4 rounded-full"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Cài Đặt Thông Số -->
+            <div x-show="activeTab === 2" class="space-y-6">
+                <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2"><i class="fas fa-sliders-h mr-2"></i> CÀI ĐẶT THÔNG SỐ VẬN HÀNH</h2>
+                <div class="bg-scada-card border border-gray-700 rounded-lg p-5 max-w-2xl">
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center"><label class="text-sm text-gray-300">Mục tiêu cân (gam)</label><input type="number" x-model="config.target" class="bg-gray-900 border border-gray-600 rounded px-3 py-2 w-32 text-right"></div>
+                        <div class="flex justify-between items-center"><label class="text-sm text-gray-300">Trừ Thô - Ngắt DO1 (gam)</label><input type="number" x-model="config.fastOffset" class="bg-gray-900 border border-gray-600 rounded px-3 py-2 w-32 text-right"></div>
+                        <div class="flex justify-between items-center"><label class="text-sm text-gray-300">Trừ Tinh - Bù bay lơ lửng (gam)</label><input type="number" x-model="config.flight" class="bg-gray-900 border border-gray-600 rounded px-3 py-2 w-32 text-right"></div>
+                        <div class="flex justify-between items-center"><label class="text-sm text-gray-300">Thời gian chờ ổn định tĩnh (ms)</label><input type="number" x-model="config.stab" class="bg-gray-900 border border-gray-600 rounded px-3 py-2 w-32 text-right"></div>
+                    </div>
+                    <button @click="saveConfig()" class="w-full mt-6 bg-scada-emerald px-6 py-3 rounded text-white font-bold shadow-lg hover:bg-emerald-600"><i class="fas fa-cloud-upload-alt mr-2"></i> LƯU XUỐNG ESP32 QUA MQTT</button>
+                </div>
+            </div>
+
+            <!-- TAB 3: Quản Lý Dữ Liệu & Báo Cáo -->
+            <div x-show="activeTab === 3" class="space-y-6">
+                <div class="flex flex-wrap justify-between items-center border-b border-gray-700 pb-2 gap-4">
+                    <h2 class="text-xl font-bold text-white"><i class="fas fa-database mr-2"></i> QUẢN LÝ DỮ LIỆU & BÁO CÁO</h2>
+                    <div class="flex gap-2">
+                        <button @click="exportCSV()" class="bg-green-600 hover:bg-green-500 px-4 py-2 text-sm rounded shadow text-white font-bold"><i class="fas fa-file-excel mr-1"></i> Xuất Excel</button>
+                        <button @click="exportPDF()" class="bg-red-600 hover:bg-red-500 px-4 py-2 text-sm rounded shadow text-white font-bold"><i class="fas fa-file-pdf mr-1"></i> Xuất PDF</button>
+                        <button @click="sendCommand('CLEARTOT'); batchLogs=[]" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 text-sm rounded shadow text-white"><i class="fas fa-trash mr-1"></i> Xóa DL</button>
+                    </div>
+                </div>
+                
+                <div class="bg-scada-card p-4 rounded-lg border border-gray-700 h-64 w-full mb-6">
+                    <canvas id="weightChart"></canvas>
+                </div>
+
+                <div class="bg-scada-card border border-gray-700 rounded-lg overflow-hidden flex flex-col h-[400px]">
+                    <div class="p-3 bg-gray-900 border-b border-gray-700 flex justify-between items-center">
+                        <h3 class="font-bold text-white text-sm">DANH SÁCH MẺ CÂN</h3>
+                        <span class="text-xs text-gray-400" x-text="'Tổng số: ' + batchLogs.length + ' bản ghi'"></span>
+                    </div>
+                    <div class="overflow-y-auto flex-1">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 shadow">
+                                <tr><th class="px-4 py-3">Mã Phiếu</th><th class="px-4 py-3">Khách hàng</th><th class="px-4 py-3">Thời gian</th><th class="px-4 py-3 text-right">Trọng Lượng (kg)</th><th class="px-4 py-3 text-center">Hành động</th></tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="log in batchLogs" :key="log.id">
+                                    <tr class="border-b border-gray-800 hover:bg-gray-700 transition-colors">
+                                        <td class="px-4 py-3 font-mono text-scada-blue" x-text="log.id"></td>
+                                        <td class="px-4 py-3 text-gray-300" x-text="log.customerName"></td>
+                                        <td class="px-4 py-3 text-gray-400" x-text="log.time"></td>
+                                        <td class="px-4 py-3 text-right font-mono text-scada-emerald font-bold" x-text="parseFloat(log.weight).toFixed(2)"></td>
+                                        <td class="px-4 py-3 text-center"><button @click="printTicket(log)" class="bg-gray-600 hover:bg-scada-blue px-3 py-1 rounded text-xs text-white transition-colors"><i class="fas fa-print"></i> In Phiếu</button></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: Thông Tin Hóa Đơn -->
+            <div x-show="activeTab === 4" class="space-y-6">
+                <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2"><i class="fas fa-building mr-2"></i> THÔNG TIN IN ẤN & HÓA ĐƠN</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-scada-card border border-gray-700 rounded-lg p-5">
+                        <h3 class="font-bold text-scada-amber mb-4 border-b border-gray-700 pb-2">Thông tin Đơn vị</h3>
+                        <div class="space-y-4">
+                            <div><label class="text-xs text-gray-400">Tên Công Ty</label><input type="text" x-model="company.name" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 mt-1 text-white"></div>
+                            <div><label class="text-xs text-gray-400">Địa chỉ</label><input type="text" x-model="company.address" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 mt-1 text-white"></div>
+                            <div><label class="text-xs text-gray-400">Số điện thoại</label><input type="text" x-model="company.phone" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 mt-1 text-white"></div>
+                        </div>
+                    </div>
+                    <div class="bg-scada-card border border-gray-700 rounded-lg p-5">
+                        <h3 class="font-bold text-scada-blue mb-4 border-b border-gray-700 pb-2">Thông tin Khách Hàng (Mẻ cân tiếp theo)</h3>
+                        <div class="space-y-4">
+                            <div><label class="text-xs text-gray-400">Tên Khách Hàng</label><input type="text" x-model="customer.name" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 mt-1 text-white"></div>
+                            <div><label class="text-xs text-gray-400">Biển số xe / Lô hàng</label><input type="text" x-model="customer.vehicle" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 mt-1 text-white"></div>
+                            <div class="pt-4"><button @click="savePrintInfo()" class="w-full bg-scada-blue px-4 py-2 rounded text-white font-bold hover:bg-blue-600">LƯU THÔNG TIN IN ẤN</button></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="showToast" x-transition.opacity class="fixed bottom-5 right-5 bg-gray-900 border border-scada-blue text-white px-4 py-3 rounded shadow-2xl z-50 flex items-center gap-3">
+                <i class="fas fa-info-circle text-scada-blue"></i><span class="text-sm font-bold" x-text="toastMessage"></span>
+            </div>
+        </div>
+    </main>
+
+    <!-- JavaScript & Alpine.js -->
+    <script>
+        function scadaSystem() {
+            return {
+                activeTab: 1, sidebarOpen: false, timeString: '00:00:00',
+                showToast: false, toastMessage: '',
+                
+                // Trạng thái 3 Kênh MQTT
+                mqttFast: null, mqttSlow: null, mqttCmd: null,
+                mqttStatus: { fast: false, slow: false, cmd: false },
+                
+                menus: [
+                    { id: 1, name: 'Trang Chủ Dashboard', icon: 'fas fa-desktop' },
+                    { id: 2, name: 'Thông Số Vận Hành', icon: 'fas fa-sliders-h' },
+                    { id: 3, name: 'Quản Lý Dữ Liệu', icon: 'fas fa-database' },
+                    { id: 4, name: 'Thông Tin Hóa Đơn', icon: 'fas fa-file-invoice' }
+                ],
+                
+                systemStats: { totalBatches: 0, totalWeight: 0.00 },
+                config: { target: 50000, fastOffset: 5000, flight: 200, stab: 500 },
+                s1: { weight: 0.00, lastBatch: 0.00, mode: 'N/A', status: 'ĐANG KẾT NỐI...', statusColor: '#475569' },
+                valves: { fast: false, slow: false, clamp: false, discharge: false },
+                inputs: { start: false, stop: false, manual: false, sensor: false },
+                
+                batchLogs: JSON.parse(localStorage.getItem('vwci_records')) || [],
+                company: JSON.parse(localStorage.getItem('vwci_company')) || { name: 'CÔNG TY TNHH DMPES', address: 'Khu Công Nghiệp VSIP', phone: '0909.xxx.xxx' },
+                customer: JSON.parse(localStorage.getItem('vwci_customer')) || { name: 'Khách Lẻ', vehicle: '' },
+                printData: { id: '', time: '', weight: 0 },
+                lastBagsCount: -1, chartInstance: null,
+
+                initSystem() {
+                    setInterval(() => { this.timeString = new Date().toLocaleTimeString('vi-VN'); }, 1000);
+                    setTimeout(() => {
+                        const ctx = document.getElementById('weightChart');
+                        if (ctx) {
+                            this.chartInstance = new Chart(ctx, {
+                                type: 'line',
+                                data: { labels: Array(15).fill(''), datasets: [{ label: 'Trọng lượng (kg)', data: Array(15).fill(0), borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.1, pointRadius: 0 }] },
+                                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: {color: '#374151'} }, x: { grid: {display: false} } }, animation: false }
+                            });
+                        }
+                    }, 500);
+                    
+                    // Khởi chạy 3 kênh MQTT độc lập[cite: 6]
+                    this.initMQTTMultiChannel();
+                },
+
+                triggerToast(msg) { this.toastMessage = msg; this.showToast = true; setTimeout(() => { this.showToast = false; }, 3000); },
+
+                // ==========================================
+                // KIẾN TRÚC MULTI-CHANNEL MQTT[cite: 6]
+                // ==========================================
+                initMQTTMultiChannel() {
+                    const brokerURL = 'broker.hivemq.com'; 
+                    const brokerPort = 8000; 
+
+                    // 1. KÊNH FAST DATA (Chỉ nhận cân)
+                    this.mqttFast = new Paho.MQTT.Client(brokerURL, brokerPort, 'DMP_F_' + Math.floor(Math.random() * 10000));
+                    this.mqttFast.onConnectionLost = () => { this.mqttStatus.fast = false; setTimeout(() => this.connectFast(), 3000); };
+                    this.mqttFast.onMessageArrived = (msg) => {
+                        try {
+                            let payload = JSON.parse(msg.payloadString);
+                            if(payload.w && payload.w !== "ERR") {
+                                this.s1.weight = parseFloat(payload.w);
+                                if (this.chartInstance) {
+                                    this.chartInstance.data.datasets[0].data.shift();
+                                    this.chartInstance.data.datasets[0].data.push(this.s1.weight);
+                                    this.chartInstance.update();
+                                }
+                            }
+                        } catch(e) {}
+                    };
+                    this.connectFast();
+
+                    // 2. KÊNH SLOW DATA (Nhận trạng thái)
+                    this.mqttSlow = new Paho.MQTT.Client(brokerURL, brokerPort, 'DMP_S_' + Math.floor(Math.random() * 10000));
+                    this.mqttSlow.onConnectionLost = () => { this.mqttStatus.slow = false; setTimeout(() => this.connectSlow(), 3000); };
+                    this.mqttSlow.onMessageArrived = (msg) => {
+                        try {
+                            let payload = JSON.parse(msg.payloadString);
+                            if (payload.stateTxt) { this.s1.status = payload.stateTxt; this.s1.statusColor = payload.stateClr || '#475569'; this.s1.mode = payload.modeTxt || 'N/A'; }
+                            if (payload.bags !== undefined) this.systemStats.totalBatches = payload.bags;
+                            if (payload.accumulated !== undefined) this.systemStats.totalWeight = payload.accumulated;
+                            if (payload.lastBagWeight !== undefined) this.s1.lastBatch = payload.lastBagWeight;
+                            if (payload.targetWeight !== undefined) { this.config.target = payload.targetWeight; this.config.fastOffset = payload.fastOffset; this.config.flight = payload.flight; this.config.stab = payload.stab; }
+                            
+                            if (payload.relays && payload.relays.length >= 4) { this.valves.fast = payload.relays[0]; this.valves.slow = payload.relays[1]; this.valves.clamp = payload.relays[2]; this.valves.discharge = payload.relays[3]; }
+                            if (payload.inputs && payload.inputs.length >= 4) { this.inputs.start = !payload.inputs[0]; this.inputs.stop = !payload.inputs[1]; this.inputs.manual = !payload.inputs[2]; this.inputs.sensor = !payload.inputs[3]; }
+
+                            if (this.lastBagsCount !== -1 && payload.bags > this.lastBagsCount) {
+                                let newLog = { id: 'PC-' + Date.now().toString().slice(-6), stt: payload.bags, time: new Date().toLocaleTimeString('vi-VN') + ' ' + new Date().toLocaleDateString('vi-VN'), weight: payload.lastBagWeight, customerName: this.customer.name };
+                                this.batchLogs.unshift(newLog);
+                                if(this.batchLogs.length > 100) this.batchLogs.pop();
+                                localStorage.setItem('vwci_records', JSON.stringify(this.batchLogs));
+                            }
+                            if (payload.bags !== undefined) this.lastBagsCount = payload.bags;
+                        } catch(e) {}
+                    };
+                    this.connectSlow();
+
+                    // 3. KÊNH COMMAND (Chỉ dùng để Publish Lệnh)
+                    this.mqttCmd = new Paho.MQTT.Client(brokerURL, brokerPort, 'DMP_C_' + Math.floor(Math.random() * 10000));
+                    this.mqttCmd.onConnectionLost = () => { this.mqttStatus.cmd = false; setTimeout(() => this.connectCmd(), 3000); };
+                    this.connectCmd();
+                },
+
+                connectFast() { this.mqttFast.connect({ onSuccess: () => { this.mqttStatus.fast = true; this.mqttFast.subscribe("dmpes/scada/fast"); }, useSSL: window.location.protocol === 'https:' }); },
+                connectSlow() { this.mqttSlow.connect({ onSuccess: () => { this.mqttStatus.slow = true; this.mqttSlow.subscribe("dmpes/scada/weighing"); }, useSSL: window.location.protocol === 'https:' }); },
+                connectCmd()  { this.mqttCmd.connect({ onSuccess: () => { this.mqttStatus.cmd = true; }, useSSL: window.location.protocol === 'https:' }); },
+
+                // ==========================================
+                // CÁC HÀM XỬ LÝ SỰ KIỆN 
+                // ==========================================
+                sendCommand(cmd) {
+                    if (this.mqttStatus.cmd && this.mqttCmd.isConnected()) {
+                        let msg = new Paho.MQTT.Message("CMD:" + cmd);
+                        msg.destinationName = "dmpes/scada/cmd";
+                        this.mqttCmd.send(msg);
+                        this.triggerToast("Đã bắn lệnh " + cmd);
+                    } else alert("Kênh COMMAND mất kết nối!");
+                },
+                saveConfig() {
+                    if (this.mqttStatus.cmd && this.mqttCmd.isConnected()) {
+                        let msg = new Paho.MQTT.Message(`CFG:${this.config.target},${this.config.fastOffset},${this.config.flight},${this.config.stab}`);
+                        msg.destinationName = "dmpes/scada/cmd";
+                        this.mqttCmd.send(msg);
+                        this.triggerToast("Đã lưu cấu hình cân!");
+                    } else alert("Kênh COMMAND mất kết nối!");
+                },
+                savePrintInfo() {
+                    localStorage.setItem('vwci_company', JSON.stringify(this.company));
+                    localStorage.setItem('vwci_customer', JSON.stringify(this.customer));
+                    this.triggerToast("Đã lưu thông tin hóa đơn!");
+                },
+                printTicket(log) {
+                    this.printData.id = log.id; this.printData.time = log.time; this.printData.weight = log.weight;
+                    setTimeout(() => { window.print(); }, 200);
+                },
+                exportCSV() {
+                    if(this.batchLogs.length === 0) return alert("Trống!");
+                    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
+                    csvContent += "Ma Phieu,Khach Hang,Thoi Gian,Trong Luong (kg)\n";
+                    this.batchLogs.forEach(row => { csvContent += `"${row.id}","${row.customerName}","${row.time}",${row.weight}\n`; });
+                    let link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "BaoCao_CanPhe_VWCI20.csv");
+                    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                },
+                exportPDF() {
+                    if(this.batchLogs.length === 0) return alert("Trống!");
+                    if (!window.jspdf) return alert("Thư viện PDF chưa tải xong!");
+                    const doc = new window.jspdf.jsPDF();
+                    doc.text("BAO CAO SAN XUAT - TRAM CAN VWCI20", 14, 20); doc.setFontSize(10);
+                    doc.text("Cong ty: " + this.company.name, 14, 30); doc.text("Ngay xuat: " + new Date().toLocaleString(), 14, 36);
+                    let tableData = this.batchLogs.map(log => [log.id, log.customerName, log.time, log.weight.toFixed(2)]);
+                    doc.autoTable({ startY: 45, head: [['Ma Phieu', 'Khach Hang', 'Thoi Gian', 'Trong Luong (kg)']], body: tableData, theme: 'grid', styles: { fontSize: 9 }, headStyles: { fillColor: [37, 99, 235] } });
+                    doc.save("BaoCao_CanPhe_VWCI20.pdf");
+                }
+            }
+        }
+    </script>
+</body>
+</html>
