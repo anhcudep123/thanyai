@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trạm Cân Trung Tâm - FIREBASE LIVE SCADA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        body { background-color: #374151; font-family: 'Roboto', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; user-select: none; }
+        .enclosure { background: linear-gradient(to bottom, #d1d5db, #9ca3af); border-radius: 16px; box-shadow: inset 2px 2px 5px rgba(255,255,255,0.8), inset -3px -3px 8px rgba(0,0,0,0.4), 10px 10px 30px rgba(0,0,0,0.7); padding: 24px; width: 95vw; max-width: 1000px; border: 2px solid #6b7280; }
+        .front-panel { background-color: #0f2b5b; border-radius: 8px; padding: 24px; display: flex; gap: 30px; box-shadow: inset 0 0 15px rgba(0,0,0,0.6); border: 1px solid #1e3a8a; }
+        .display-window { background: #f8fafc; border: 4px solid #334155; border-radius: 4px; flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; box-shadow: inset 0 0 10px rgba(0,0,0,0.2); }
+        .display-header { background-color: #1e3a8a; color: white; padding: 4px 12px; display: flex; justify-content: space-between; font-size: 0.875rem; border-bottom: 2px solid #cbd5e1; }
+        .weight-text { font-family: 'Share Tech Mono', monospace; color: #0f172a; font-size: 7rem; line-height: 1; letter-spacing: -2px; text-align: right; flex-grow: 1; }
+        .annunciator { font-size: 1.125rem; font-weight: 700; color: #64748b; transition: 0.2s; }
+        .annunciator.active { color: #0f172a; text-shadow: 0 0 2px rgba(0,0,0,0.3); }
+        .keypad { display: flex; flex-direction: column; width: 320px; gap: 15px; }
+        .nav-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .hard-key { height: 50px; border-radius: 8px; background: linear-gradient(135deg, #475569, #1e293b); color: white; font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid #0f172a; box-shadow: 0 4px 6px rgba(0,0,0,0.5); transition: 0.1s;}
+        .hard-key:active { transform: translateY(2px); box-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .action-key { background: linear-gradient(135deg, #1e3a8a, #172554); border-color: #172554; }
+        .settings-panel { display: none; background: #1f2937; padding: 20px; border-radius: 8px; border: 1px solid #4b5563; color: white; margin-top: 20px; }
+        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.9); color: white; padding: 12px 24px; border-radius: 4px; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none;}
+    </style>
+</head>
+<body>
+    <div id="toast">Thông báo</div>
+
+    <div class="enclosure">
+        <!-- Khu vực kết nối ESP32 -->
+        <div class="bg-gray-800 p-3 rounded-lg mb-4 flex items-center justify-between border border-gray-700">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-gray-300">IP CỦA ESP32:</span>
+                <input type="text" id="esp-ip" value="http://192.168.2.116" class="bg-gray-900 text-green-400 font-mono p-1 rounded border border-gray-600 w-48 text-center">
+            </div>
+            <div id="conn-badge" class="text-xs font-bold px-3 py-1 rounded bg-red-900 text-red-300">ĐANG NGẮT KẾT NỐI</div>
+        </div>
+
+        <div class="front-panel flex-col md:flex-row">
+            <!-- MÀN HÌNH LCD -->
+            <div class="display-window w-full md:w-2/3">
+                <div class="display-header">
+                    <span id="lc-conn-status">Data source: ESP32 REST API</span>
+                    <span id="datetime">--/--/---- --:--:--</span>
+                </div>
+                
+                <div class="flex-grow flex flex-col p-4 bg-white relative">
+                    <div class="flex justify-between text-sm text-gray-500 font-medium mb-2 border-b border-gray-200 pb-1">
+                        <span>Lịch sử: <span id="accum-count" class="font-bold text-blue-600">0</span> mã</span>
+                        <span>Max <span id="cap-val">5000</span> / d=<span id="div-val">1</span></span>
+                    </div>
+
+                    <div class="flex flex-grow items-center">
+                        <div class="flex flex-col gap-4 w-16">
+                            <span id="ind-motion" class="annunciator">~</span>
+                            <span id="ind-zero" class="annunciator">&gt;0&lt;</span>
+                            <span id="ind-net" class="annunciator">NET</span>
+                        </div>
+                        
+                        <div class="weight-text flex items-baseline justify-end w-full">
+                            <span id="weight-val">0</span>
+                            <span class="text-4xl text-gray-600 ml-4 font-bold font-sans self-end pb-4">kg</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-end mt-4 pt-2 border-t border-gray-200">
+                        <div class="text-sm font-bold text-gray-600">
+                            Mã nội (Raw ADC): <span id="raw-val" class="font-mono text-lg text-gray-400">0</span>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="text-sm font-bold text-gray-600">Tare: <span id="tare-val" class="font-mono text-xl text-gray-800">0</span> kg</div>
+                            <div class="text-sm font-bold text-gray-600">Tổng: <span id="total-val" class="font-mono text-xl text-blue-800">0</span> kg</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BÀN PHÍM ĐIỀU KHIỂN -->
+            <div class="keypad">
+                <div class="text-white font-bold text-xl tracking-wider mb-2 border-b border-blue-800 pb-2 text-center">
+                    CLIENT-SIDE SCADA
+                </div>
+
+                <div class="nav-pad">
+                    <div class="hard-key" onclick="window.simZero()"><span>&gt;0&lt; Zero</span></div>
+                    <div class="hard-key" onclick="window.simTare()"><span>T Tare</span></div>
+                    <div class="hard-key action-key" onclick="window.simAdd()"><span>+ Cộng</span></div>
+                    
+                    <div class="hard-key" onclick="window.toggleSettings()"><span>⚙ Cài đặt</span></div>
+                    <div class="hard-key bg-amber-800 border-amber-950" onclick="window.simTotal()"><span>🗑 Xóa Tổng</span></div>
+                    <div class="hard-key action-key" onclick="window.toggleApiPolling()" id="btn-sync"><span>▶ Bắt đầu</span></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <div class="hard-key bg-gray-600 col-span-2" onclick="window.exportCSV()"><span>💾 XUẤT FILE LỊCH SỬ (CSV)</span></div>
+                    <div class="hard-key action-key" onclick="window.executePrint('detail')"><span>🖨️ In Chi Tiết</span></div>
+                    <div class="hard-key action-key" onclick="window.executePrint('summary')"><span>🖨️ In Tổng</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BẢNG CÀI ĐẶT & CALIB -->
+        <div id="settings-panel" class="settings-panel">
+            <h3 class="font-bold text-lg mb-4 border-b border-gray-600 pb-2">Hiệu chuẩn & Cài đặt (Lưu trên Trình duyệt)</h3>
+            <div class="grid grid-cols-2 gap-6">
+                
+                <div class="col-span-2 bg-gray-800 p-4 rounded border border-gray-700">
+                    <h4 class="font-bold mb-2 text-yellow-400">Hiệu Chuẩn Cân (Calibration)</h4>
+                    <p class="text-xs text-gray-400 mb-2">B1: Cân trống -> Nhấn "&gt;0&lt; Zero". B2: Đặt tải chuẩn -> Nhập số ký -> Bấm xác nhận.</p>
+                    <div class="flex gap-4 items-end">
+                        <div class="flex-grow">
+                            <label class="block text-sm mb-1">Khối lượng chuẩn (kg)</label>
+                            <input type="number" id="inp-calib-weight" placeholder="Ví dụ: 1000" class="w-full text-black p-2 rounded font-mono">
+                        </div>
+                        <button onclick="window.executeCalibration()" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition">
+                            ⚖️ XÁC NHẬN CALIB
+                        </button>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        Tỷ số (Ratio): <span id="lbl-ratio" class="font-mono font-bold text-white">1.00000</span> | Mốc Zero: <span id="lbl-zero" class="font-mono font-bold text-white">0</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm mb-1 text-gray-300">Tải trọng tối đa (Max Capacity)</label>
+                    <input type="number" id="inp-cap" class="w-full text-black p-2 rounded" onchange="window.updateBasicSettings()">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1 text-gray-300">Bước nhảy (Division)</label>
+                    <input type="number" id="inp-div" class="w-full text-black p-2 rounded" onchange="window.updateBasicSettings()">
+                </div>
+                
+                <div class="col-span-2 bg-gray-800 p-4 rounded border border-gray-700">
+                    <h4 class="font-bold mb-2 text-blue-400">Máy in Ngoại vi (Web Serial API)</h4>
+                    <div class="flex gap-4 items-center">
+                        <button onclick="window.connectPrinter()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
+                            🖨️ Mở Cổng COM Máy In
+                        </button>
+                        <span id="print-conn-status" class="text-sm text-gray-400">Chưa kết nối</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODULE FIREBASE JS V10 (TÍCH HỢP PUSH RECORDS & SET LIVE_STATUS) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        // Cấu hình Firebase chính xác của anh
+        const firebaseConfig = {
+            apiKey: "AIzaSyB_EjFQ6vjj5odcgfRpD0OH2jMdmYL4iU8",
+            authDomain: "mychatappsach.firebaseapp.com",
+            databaseURL: "https://mychatappsach-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "mychatappsach",
+            storageBucket: "mychatappsach.firebasestorage.app",
+            messagingSenderId: "139204766512",
+            appId: "1:139204766512:web:8937b6207c608f69d436f5",
+            measurementId: "G-NEC9LW1BZ3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const CFG = { capacity: 5000, division: 1, ratio: 1.0 };
+        const state = {
+            rawWeight: 0, zeroOffset: 0, grossWeight: 0, tareWeight: 0, netWeight: 0,
+            isStable: true, accumTotal: 0, accumCount: 0, ticketSeq: 1,
+            csvData: [["STT", "Thoi_Gian", "Gross(kg)", "Tare(kg)", "Net(kg)"]]
+        };
+
+        let pollingInterval = null;
+        let isPolling = false;
+        let isFetching = false;
+        let printPort = null, printWriter = null;
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.innerText = msg; 
+            t.style.backgroundColor = isError ? '#dc2626' : '#16a34a';
+            t.style.opacity = '1'; 
+            setTimeout(() => { t.style.opacity = '0'; }, 3000);
+        }
+
+        function saveSettingsToBrowser() {
+            localStorage.setItem('scada_v6_settings', JSON.stringify({
+                capacity: CFG.capacity, division: CFG.division, ratio: CFG.ratio, zeroOffset: state.zeroOffset
+            }));
+        }
+
+        function loadSettingsFromBrowser() {
+            const saved = localStorage.getItem('scada_v6_settings');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    CFG.capacity = data.capacity || 5000; CFG.division = data.division || 1;
+                    CFG.ratio = data.ratio || 1.0; state.zeroOffset = data.zeroOffset || 0;
+                } catch (e) {}
+            }
+            document.getElementById('inp-cap').value = CFG.capacity;
+            document.getElementById('inp-div').value = CFG.division;
+            document.getElementById('cap-val').innerText = CFG.capacity;
+            document.getElementById('div-val').innerText = CFG.division;
+            document.getElementById('lbl-ratio').innerText = CFG.ratio.toFixed(6);
+            document.getElementById('lbl-zero').innerText = state.zeroOffset;
+        }
+
+        window.toggleApiPolling = function() {
+            const btn = document.getElementById('btn-sync');
+            if (isPolling) {
+                clearInterval(pollingInterval); isPolling = false;
+                btn.innerHTML = "<span>▶ Bắt đầu</span>"; btn.classList.replace("bg-red-800", "bg-blue-800");
+                document.getElementById('conn-badge').innerText = "ĐÃ DỪNG";
+                document.getElementById('conn-badge').className = "text-xs font-bold px-3 py-1 rounded bg-gray-700 text-gray-300";
+            } else {
+                pollingInterval = setInterval(fetchDataFromESP32, 150); 
+                isPolling = true;
+                btn.innerHTML = "<span>⏸ Dừng Sync</span>"; btn.classList.replace("bg-blue-800", "bg-red-800");
+            }
+        };
+
+        async function fetchDataFromESP32() {
+            if (isFetching || document.hidden) return;
+            isFetching = true;
+            try {
+                let ip = document.getElementById('esp-ip').value.trim();
+                if(ip.endsWith('/')) ip = ip.slice(0, -1);
+                const url = `${ip}/api/raw?t=${Date.now()}`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if (data.raw !== undefined && data.raw !== -999) {
+                    state.rawWeight = data.raw;
+                    state.isStable = data.stable;
+                    
+                    const badge = document.getElementById('conn-badge');
+                    badge.innerText = "ONLINE"; badge.className = "text-xs font-bold px-3 py-1 rounded bg-green-900 text-green-300";
+                }
+            } catch (error) {
+                const badge = document.getElementById('conn-badge');
+                badge.innerText = "OFFLINE"; badge.className = "text-xs font-bold px-3 py-1 rounded bg-red-900 text-red-300";
+            } finally {
+                isFetching = false;
+            }
+        }
+
+        // Tự động đẩy số cân live lên Firebase mỗi 1 giây
+        setInterval(() => {
+            if (db && isPolling) {
+                const currentWeightVal = state.tareWeight > 0 ? state.netWeight : state.grossWeight;
+                set(ref(db, 'live_status'), {
+                    weight: currentWeightVal,
+                    tare: state.tareWeight,
+                    stable: state.isStable,
+                    time: new Date().toLocaleTimeString('vi-VN')
+                }).catch(err => {});
+            }
+        }, 1000);
+
+        function processLoop() {
+            let grossRaw = (state.rawWeight - state.zeroOffset) * CFG.ratio;
+            state.grossWeight = Math.round(grossRaw / CFG.division) * CFG.division;
+            state.netWeight = state.grossWeight - state.tareWeight;
+
+            const val = state.tareWeight > 0 ? state.netWeight : state.grossWeight;
+            document.getElementById('weight-val').innerText = Math.abs(val) < (CFG.division / 2) ? "0" : val.toFixed(0);
+            document.getElementById('tare-val').innerText = state.tareWeight.toFixed(0);
+            document.getElementById('raw-val').innerText = state.rawWeight;
+            
+            document.getElementById('ind-motion').classList.toggle('active', !state.isStable);
+            document.getElementById('ind-net').classList.toggle('active', state.tareWeight > 0);
+            document.getElementById('ind-zero').classList.toggle('active', Math.abs(state.grossWeight) < (CFG.division / 2) && state.isStable);
+
+            requestAnimationFrame(processLoop);
+        }
+
+        window.updateBasicSettings = function() {
+            CFG.capacity = parseFloat(document.getElementById('inp-cap').value);
+            CFG.division = parseFloat(document.getElementById('inp-div').value);
+            document.getElementById('cap-val').innerText = CFG.capacity; document.getElementById('div-val').innerText = CFG.division;
+            saveSettingsToBrowser(); showToast("Đã lưu thông số cấu hình");
+        };
+
+        window.simZero = function() {
+            if (!state.isStable) return showToast("Lỗi: Cân chưa ổn định!", true);
+            state.zeroOffset = state.rawWeight; state.tareWeight = 0;
+            document.getElementById('lbl-zero').innerText = state.zeroOffset;
+            saveSettingsToBrowser(); showToast("Đã lấy mốc Zero (Lưu hệ thống)");
+        };
+
+        window.executeCalibration = function() {
+            const stdWeight = parseFloat(document.getElementById('inp-calib-weight').value);
+            if (isNaN(stdWeight) || stdWeight <= 0) return showToast("Nhập khối lượng chuẩn hợp lệ!", true);
+            if (!state.isStable) return showToast("Lỗi: Cân chưa ổn định!", true);
+
+            const rawDiff = state.rawWeight - state.zeroOffset;
+            if (Math.abs(rawDiff) < 5) return showToast("Lỗi: Mã nội không đổi, hãy đặt tải!", true);
+
+            CFG.ratio = stdWeight / rawDiff;
+            document.getElementById('lbl-ratio').innerText = CFG.ratio.toFixed(6);
+            saveSettingsToBrowser(); showToast(`Calib thành công! Tỷ số: ${CFG.ratio.toFixed(4)}`);
+        };
+
+        window.simTare = function() {
+            if (!state.isStable) return showToast("Lỗi: Cân chưa ổn định!", true);
+            if (state.grossWeight <= 0) return showToast("Cân phải > 0 để Tare", true);
+            state.tareWeight = state.grossWeight; showToast("Đã trừ bì (Tare)");
+        };
+
+        window.simAdd = function() {
+            if (!state.isStable) return showToast("Lỗi: Cân chưa ổn định!", true);
+            if (state.netWeight <= 0) return showToast("Lỗi: Trọng lượng = 0", true);
+            
+            state.accumCount++; state.accumTotal += state.netWeight;
+            document.getElementById('accum-count').innerText = state.accumCount;
+            document.getElementById('total-val').innerText = state.accumTotal.toFixed(0);
+            
+            const timeStr = new Date().toLocaleTimeString('vi-VN') + ' ' + new Date().toLocaleDateString('vi-VN');
+            state.csvData.push([state.accumCount, timeStr, state.grossWeight, state.tareWeight, state.netWeight]);
+            
+            push(ref(db, 'records'), {
+                stt: state.accumCount,
+                time: timeStr,
+                gross: state.grossWeight,
+                tare: state.tareWeight,
+                net: state.netWeight
+            }).then(() => {
+                showToast(`Đã lưu mã ${state.accumCount} và đẩy lên Cloud`);
+            }).catch((err) => {
+                showToast("Lỗi đẩy lên Cloud: " + err.message, true);
+            });
+        };
+
+        window.simTotal = function() {
+            if (state.accumCount === 0) return showToast("Chưa có dữ liệu tổng!");
+            if (confirm("Xóa toàn bộ dữ liệu tổng?")) {
+                state.accumCount = 0; state.accumTotal = 0;
+                document.getElementById('accum-count').innerText = 0; document.getElementById('total-val').innerText = 0;
+                state.csvData = [["STT", "Thoi_Gian", "Gross(kg)", "Tare(kg)", "Net(kg)"]]; 
+                showToast("Đã xóa bộ đếm máy trạm.");
+            }
+        };
+
+        window.toggleSettings = function() {
+            const panel = document.getElementById('settings-panel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        };
+
+        window.exportCSV = function() {
+            if(state.csvData.length <= 1) return showToast("Chưa có dữ liệu!", true);
+            const link = document.createElement("a");
+            link.href = encodeURI("data:text/csv;charset=utf-8," + state.csvData.map(e => e.join(",")).join("\n"));
+            link.download = `Data_TramCan_${Date.now()}.csv`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            showToast("Đã xuất file CSV");
+        };
+
+        window.connectPrinter = async function() {
+            if (!navigator.serial) return alert("Trình duyệt không hỗ trợ Web Serial.");
+            try {
+                printPort = await navigator.serial.requestPort();
+                await printPort.open({ baudRate: 9600 });
+                const textEncoder = new TextEncoderStream();
+                textEncoder.readable.pipeTo(printPort.writable);
+                printWriter = textEncoder.writable.getWriter();
+                document.getElementById('print-conn-status').innerText = "Đã kết nối COM";
+                document.getElementById('print-conn-status').classList.replace("text-gray-400", "text-green-400");
+                showToast("Kết nối máy in thành công!");
+            } catch (error) { showToast("Lỗi mở cổng máy in.", true); }
+        };
+
+        window.executePrint = async function(type) {
+            if (!printPort || !printWriter) return showToast("Chưa kết nối Máy in!", true);
+            if (type === 'detail' && !state.isStable) return showToast("Cân đang rung lắc!", true);
+            try {
+                const ESC = '\x1B', GS = '\x1D', INIT = ESC + '@', CUT = '\n\n\n\n' + GS + 'V\x41\x03';
+                let t = INIT + "TRAM CAN DIEN TU SCADA\n------------------------------\n";
+                t += `Ngay: ${new Date().toLocaleString('vi-VN')}\n------------------------------\n`;
+                if (type === 'detail') {
+                    t += `Phieu: ${String(state.ticketSeq++).padStart(4, '0')}\n`;
+                    t += `Gross: ${state.grossWeight.toFixed(1).padStart(8)} kg\n`;
+                    t += `Tare : ${state.tareWeight.toFixed(1).padStart(8)} kg\n`;
+                    t += `Net  : ${state.netWeight.toFixed(1).padStart(8)} kg\n`;
+                } else if (type === 'summary') {
+                    if (state.accumCount === 0) return showToast("Không có dữ liệu tổng", true);
+                    t += `Bao cao Tong Hop\nSo ma: ${state.accumCount}\nTong : ${state.accumTotal.toFixed(1)} kg\n`;
+                }
+                t += "------------------------------\n      Xin cam on!\n" + CUT;
+                await printWriter.write(t); showToast(`Đã in phiếu (${type})`);
+            } catch (error) { showToast("Lỗi in, kiểm tra cáp", true); }
+        };
+
+        window.onload = () => {
+            loadSettingsFromBrowser();
+            setInterval(() => { document.getElementById('datetime').innerText = new Date().toLocaleTimeString('vi-VN'); }, 1000);
+            requestAnimationFrame(processLoop);
+        };
+    </script>
+</body>
+</html>

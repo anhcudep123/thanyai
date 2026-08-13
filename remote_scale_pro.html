@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Giám Sát Trạm Cân (Live Real-time)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    
+    <style>
+        body { background-color: #1f2937; font-family: 'Roboto', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px 0; user-select: none; }
+        .enclosure { background: linear-gradient(to bottom, #d1d5db, #9ca3af); border-radius: 16px; box-shadow: 10px 10px 30px rgba(0,0,0,0.7); padding: 24px; width: 95vw; max-width: 900px; border: 2px solid #6b7280; position: relative; overflow: hidden; }
+        .front-panel { background-color: #0f2b5b; border-radius: 8px; padding: 20px; box-shadow: inset 0 0 15px rgba(0,0,0,0.6); border: 1px solid #1e3a8a; }
+        .display-window { background: #f8fafc; border: 4px solid #334155; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; box-shadow: inset 0 0 10px rgba(0,0,0,0.2); }
+        .display-header { background-color: #1e3a8a; color: white; padding: 6px 16px; display: flex; justify-content: space-between; font-size: 1rem; border-bottom: 2px solid #cbd5e1; }
+        .weight-text { font-family: 'Share Tech Mono', monospace; color: #0f172a; font-size: 6rem; line-height: 1; letter-spacing: -2px; text-align: right; flex-grow: 1; }
+        .annunciator { font-size: 1.5rem; font-weight: 700; color: #64748b; transition: 0.2s; }
+        .annunciator.active { color: #0f172a; text-shadow: 0 0 2px rgba(0,0,0,0.3); }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        #login-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .table-container { max-height: 250px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; text-align: center; font-size: 0.85rem; }
+        thead { background-color: #1e293b; color: white; position: sticky; top: 0; z-index: 10; }
+        th, td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+        tbody tr:nth-child(even) { background-color: #f1f5f9; }
+        tbody tr:hover { background-color: #e2e8f0; }
+        .btn-act { padding: 4px 8px; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; font-size: 0.75rem; margin: 0 2px; }
+    </style>
+</head>
+<body>
+
+    <div class="enclosure">
+        
+        <!-- ================= MÀN HÌNH KHÓA ================= -->
+        <div id="login-overlay">
+            <h2 class="text-3xl font-bold text-white mb-2">SCADA SECURITY</h2>
+            <p class="text-gray-400 mb-6 text-sm">Vui lòng nhập mật khẩu để giám sát trạm cân</p>
+            <div class="flex gap-2">
+                <input type="password" id="inp-password" placeholder="Mật khẩu..." class="px-4 py-2 rounded font-mono text-black outline-none border-2 border-blue-500 w-48 text-center" onkeypress="if(event.key==='Enter') window.checkPassword()">
+                <button onclick="window.checkPassword()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2 rounded transition">MỞ KHÓA</button>
+            </div>
+            <p id="login-err" class="text-red-400 mt-4 text-sm font-bold opacity-0 transition">Sai mật khẩu!</p>
+        </div>
+
+        <!-- ================= NỘI DUNG CHÍNH ================= -->
+        <div class="bg-gray-800 p-3 rounded-lg mb-4 flex items-center justify-between border border-gray-700">
+            <div class="flex items-center gap-3">
+                <div id="sync-spinner" class="loader" style="display: none;"></div>
+                <span id="sync-time" class="text-sm font-bold text-gray-300">Trạng thái: Đang chờ xác thực...</span>
+            </div>
+            <div class="flex gap-2">
+                <div id="conn-badge" class="text-xs font-bold px-3 py-1 rounded bg-yellow-900 text-yellow-300 flex items-center shadow">OFFLINE</div>
+            </div>
+        </div>
+
+        <div class="front-panel">
+            <div class="display-window w-full">
+                <div class="display-header">
+                    <span class="font-bold">DMPES-99 LIVE MONITORING DASHBOARD</span>
+                    <span id="remote-datetime">--:--:--</span>
+                </div>
+                
+                <div class="flex-grow flex flex-col p-5 bg-white relative">
+                    <!-- LCD HIỂN THỊ SỐ LIVE -->
+                    <div class="flex justify-between text-sm text-gray-500 font-medium mb-3 border-b border-gray-200 pb-2">
+                        <span>Trạng thái cân: <span id="stable-status" class="font-bold text-amber-600">ĐANG ĐỢI...</span></span>
+                        <span id="live-time" class="text-gray-600 font-mono">Cập nhật: --:--:--</span>
+                    </div>
+
+                    <div class="flex flex-grow items-center mb-3">
+                        <div class="flex flex-col gap-6 w-16">
+                            <span id="ind-net" class="annunciator">NET</span>
+                        </div>
+                        <div class="weight-text flex items-baseline justify-end w-full">
+                            <span id="weight-val">0</span>
+                            <span class="text-4xl text-gray-600 ml-3 font-bold font-sans self-end pb-4">kg</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-end mb-4 pt-3 border-t border-gray-200">
+                        <div class="text-sm font-bold text-gray-600">Tare: <span id="tare-val" class="font-mono text-xl text-gray-800">0</span> kg</div>
+                        <div class="text-sm font-bold text-gray-600">Tổng sản lượng (Mẻ): <span id="total-val" class="font-mono text-xl text-blue-800">0</span> kg</div>
+                    </div>
+
+                    <!-- BIỂU ĐỒ XU HƯỚNG MẺ CÂN -->
+                    <div class="pt-3 border-t-2 border-dashed border-gray-300 mb-4">
+                        <div class="flex justify-between items-center mb-1">
+                            <h3 class="text-gray-700 font-bold text-sm">Biểu Đồ Các Mẻ Cân Gần Nhất</h3>
+                            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded text-blue-700 font-bold">📊 History Chart</span>
+                        </div>
+                        <div class="w-full h-28"><canvas id="trendChart"></canvas></div>
+                    </div>
+
+                    <!-- BẢNG LỊCH SỬ CHI TIẾT -->
+                    <div class="pt-3 border-t-2 border-dashed border-gray-300">
+                        <h3 class="text-gray-700 font-bold text-sm mb-2">Bảng Dữ Liệu Lịch Sử Mẻ Cân</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width: 10%;">Mã</th>
+                                        <th style="width: 30%;">Thời Gian</th>
+                                        <th style="width: 15%;">Gross</th>
+                                        <th style="width: 15%;">Tare</th>
+                                        <th style="width: 15%;">Net</th>
+                                        <th style="width: 15%;">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center text-gray-400 text-xs mt-3">
+            Hệ thống hiển thị số cân trực tiếp và lưu trữ lịch sử qua Firebase Realtime Database
+        </div>
+    </div>
+
+    <!-- MODULE FIREBASE V10 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, onValue, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB_EjFQ6vjj5odcgfRpD0OH2jMdmYL4iU8",
+            authDomain: "mychatappsach.firebaseapp.com",
+            databaseURL: "https://mychatappsach-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "mychatappsach",
+            storageBucket: "mychatappsach.firebasestorage.app",
+            messagingSenderId: "139204766512",
+            appId: "1:139204766512:web:8937b6207c608f69d436f5",
+            measurementId: "G-NEC9LW1BZ3"
+        };
+
+        const SYSTEM_PASSWORD = "admin"; 
+        
+        let db;
+        let chartInstance = null;
+
+        function formatNum(num) { return Number(num).toLocaleString('vi-VN'); }
+
+        window.checkPassword = function() {
+            const pass = document.getElementById('inp-password').value;
+            if (pass === SYSTEM_PASSWORD) {
+                document.getElementById('login-overlay').style.display = 'none';
+                initFirebase();
+            } else {
+                const err = document.getElementById('login-err');
+                err.style.opacity = '1'; setTimeout(() => err.style.opacity = '0', 2000);
+            }
+        };
+
+        function initFirebase() {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+            
+            initChart();
+            
+            // 1. LẮNG NGHE SỐ CÂN LIVE (NHẬP MỚI MỖI 1 GIÂY TỪ TRẠM CÂN)
+            onValue(ref(db, 'live_status'), (snapshot) => {
+                if (snapshot.exists()) {
+                    const live = snapshot.val();
+                    document.getElementById('weight-val').innerText = formatNum(parseFloat(live.weight).toFixed(0));
+                    document.getElementById('tare-val').innerText = formatNum(parseFloat(live.tare).toFixed(0));
+                    document.getElementById('ind-net').classList.toggle('active', parseFloat(live.tare) > 0);
+                    
+                    const stEl = document.getElementById('stable-status');
+                    if (live.stable) {
+                        stEl.innerText = "ỔN ĐỊNH (STABLE)";
+                        stEl.className = "font-bold text-green-600";
+                    } else {
+                        stEl.innerText = "DAO ĐỘNG (MOTION)";
+                        stEl.className = "font-bold text-amber-600";
+                    }
+                    document.getElementById('live-time').innerText = `Cập nhật: ${live.time}`;
+                }
+            });
+
+            // 2. LẮNG NGHE LỊCH SỬ CÁC MẺ CÂN (RECORDS) ĐỂ VẼ BIỂU ĐỒ VÀ BẢNG
+            const recordsRef = query(ref(db, 'records'), limitToLast(50));
+            onValue(recordsRef, (snapshot) => {
+                document.getElementById('sync-spinner').style.display = "none";
+                document.getElementById('conn-badge').innerText = "ONLINE - LIVE";
+                document.getElementById('conn-badge').className = "text-xs font-bold px-3 py-1 rounded bg-green-900 text-green-300 flex items-center shadow";
+                document.getElementById('sync-time').innerText = "Đã kết nối Socket Real-time";
+
+                if (!snapshot.exists()) {
+                    document.getElementById('table-body').innerHTML = "";
+                    return;
+                }
+
+                const dataList = [];
+                let totalAccumulated = 0;
+
+                snapshot.forEach((child) => {
+                    const item = child.val();
+                    item.firebaseKey = child.key; 
+                    dataList.push(item);
+                    if(!isNaN(item.net)) totalAccumulated += parseFloat(item.net);
+                });
+
+                document.getElementById('total-val').innerText = formatNum(totalAccumulated.toFixed(0));
+
+                // Cập nhật Biểu đồ
+                if (chartInstance) {
+                    chartInstance.data.labels = dataList.map(r => "Mã " + r.stt);
+                    chartInstance.data.datasets[0].data = dataList.map(r => (parseFloat(r.tare) > 0 ? parseFloat(r.net) : parseFloat(r.gross)));
+                    chartInstance.update();
+                }
+
+                // Cập nhật Bảng lịch sử (Đảo ngược để mã mới nhất lên trên)
+                const tbody = document.getElementById('table-body');
+                tbody.innerHTML = ""; 
+                const reversedData = [...dataList].reverse();
+                
+                reversedData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="font-bold text-blue-800">${row.stt}</td>
+                        <td>${row.time}</td>
+                        <td>${formatNum(row.gross)}</td>
+                        <td>${formatNum(row.tare)}</td>
+                        <td class="font-bold text-green-700">${formatNum(row.net)}</td>
+                        <td>
+                            <button onclick="window.promptEdit('${row.firebaseKey}', ${row.gross}, ${row.tare}, ${row.net})" class="btn-act bg-yellow-500 hover:bg-yellow-600"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="window.confirmDelete('${row.firebaseKey}', ${row.stt})" class="btn-act bg-red-500 hover:bg-red-600"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }, (error) => {
+                console.error(error);
+                document.getElementById('conn-badge').innerText = "MẤT KẾT NỐI";
+                document.getElementById('conn-badge').className = "text-xs font-bold px-3 py-1 rounded bg-red-900 text-red-300 flex items-center shadow";
+            });
+
+            setInterval(() => {
+                document.getElementById('remote-datetime').innerText = new Date().toLocaleTimeString('vi-VN');
+            }, 1000);
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Khối lượng Tịnh', data: [], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3 }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { beginAtZero: true, ticks: { font: { size: 9 } } } } }
+            });
+        }
+
+        window.confirmDelete = function(firebaseKey, stt) {
+            if(confirm(`Xóa mã số [${stt}]?`)) {
+                remove(ref(db, 'records/' + firebaseKey)).catch(err => alert("Lỗi xóa: " + err.message));
+            }
+        };
+
+        window.promptEdit = function(firebaseKey, oldG, oldT, oldN) {
+            let newG = prompt(`Sửa Gross (Hiện tại: ${oldG} kg):`, oldG);
+            if(newG === null) return; 
+            let newT = prompt(`Sửa Tare (Hiện tại: ${oldT} kg):`, oldT);
+            if(newT === null) return;
+            let newN = prompt(`Sửa Net (Hiện tại: ${oldN} kg):`, oldN);
+            if(newN === null) return;
+
+            update(ref(db, 'records/' + firebaseKey), {
+                gross: parseFloat(newG),
+                tare: parseFloat(newT),
+                net: parseFloat(newN)
+            }).catch(err => alert("Lỗi sửa: " + err.message));
+        };
+    </script>
+</body>
+</html>
