@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cờ Tướng - Học Viện AI & Thư Viện 30+ Thế Cờ</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background-color: #0b0f19;
+            color: #38bdf8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: rgba(30, 41, 59, 0.8);
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            max-width: 900px;
+        }
+        button, select {
+            padding: 9px 14px;
+            font-size: 14px;
+            font-weight: bold;
+            border: 1px solid #0284c7;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #0c4a6e;
+            color: #e0f2fe;
+            transition: all 0.2s;
+        }
+        select { max-width: 260px; text-overflow: ellipsis; }
+        button:hover { background-color: #0284c7; box-shadow: 0 0 10px rgba(56,189,248,0.5); }
+        .btn-ai { background-color: #047857; border-color: #10b981; }
+        .btn-ai:hover { background-color: #10b981; box-shadow: 0 0 15px rgba(16,185,129,0.6); }
+        .btn-undo { background-color: #7f1d1d; border-color: #dc2626; }
+        
+        #statusLabel { font-size: 20px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+        #radarLabel { font-size: 14px; color: #10b981; margin-top: 15px; }
+        canvas { background-color: #0f172a; border: 2px solid #1e293b; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button onclick="startGame('PvP')">PvP (2 Người)</button>
+        <button onclick="startGame('PvE')">PvE (Đấu Máy)</button>
+        <button class="btn-ai" onclick="startGame('Auto')">🤖 AI vs AI</button>
+        
+        <label style="color: #cbd5e1; margin-left: 5px;">Thư Viện:</label>
+        <select id="boardPreset" onchange="if(mode) startGame(mode);">
+            <optgroup label="I. Khai Cuộc Kinh Điển">
+                <option value="default">01. Bố trận Tiêu chuẩn (Mặc định)</option>
+                <option value="khai_thuanphao">02. Thuận Pháo</option>
+                <option value="khai_nghichphao">03. Nghịch Pháo</option>
+                <option value="khai_binhphong">04. Trung Pháo vs Bình Phong Mã</option>
+                <option value="khai_tiennhan">05. Tiên Nhân Chỉ Lộ</option>
+                <option value="khai_phituong">06. Phi Tượng Cuộc</option>
+                <option value="khai_khoima">07. Khởi Mã Cuộc</option>
+                <option value="khai_quacung">08. Quá Cung Pháo</option>
+            </optgroup>
+            <optgroup label="II. Sát Cục Tân Thủ (Học Mưu)">
+                <option value="sat_mahauphao">09. Sát Cục: Mã Hậu Pháo</option>
+                <option value="sat_ngoataoma">10. Sát Cục: Ngọa Tào Mã</option>
+                <option value="sat_thietmonham">11. Sát Cục: Thiết Môn Hạm</option>
+                <option value="sat_daidao">12. Sát Cục: Đại Đao Xuyên Tâm</option>
+                <option value="sat_phaolong">13. Sát Cục: Pháo Lồng</option>
+                <option value="sat_dieungu">14. Sát Cục: Điếu Ngư Mã</option>
+                <option value="sat_tieuguy">15. Sát Cục: Tiểu Quỷ Tọa Tán</option>
+                <option value="sat_nhiquy">16. Sát Cục: Nhị Quỷ Vỗ Môn</option>
+                <option value="sat_thiendia">17. Sát Cục: Thiên Địa Pháo</option>
+                <option value="sat_songphao">18. Sát Cục: Song Pháo Đoạt Thành</option>
+            </optgroup>
+            <optgroup label="III. Cờ Tàn Căn Bản">
+                <option value="tan_donxe_songsi">19. Đơn Xe vờn Song Sĩ</option>
+                <option value="tan_donxe_songtuong">20. Đơn Xe vờn Song Tượng</option>
+                <option value="tan_donma_donsi">21. Đơn Mã thắng Đơn Sĩ</option>
+                <option value="tan_donphaosi_donsi">22. Đơn Pháo Sĩ thắng Đơn Sĩ</option>
+                <option value="tan_matot_khuyetsi">23. Mã Tốt thắng Khuyết Sĩ</option>
+                <option value="tan_phaotot_khuyettuong">24. Pháo Tốt thắng Khuyết Tượng</option>
+                <option value="tan_tamtot_khuyetsi">25. Tam Tốt thắng Khuyết Sĩ</option>
+            </optgroup>
+            <optgroup label="IV. Thế Cờ Giang Hồ">
+                <option value="gh_khuocnguyet">26. Khước Nguyệt Cuộc</option>
+                <option value="gh_thattinh">27. Thất Tinh Tụ Hội (Mini)</option>
+                <option value="gh_dama">28. Dã Mã Thao Lâm (Mini)</option>
+                <option value="gh_khuudan">29. Khưu Dẫn Hàng Long</option>
+                <option value="gh_laotot">30. Lão Tốt Đồ Môn</option>
+                <option value="gh_docbo">31. Độc Bộ Hổ Uy</option>
+            </optgroup>
+        </select>
+
+        <label style="color: #cbd5e1; margin-left: 5px;">Cấp AI:</label>
+        <select id="aiLevel">
+            <option value="1">Dễ</option>
+            <option value="2" selected>Trung bình</option>
+            <option value="3">Khó</option>
+        </select>
+        <button class="btn-undo" onclick="undo()">↶ Undo</button>
+    </div>
+
+    <div id="statusLabel">Chọn chế độ để bắt đầu</div>
+    <canvas id="gameCanvas" width="720" height="800"></canvas>
+    <div id="radarLabel">Radar AI: Đang chờ...</div>
+
+<script>
+    const CELL_SIZE = 80;
+    const BOARD_WIDTH = 9;
+    const BOARD_HEIGHT = 10;
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusLabel = document.getElementById('statusLabel');
+    const radarLabel = document.getElementById('radarLabel');
+    const aiLevelSelect = document.getElementById('aiLevel');
+    const presetSelect = document.getElementById('boardPreset');
+
+    const PIECE_ICONS = { "Xe": "🚙", "Mã": "🐎", "Tượng": "🐘", "Sĩ": "🛡️", "Tướng": "👑", "Pháo": "🚀", "Tốt": "🪖" };
+    
+    // BỘ NÉN TỌA ĐỘ TIÊU CHUẨN
+    const DEFAULT_BOARD = {
+        "0,0": ["Xe", "black"], "1,0": ["Mã", "black"], "2,0": ["Tượng", "black"], "3,0": ["Sĩ", "black"], "4,0": ["Tướng", "black"], "5,0": ["Sĩ", "black"], "6,0": ["Tượng", "black"], "7,0": ["Mã", "black"], "8,0": ["Xe", "black"], "1,2": ["Pháo", "black"], "7,2": ["Pháo", "black"], "0,3": ["Tốt", "black"], "2,3": ["Tốt", "black"], "4,3": ["Tốt", "black"], "6,3": ["Tốt", "black"], "8,3": ["Tốt", "black"],
+        "0,9": ["Xe", "red"], "1,9": ["Mã", "red"], "2,9": ["Tượng", "red"], "3,9": ["Sĩ", "red"], "4,9": ["Tướng", "red"], "5,9": ["Sĩ", "red"], "6,9": ["Tượng", "red"], "7,9": ["Mã", "red"], "8,9": ["Xe", "red"], "1,7": ["Pháo", "red"], "7,7": ["Pháo", "red"], "0,6": ["Tốt", "red"], "2,6": ["Tốt", "red"], "4,6": ["Tốt", "red"], "6,6": ["Tốt", "red"], "8,6": ["Tốt", "red"]
+    };
+
+    function cloneAndMove(moves) {
+        let b = {...DEFAULT_BOARD};
+        for(let [from, to] of moves) { b[to] = b[from]; delete b[from]; }
+        return b;
+    }
+
+    // THƯ VIỆN 31 THẾ CỜ SÁCH VỞ
+    const PRESETS = {
+        "default": DEFAULT_BOARD,
+        // I. KHAI CUỘC
+        "khai_thuanphao": cloneAndMove([ ["1,7", "4,7"], ["7,2", "4,2"] ]),
+        "khai_nghichphao": cloneAndMove([ ["1,7", "4,7"], ["1,2", "4,2"] ]),
+        "khai_binhphong": cloneAndMove([ ["1,7", "4,7"], ["1,0", "2,2"], ["7,0", "6,2"] ]),
+        "khai_tiennhan": cloneAndMove([ ["2,6", "2,5"] ]),
+        "khai_phituong": cloneAndMove([ ["2,9", "4,7"] ]),
+        "khai_khoima": cloneAndMove([ ["7,9", "6,7"] ]),
+        "khai_quacung": cloneAndMove([ ["1,7", "5,7"] ]),
+        // II. SÁT CỤC
+        "sat_mahauphao": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "5,2":["Mã","red"], "5,4":["Pháo","red"] },
+        "sat_ngoataoma": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "2,1":["Mã","red"], "4,1":["Xe","red"] },
+        "sat_thietmonham": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "2,0":["Tượng","black"], "6,0":["Tượng","black"], "4,9":["Tướng","red"], "4,6":["Pháo","red"], "4,1":["Xe","red"] },
+        "sat_daidao": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "4,1":["Sĩ","black"], "4,9":["Tướng","red"], "4,2":["Xe","red"], "4,7":["Pháo","red"] },
+        "sat_phaolong": { "4,0":["Tướng","black"], "4,9":["Tướng","red"], "4,1":["Pháo","red"], "4,2":["Pháo","red"] },
+        "sat_dieungu": { "5,0":["Tướng","black"], "4,0":["Sĩ","black"], "6,0":["Sĩ","black"], "4,9":["Tướng","red"], "3,1":["Mã","red"], "5,2":["Xe","red"] },
+        "sat_tieuguy": { "5,0":["Tướng","black"], "3,0":["Sĩ","black"], "4,1":["Sĩ","black"], "4,9":["Tướng","red"], "4,0":["Tốt","red"], "5,2":["Xe","red"] },
+        "sat_nhiquy": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "3,1":["Tốt","red"], "5,1":["Tốt","red"], "4,2":["Xe","red"] },
+        "sat_thiendia": { "4,1":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "4,0":["Pháo","red"], "4,8":["Pháo","red"], "5,1":["Xe","red"], "3,1":["Tốt","red"] },
+        "sat_songphao": { "4,0":["Tướng","black"], "4,9":["Tướng","red"], "3,0":["Pháo","red"], "5,0":["Pháo","red"] },
+        // III. CỜ TÀN
+        "tan_donxe_songsi": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "2,2":["Xe","red"] },
+        "tan_donxe_songtuong": { "4,0":["Tướng","black"], "2,0":["Tượng","black"], "6,0":["Tượng","black"], "4,9":["Tướng","red"], "2,2":["Xe","red"] },
+        "tan_donma_donsi": { "4,0":["Tướng","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "5,5":["Mã","red"] },
+        "tan_donphaosi_donsi": { "4,0":["Tướng","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "4,4":["Pháo","red"], "5,9":["Sĩ","red"], "3,9":["Sĩ","red"] },
+        "tan_matot_khuyetsi": { "4,0":["Tướng","black"], "5,0":["Sĩ","black"], "2,0":["Tượng","black"], "6,0":["Tượng","black"], "4,9":["Tướng","red"], "5,5":["Mã","red"], "4,4":["Tốt","red"] },
+        "tan_phaotot_khuyettuong": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "2,0":["Tượng","black"], "4,9":["Tướng","red"], "4,4":["Pháo","red"], "5,5":["Tốt","red"] },
+        "tan_tamtot_khuyetsi": { "4,0":["Tướng","black"], "5,0":["Sĩ","black"], "2,0":["Tượng","black"], "6,0":["Tượng","black"], "4,9":["Tướng","red"], "3,4":["Tốt","red"], "4,4":["Tốt","red"], "5,4":["Tốt","red"] },
+        // IV. GIANG HỒ
+        "gh_khuocnguyet": { "4,0":["Tướng","black"], "3,1":["Tốt","black"], "5,1":["Tốt","black"], "4,9":["Tướng","red"], "4,7":["Xe","red"], "4,2":["Tốt","red"] },
+        "gh_thattinh": { "4,0":["Tướng","black"], "2,0":["Tượng","black"], "3,0":["Sĩ","black"], "3,1":["Tốt","black"], "4,1":["Tốt","black"], "5,1":["Tốt","black"], "4,9":["Tướng","red"], "2,5":["Tốt","red"], "4,5":["Tốt","red"], "6,5":["Tốt","red"], "4,8":["Pháo","red"] },
+        "gh_dama": { "4,0":["Tướng","black"], "3,0":["Xe","black"], "5,0":["Xe","black"], "4,1":["Tốt","black"], "4,9":["Tướng","red"], "5,5":["Mã","red"], "3,5":["Mã","red"], "4,2":["Tốt","red"] },
+        "gh_khuudan": { "4,0":["Tướng","black"], "2,0":["Xe","black"], "6,0":["Mã","black"], "4,9":["Tướng","red"], "4,1":["Tốt","red"], "4,2":["Tốt","red"], "5,9":["Sĩ","red"] },
+        "gh_laotot": { "4,0":["Tướng","black"], "3,0":["Sĩ","black"], "5,0":["Sĩ","black"], "4,9":["Tướng","red"], "3,2":["Xe","red"], "4,0":["Tốt","red"] },
+        "gh_docbo": { "4,0":["Tướng","black"], "5,0":["Sĩ","black"], "4,1":["Tốt","black"], "3,1":["Tốt","black"], "4,9":["Tướng","red"], "5,2":["Mã","red"], "4,3":["Tốt","red"] }
+    };
+
+    let mode = null;
+    let turn = "red";
+    let board = new Map(); 
+    let selectedPos = null;
+    let history = [];
+    let nodeCount = 0;
+    let isAILoading = false;
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+
+    function playSound(isCapture) {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+        osc.type = isCapture ? 'sawtooth' : 'sine';
+        osc.frequency.setValueAtTime(isCapture ? 300 : 600, audioCtx.currentTime);
+        if (isCapture) osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+        gainNode.gain.setValueAtTime(isCapture ? 0.15 : 0.05, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+    }
+
+    function startGame(newMode) {
+        mode = newMode; turn = "red"; selectedPos = null; history = []; isAILoading = false;
+        
+        let presetKey = presetSelect.value;
+        board.clear();
+        let layout = PRESETS[presetKey];
+        for (let pos in layout) board.set(pos, {name: layout[pos][0], color: layout[pos][1]});
+        
+        updateStatus(); render();
+
+        if (mode === 'Auto') {
+            radarLabel.innerText = "Chế độ Mô phỏng: AI tự đấu (Tốc độ 0.8s/nước)";
+            setTimeout(aiMakeMove, 800); 
+        } else {
+            radarLabel.innerText = "Radar AI: Đã tải thư viện, sẵn sàng.";
+        }
+    }
+
+    function checkPieceRules(currBoard, start, end) {
+        let piece = currBoard.get(start), targetPiece = currBoard.get(end);
+        if(!piece || (targetPiece && targetPiece.color === piece.color)) return false;
+        let [sx, sy] = start.split(',').map(Number), [ex, ey] = end.split(',').map(Number);
+        let dx = ex - sx, dy = ey - sy;
+
+        if (piece.name === "Tướng") {
+            if (Math.abs(dx) + Math.abs(dy) !== 1 || ex < 3 || ex > 5) return false;
+            if (piece.color === "red" && ey < 7) return false;
+            if (piece.color === "black" && ey > 2) return false;
+            return true;
+        }
+        if (piece.name === "Sĩ") {
+            if (Math.abs(dx) !== 1 || Math.abs(dy) !== 1 || ex < 3 || ex > 5) return false;
+            if (piece.color === "red" && ey < 7) return false;
+            if (piece.color === "black" && ey > 2) return false;
+            return true;
+        }
+        if (piece.name === "Tượng") {
+            if (Math.abs(dx) !== 2 || Math.abs(dy) !== 2) return false;
+            if (piece.color === "red" && ey <= 4) return false;
+            if (piece.color === "black" && ey >= 5) return false;
+            return !currBoard.has(`${sx + dx/2},${sy + dy/2}`);
+        }
+        if (piece.name === "Mã") {
+            if (Math.abs(dx) === 2 && Math.abs(dy) === 1) return !currBoard.has(`${sx + dx/2},${sy}`);
+            if (Math.abs(dx) === 1 && Math.abs(dy) === 2) return !currBoard.has(`${sx},${sy + dy/2}`);
+            return false;
+        }
+        if (piece.name === "Xe") {
+            if (dx !== 0 && dy !== 0) return false;
+            let cx = sx + Math.sign(dx), cy = sy + Math.sign(dy);
+            while (cx !== ex || cy !== ey) { if (currBoard.has(`${cx},${cy}`)) return false; cx += Math.sign(dx); cy += Math.sign(dy); }
+            return true;
+        }
+        if (piece.name === "Pháo") {
+            if (dx !== 0 && dy !== 0) return false;
+            let cx = sx + Math.sign(dx), cy = sy + Math.sign(dy), count = 0;
+            while (cx !== ex || cy !== ey) { if (currBoard.has(`${cx},${cy}`)) count++; cx += Math.sign(dx); cy += Math.sign(dy); }
+            return targetPiece ? count === 1 : count === 0;
+        }
+        if (piece.name === "Tốt") {
+            let dir = piece.color === "red" ? -1 : 1, crossed = piece.color === "red" ? sy <= 4 : sy >= 5;
+            if (dx === 0 && dy === dir) return true;
+            return (crossed && dy === 0 && Math.abs(dx) === 1);
+        }
+        return false;
+    }
+
+    function kingsFacing(currBoard) {
+        let rKing = null, bKing = null;
+        for (let [pos, piece] of currBoard) { if (piece.name === "Tướng") piece.color === "red" ? rKing = pos : bKing = pos; }
+        if (!rKing || !bKing) return false;
+        let [rx, ry] = rKing.split(',').map(Number), [bx, by] = bKing.split(',').map(Number);
+        if (rx === bx) {
+            for (let y = Math.min(ry, by) + 1; y < Math.max(ry, by); y++) if (currBoard.has(`${rx},${y}`)) return false;
+            return true;
+        }
+        return false;
+    }
+
+    function isInCheck(currBoard, checkColor) {
+        let kingPos = null;
+        for (let [pos, piece] of currBoard) { if (piece.name === "Tướng" && piece.color === checkColor) { kingPos = pos; break; } }
+        if (!kingPos) return true;
+        let enemyColor = checkColor === "red" ? "black" : "red";
+        for (let [pos, piece] of currBoard) { if (piece.color === enemyColor && checkPieceRules(currBoard, pos, kingPos)) return true; }
+        return false;
+    }
+
+    function isSafeMove(start, end) {
+        if (!checkPieceRules(board, start, end)) return false;
+        let simBoard = new Map(board); simBoard.set(end, simBoard.get(start)); simBoard.delete(start);
+        return !kingsFacing(simBoard) && !isInCheck(simBoard, turn);
+    }
+
+    function updateStatus() {
+        if (!mode) return;
+        let text = mode === 'Auto' ? `🤖 MÔ PHỎNG: Máy ${turn === "red" ? "Đỏ" : "Đen"} đang đi...` : `[${mode}] Lượt đi: ${turn === "red" ? "Đỏ" : "Đen"}`;
+        if (isInCheck(board, turn)) text += " (CHIẾU!)";
+        statusLabel.innerText = text;
+        statusLabel.style.color = turn === "red" ? "#ef4444" : "#38bdf8";
+    }
+
+    function checkGameOver() {
+        let hasMove = false;
+        for (let [pos, piece] of board) {
+            if (piece.color === turn) {
+                for (let x = 0; x < BOARD_WIDTH; x++) {
+                    for (let y = 0; y < BOARD_HEIGHT; y++) { if (isSafeMove(pos, `${x},${y}`)) { hasMove = true; break; } }
+                    if(hasMove) break;
+                }
+            }
+            if(hasMove) break;
+        }
+        if (!hasMove) {
+            setTimeout(() => alert(isInCheck(board, turn) ? `SÁT CỤC! Phe ${turn === "black" ? "Đỏ" : "Đen"} thắng!` : `HÒA CỜ (HẾT NƯỚC)!`), 100);
+            mode = null; return true;
+        }
+        return false;
+    }
+
+    canvas.addEventListener('click', (event) => {
+        if (!mode || isAILoading || mode === 'Auto' || (mode === "PvE" && turn === "black")) return;
+        let gridX = Math.round((event.offsetX - CELL_SIZE / 2) / CELL_SIZE), gridY = Math.round((event.offsetY - CELL_SIZE / 2) / CELL_SIZE);
+        let clickedPos = `${gridX},${gridY}`;
+        if (gridX < 0 || gridX >= BOARD_WIDTH || gridY < 0 || gridY >= BOARD_HEIGHT) return;
+
+        if (selectedPos) {
+            if (clickedPos === selectedPos) selectedPos = null;
+            else if (isSafeMove(selectedPos, clickedPos)) executeMove(selectedPos, clickedPos);
+            else if (board.get(clickedPos)?.color === turn) selectedPos = clickedPos;
+        } else if (board.get(clickedPos)?.color === turn) selectedPos = clickedPos;
+        render();
+    });
+
+    function executeMove(start, end) {
+        let isCapture = board.has(end);
+        history.push({board: new Map(board), turn: turn});
+        board.set(end, board.get(start)); board.delete(start);
+        selectedPos = null; playSound(isCapture);
+        turn = turn === "red" ? "black" : "red";
+        render();
+        
+        if (checkGameOver()) { updateStatus(); return; }
+        updateStatus();
+        
+        if (mode === "PvE" && turn === "black") {
+            isAILoading = true; setTimeout(aiMakeMove, 50);
+        } else if (mode === "Auto") {
+            isAILoading = true; setTimeout(aiMakeMove, 800); 
+        }
+    }
+
+    function undo() {
+        if (!history.length || (mode === "PvE" && turn === "black") || mode === "Auto") return;
+        if (mode === "PvE" && history.length >= 2) { history.pop(); let state = history.pop(); board = state.board; turn = state.turn; } 
+        else { let state = history.pop(); board = state.board; turn = state.turn; }
+        selectedPos = null; updateStatus(); render();
+    }
+
+    function evaluateBoard(currBoard) {
+        let score = 0; const vals = {"Tướng": 10000, "Xe": 900, "Pháo": 500, "Mã": 400, "Tượng": 200, "Sĩ": 200, "Tốt": 100};
+        for (let [pos, piece] of currBoard) {
+            let [x, y] = pos.split(',').map(Number), val = vals[piece.name] || 0, bonus = 0;
+            if (piece.name === "Tốt") bonus += (piece.color === "black" && y >= 5) ? 50 + (y - 5)*15 : (piece.color === "red" && y <= 4) ? 50 + (4 - y)*15 : 0;
+            else if (piece.name === "Mã") bonus += (x >= 2 && x <= 6 && y >= 2 && y <= 7) ? 40 : (x === 0 || x === 8) ? -30 : 0;
+            else if (piece.name === "Pháo") bonus += (x === 4) ? 30 : 0;
+            else if (piece.name === "Xe") bonus += (piece.color === "black" && y > 0) ? 20 : (piece.color === "red" && y < 9) ? 20 : 0;
+            score += piece.color === turn ? (val + bonus) : -(val + bonus); 
+        }
+        return score;
+    }
+
+    function sortMoves(currBoard, moves) {
+        const vals = {"Tướng": 10000, "Xe": 900, "Pháo": 500, "Mã": 400, "Tượng": 200, "Sĩ": 200, "Tốt": 100};
+        return moves.sort((a, b) => (vals[currBoard.get(b[1])?.name] || 0) - (vals[currBoard.get(a[1])?.name] || 0));
+    }
+
+    function minimax(currBoard, depth, alpha, beta, isMaximizing, checkTurn) {
+        nodeCount++;
+        if (depth === 0) return evaluateBoard(currBoard);
+        let moveColor = isMaximizing ? checkTurn : (checkTurn === "red" ? "black" : "red");
+        let moves = [];
+        for (let [pos, piece] of currBoard) {
+            if (piece.color === moveColor) {
+                for (let x = 0; x < BOARD_WIDTH; x++) {
+                    for (let y = 0; y < BOARD_HEIGHT; y++) {
+                        let target = `${x},${y}`;
+                        if (checkPieceRules(currBoard, pos, target)) moves.push([pos, target]);
+                    }
+                }
+            }
+        }
+        if (!moves.length) return isMaximizing ? -99999 : 99999;
+        moves = sortMoves(currBoard, moves);
+        
+        let bestEval = isMaximizing ? -Infinity : Infinity;
+        for (let [start, end] of moves) {
+            let piece = currBoard.get(start), cap = currBoard.get(end);
+            currBoard.set(end, piece); currBoard.delete(start);
+            let evalScore = kingsFacing(currBoard) ? (isMaximizing ? -10000 : 10000) : minimax(currBoard, depth - 1, alpha, beta, !isMaximizing, checkTurn);
+            if (cap) currBoard.set(end, cap); else currBoard.delete(end);
+            currBoard.set(start, piece);
+            
+            if (isMaximizing) { bestEval = Math.max(bestEval, evalScore); alpha = Math.max(alpha, evalScore); } 
+            else { bestEval = Math.min(bestEval, evalScore); beta = Math.min(beta, evalScore); }
+            if (beta <= alpha) break;
+        }
+        return bestEval;
+    }
+
+    function aiMakeMove() {
+        if (!mode) return;
+        let depth = parseInt(aiLevelSelect.value); nodeCount = 0;
+        let validMoves = [];
+        for (let [pos, piece] of board) {
+            if (piece.color === turn) {
+                for (let x = 0; x < BOARD_WIDTH; x++) {
+                    for (let y = 0; y < BOARD_HEIGHT; y++) {
+                        let tgt = `${x},${y}`;
+                        if (isSafeMove(pos, tgt)) validMoves.push([pos, tgt]);
+                    }
+                }
+            }
+        }
+        if (!validMoves.length) { isAILoading = false; return; }
+        
+        let bestMove = validMoves[0];
+        if (depth === 1) bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+        else {
+            let bestVal = -Infinity; validMoves = sortMoves(board, validMoves);
+            for (let [start, end] of validMoves) {
+                let piece = board.get(start), cap = board.get(end);
+                board.set(end, piece); board.delete(start);
+                let moveVal = minimax(board, depth - 1, -Infinity, Infinity, false, turn);
+                if (cap) board.set(end, cap); else board.delete(end);
+                board.set(start, piece);
+                if (moveVal > bestVal) { bestVal = moveVal; bestMove = [start, end]; }
+            }
+        }
+        isAILoading = false;
+        executeMove(bestMove[0], bestMove[1]);
+    }
+
+    // DRAWING
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let offset = CELL_SIZE / 2; ctx.strokeStyle = "#334155"; ctx.lineWidth = 2;
+        for (let y = 0; y < BOARD_HEIGHT; y++) { ctx.beginPath(); ctx.moveTo(offset, offset + y * CELL_SIZE); ctx.lineTo(offset + 8 * CELL_SIZE, offset + y * CELL_SIZE); ctx.stroke(); }
+        for (let x = 0; x < BOARD_WIDTH; x++) {
+            ctx.beginPath(); ctx.moveTo(offset + x * CELL_SIZE, offset); ctx.lineTo(offset + x * CELL_SIZE, offset + (x===0||x===8?9:4) * CELL_SIZE); ctx.stroke();
+            if(x!==0&&x!==8) { ctx.beginPath(); ctx.moveTo(offset + x * CELL_SIZE, offset + 5 * CELL_SIZE); ctx.lineTo(offset + x * CELL_SIZE, offset + 9 * CELL_SIZE); ctx.stroke(); }
+        }
+        const cross = (sx, sy, ex, ey) => { ctx.beginPath(); ctx.moveTo(offset+sx*CELL_SIZE, offset+sy*CELL_SIZE); ctx.lineTo(offset+ex*CELL_SIZE, offset+ey*CELL_SIZE); ctx.stroke(); };
+        cross(3,0, 5,2); cross(5,0, 3,2); cross(3,7, 5,9); cross(5,7, 3,9);
+        
+        ctx.font = "bold 24px Tahoma"; ctx.fillStyle = "#475569"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("SỞ HÀ", offset + 2*CELL_SIZE, offset + 4.5*CELL_SIZE); ctx.fillText("HÁN GIỚI", offset + 6*CELL_SIZE, offset + 4.5*CELL_SIZE);
+
+        for (let [pos, piece] of board) {
+            let [x, y] = pos.split(',').map(Number), isRed = piece.color === "red", glow = isRed ? "#ef4444" : "#0ea5e9";
+            ctx.shadowBlur = selectedPos === pos ? 25 : 10; ctx.shadowColor = glow;
+            ctx.strokeStyle = selectedPos === pos ? "#fff" : glow; ctx.lineWidth = selectedPos === pos ? 4 : 2;
+            ctx.fillStyle = "#1e293b"; ctx.beginPath(); ctx.arc(offset+x*CELL_SIZE, offset+y*CELL_SIZE, CELL_SIZE*0.42, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+            ctx.shadowBlur = 0; ctx.font = "34px Arial"; ctx.fillText(PIECE_ICONS[piece.name], offset+x*CELL_SIZE, offset+y*CELL_SIZE - 6);
+            ctx.font = "bold 12px Tahoma"; ctx.fillStyle = isRed ? "#fca5a5" : "#bae6fd"; ctx.fillText(piece.name.toUpperCase(), offset+x*CELL_SIZE, offset+y*CELL_SIZE + 22);
+        }
+    }
+    render();
+</script>
+</body>
+</html>
