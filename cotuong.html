@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P SpeedShare & Cờ Tướng 🚀</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e1e2e; }
+        ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #585b70; }
+        
+        #video-grid { transition: all 0.3s ease-in-out; }
+        
+        .ripple {
+            animation: ripple 2s infinite ease-in-out;
+        }
+        @keyframes ripple {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3); }
+            70% { box-shadow: 0 0 0 20px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+                    <i data-lucide="zap" class="w-6 h-6 animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">P2P Connect</h1>
+                    <p class="text-xs text-slate-400" data-i18n="subtitle">Gọi Thoại, Video & Chuyển File Trực Tiếp</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="relative group">
+                    <button class="flex items-center gap-1.5 bg-slate-800/50 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/50 text-xs font-medium text-slate-300 transition-colors">
+                        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                        <span id="current-lang-text">Tiếng Việt</span>
+                        <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                    </button>
+                    <div class="absolute right-0 mt-1 w-32 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                        <div class="py-1">
+                            <button onclick="changeLanguage('vi')" class="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">Tiếng Việt</button>
+                            <button onclick="changeLanguage('en')" class="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">English</button>
+                            <button onclick="changeLanguage('zh')" class="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">中文</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 bg-slate-800/50 px-4 py-2 rounded-full border border-slate-700/50 text-sm">
+                    <span id="connection-dot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                    <span id="connection-status-text" class="font-medium text-slate-300" data-i18n="status_disconnected">Chưa kết nối</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Khu vực chính -->
+    <main class="max-w-7xl mx-auto w-full flex-1 p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Cột trái (4 cột) -->
+        <section class="lg:col-span-4 flex flex-col gap-6">
+            
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-md">
+                <h2 class="text-base font-semibold mb-3.5 flex items-center gap-2 text-indigo-400">
+                    <i data-lucide="door-open" class="w-5 h-5"></i> <span data-i18n="room_title">Phòng kết nối</span>
+                </h2>
+                <div class="space-y-3.5">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1" data-i18n="room_label">Mã kết nối của nhóm</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="room-input" data-i18n-placeholder="room_placeholder" placeholder="Nhập mã..." 
+                                class="flex-1 bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-100 outline-none transition-all">
+                            <button onclick="generateRandomRoom()" class="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700/50 transition-colors" title="Tạo mã">
+                                <i data-lucide="shuffle" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button id="connect-btn" onclick="startSignaling()" class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-semibold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 text-sm">
+                        <i data-lucide="link-2" class="w-4 h-4"></i> <span data-i18n="btn_connect">Bắt đầu kết nối</span>
+                    </button>
+
+                    <div id="share-link-container" class="hidden pt-3 border-t border-slate-800/80 space-y-2">
+                        <label class="block text-[10px] font-medium text-slate-400" data-i18n="share_link_label">Gửi link này cho đối tác (Cần phê duyệt nếu nhóm > 1 người):</label>
+                        <div class="flex gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                            <input type="text" id="share-url" readonly class="flex-1 bg-transparent border-none text-xs text-indigo-400 px-2 outline-none select-all" value="">
+                            <button onclick="copyShareUrl()" class="bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1">
+                                <i data-lucide="copy" class="w-3.5 h-3.5"></i> <span data-i18n="btn_copy">Chép</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-md">
+                <h2 class="text-base font-semibold mb-3 flex items-center gap-2 text-pink-400">
+                    <i data-lucide="phone-call" class="w-5 h-5"></i> <span data-i18n="media_title">Cuộc gọi & Chia sẻ</span>
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <button id="btn-audio" onclick="toggleAudioCall()" disabled class="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 py-3 px-3 rounded-xl text-xs font-semibold border border-slate-700/50 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="phone" class="w-4 h-4 text-emerald-400"></i> <span data-i18n="btn_audio">Gọi Thoại</span>
+                    </button>
+                    <button id="btn-webcam" onclick="toggleWebcam()" disabled class="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 py-3 px-3 rounded-xl text-xs font-semibold border border-slate-700/50 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="video" class="w-4 h-4 text-sky-400"></i> <span data-i18n="btn_video">Gọi Video</span>
+                    </button>
+                </div>
+                
+                <button id="btn-screen" onclick="toggleScreenShare()" disabled class="w-full mb-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 py-2.5 px-3 rounded-xl text-xs font-semibold border border-slate-700/50 transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="monitor-up" class="w-4 h-4"></i> <span data-i18n="btn_screen">Chia sẻ màn hình (Trình chiếu)</span>
+                </button>
+
+                <button id="btn-chess" onclick="toggleChessBoard()" disabled class="w-full mb-3 bg-emerald-900/40 hover:bg-emerald-800/60 disabled:opacity-50 text-emerald-300 py-2.5 px-3 rounded-xl text-xs font-bold border border-emerald-700/50 transition-all flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                    <i data-lucide="swords" class="w-4 h-4 text-emerald-400"></i> <span data-i18n="btn_chess">Giao lưu Cờ Tướng P2P</span>
+                </button>
+
+                <button id="btn-record" onclick="toggleRecording()" class="w-full mb-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 py-2.5 px-3 rounded-xl text-xs font-semibold border border-slate-700/50 transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="camera" class="w-4 h-4 text-red-400"></i> <span id="record-text" data-i18n="btn_record">Ghi lại màn hình (Lưu MP4)</span>
+                </button>
+
+                <div class="border-t border-slate-800/80 pt-3 space-y-2">
+                    <label class="block text-[11px] font-semibold text-slate-300" data-i18n="cinema_label">Phát tệp phim cùng xem (Cinema):</label>
+                    <div class="relative flex items-center justify-center bg-slate-950 border border-slate-800 hover:border-pink-500/50 rounded-xl p-2.5 transition-colors group cursor-pointer">
+                        <input type="file" id="movie-file-input" accept="video/*" disabled class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none">
+                        <div class="flex items-center gap-2 text-xs text-slate-400 group-hover:text-pink-400">
+                            <i data-lucide="film" class="w-4 h-4"></i>
+                            <span data-i18n="btn_choose_movie">Chọn phim từ máy</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-stop-stream" onclick="stopAllMediaStreams()" class="hidden w-full mt-3 bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="phone-off" class="w-4 h-4"></i> <span data-i18n="btn_end_call">Kết thúc cuộc gọi</span>
+                </button>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-md">
+                <h2 class="text-sm font-semibold mb-3 flex items-center gap-2 text-emerald-400">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i> <span data-i18n="ip_title">Danh sách IP Nhóm</span>
+                </h2>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                        <span class="text-slate-400" data-i18n="ip_yours">IP Của Bạn:</span>
+                        <span id="local-ip" class="font-mono font-medium text-slate-500" data-i18n="ip_fetching">Đang lấy...</span>
+                    </div>
+                    <div id="peer-ip-list" class="space-y-2">
+                        <div class="flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-slate-400" data-i18n="ip_others">Thành viên khác:</span>
+                            <span class="font-mono font-medium text-slate-500" data-i18n="ip_none">Chưa có ai</span>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-2 leading-relaxed border-t border-slate-800/80 pt-2">
+                        <strong class="text-amber-500">⚠️ <span data-i18n="ip_note_title">Lưu ý:</span></strong> <span data-i18n="ip_note_desc">Mỗi người tham gia mới cần được sự xác nhận của các thành viên đang có trong phòng.</span>
+                    </p>
+                </div>
+            </div>
+            
+        </section>
+
+        <!-- Cột phải (8 cột) -->
+        <section class="lg:col-span-8 flex flex-col gap-6">
+
+            <!-- KHU VỰC BÀN CỜ TƯỚNG -->
+            <div id="chess-theater" class="hidden bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md flex flex-col relative shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                <div class="px-5 py-3 border-b border-slate-800/80 flex justify-between items-center bg-slate-900/80">
+                    <div class="flex items-center gap-2 text-emerald-400">
+                        <i data-lucide="swords" class="w-5 h-5"></i>
+                        <span class="text-sm font-bold tracking-wide uppercase" data-i18n="chess_title">Chiến Trường P2P</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <select id="my-chess-color" onchange="myPlayerColor = this.value; renderChess();" class="bg-slate-950 text-slate-200 text-xs font-semibold rounded-lg px-3 py-1.5 outline-none border border-slate-700 focus:border-emerald-500">
+                            <option value="red" data-i18n="chess_color_red">Tôi cầm Cờ Đỏ (Đi trước)</option>
+                            <option value="black" data-i18n="chess_color_black">Tôi cầm Cờ Đen</option>
+                        </select>
+                        <button onclick="resetChessGame(true)" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-all" data-i18n="chess_reset">Ván Mới</button>
+                        <button onclick="toggleChessBoard()" class="text-slate-400 hover:text-white bg-slate-800 rounded-lg p-1.5 transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+
+                <div class="p-4 flex flex-col items-center bg-slate-950/50">
+                    <div id="chess-status" class="text-xl font-bold mb-3 text-red-500 uppercase text-center tracking-wider" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.8);" data-i18n="chess_loading">Đang nạp bàn cờ...</div>
+                    <canvas id="chessCanvas" width="540" height="600" class="bg-slate-900 rounded-lg shadow-2xl border border-slate-700/50" style="max-width: 100%; height: auto; cursor: pointer;"></canvas>
+                </div>
+            </div>
+
+            <!-- Khu vực Video Call -->
+            <div id="cinema-theater" class="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md flex flex-col relative transition-all">
+                <div class="px-5 py-3.5 border-b border-slate-800/80 flex justify-between items-center bg-slate-900/40">
+                    <div class="flex items-center gap-2 text-indigo-400">
+                        <i data-lucide="monitor-speaker" class="w-5 h-5"></i>
+                        <span class="text-sm font-bold tracking-wide uppercase" data-i18n="screen_title">Màn Hình Giao Tiếp</span>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button onclick="toggleCinemaFullscreen()" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors" title="Toàn màn hình">
+                            <i data-lucide="expand" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-black aspect-video w-full relative flex items-center justify-center overflow-hidden">
+                    <div id="video-grid" class="w-full h-full p-2 gap-2 grid grid-cols-1 hidden">
+                        <div id="remote-videos-container" class="contents"></div>
+                        <div id="local-video-wrapper" class="relative w-full h-full bg-slate-900/80 rounded-xl overflow-hidden border border-slate-800 hidden">
+                            <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover bg-black"></video>
+                            <div id="local-audio-ui" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center hidden">
+                                <div class="w-24 h-24 rounded-full bg-indigo-600/20 border-4 border-indigo-500/30 flex items-center justify-center ripple shadow-xl">
+                                    <i data-lucide="mic" class="w-10 h-10 text-indigo-400"></i>
+                                </div>
+                                <p class="mt-5 text-sm font-medium text-indigo-400" data-i18n="mic_on">Microphone của bạn đang bật</p>
+                            </div>
+                            <div class="absolute bottom-3 left-3 bg-black/60 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-200 flex items-center gap-2 backdrop-blur-md z-10">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> <span data-i18n="you">Bạn</span>
+                            </div>
+                            <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-2 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md z-20">
+                                <button id="btn-local-mic" onclick="toggleLocalMic()" class="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-white transition-colors shadow-lg" title="Tắt/Bật Mic">
+                                    <i data-lucide="mic" id="icon-local-mic" class="w-4 h-4"></i>
+                                </button>
+                                <button id="btn-local-cam" onclick="toggleLocalCamera()" class="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-white transition-colors shadow-lg" title="Tắt/Bật Camera">
+                                    <i data-lucide="video" id="icon-local-cam" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <video id="local-movie-player" controls class="w-full h-full object-contain hidden bg-black"></video>
+                    <div id="cinema-placeholder" class="text-center p-8 text-slate-600 flex flex-col items-center gap-3">
+                        <div class="p-5 bg-slate-900/80 rounded-full border border-slate-850">
+                            <i data-lucide="phone-call" class="w-10 h-10 text-slate-500"></i>
+                        </div>
+                        <p class="text-xs max-w-md"><span data-i18n="cinema_wait">Cuộc gọi đang chờ. Bạn có thể nhấn <b>Gọi Thoại</b> hoặc <b>Gọi Video</b> để bắt đầu chia sẻ với nhóm.</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat & File Transfer -->
+            <div id="chat-container" class="relative flex flex-col bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-md h-[400px] transition-colors">
+                <div id="chat-box" class="flex-1 p-5 overflow-y-auto space-y-3 flex flex-col justify-start">
+                    <div id="chat-placeholder" class="text-center py-6 text-slate-500 flex flex-col items-center gap-2 my-auto">
+                        <i data-lucide="messages-square" class="w-10 h-10 stroke-[1.5] text-slate-600"></i>
+                        <p class="text-xs" data-i18n="chat_placeholder">Kết nối phòng để bắt đầu nhắn tin và chia sẻ file an toàn.</p>
+                    </div>
+                </div>
+
+                <div id="progress-container" class="hidden px-5 py-3 bg-slate-950/80 border-t border-slate-800/80 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span id="progress-filename" class="text-indigo-400 font-medium truncate max-w-[250px]" data-i18n="processing">Đang xử lý...</span>
+                        <span id="progress-percent" class="font-semibold text-slate-300">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div id="progress-bar-fill" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full w-0 transition-all duration-100"></div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-slate-950/50 border-t border-slate-800/80 space-y-3">
+                    <div class="border border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-950/40 rounded-xl p-2.5 text-center cursor-pointer transition-all flex items-center justify-center gap-2 group relative">
+                        <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none" disabled>
+                        <i data-lucide="paperclip" id="file-icon" class="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors"></i>
+                        <p class="text-xs text-slate-400 group-hover:text-indigo-300" data-i18n="attach_file">Đính kèm File</p>
+                    </div>
+
+                    <form id="chat-form" onsubmit="event.preventDefault(); sendChatMessage();" class="flex gap-2">
+                        <input type="text" id="msg-input" data-i18n-placeholder="msg_placeholder" placeholder="Nhập tin nhắn chat nhóm..." disabled
+                            class="flex-1 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-100 outline-none transition-all disabled:opacity-50">
+                        <button type="submit" id="send-btn" disabled class="px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl transition-colors">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="notification-area" class="fixed bottom-5 left-5 z-50 flex flex-col gap-2 max-w-sm"></div>
+
+    <!-- Hộp thoại Phê duyệt -->
+    <div id="approval-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex-col items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center transition-all">
+            <div class="w-16 h-16 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-4 border border-indigo-500/30">
+                <i data-lucide="user-plus" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2" data-i18n="approval_title">Yêu cầu tham gia</h3>
+            <p id="approval-text" class="text-sm text-slate-400 mb-6">Ai đó muốn tham gia phòng...</p>
+            <div class="flex gap-3 w-full">
+                <button onclick="rejectJoin()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-2.5 rounded-xl transition-colors text-sm font-medium" data-i18n="btn_reject">Từ chối</button>
+                <button onclick="acceptJoin()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl transition-colors shadow-lg shadow-indigo-600/20 text-sm font-medium" data-i18n="btn_accept">Đồng ý</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const translations = {
+            vi: {
+                lang_name: "Tiếng Việt", subtitle: "Gọi Thoại, Video & Chuyển File Trực Tiếp",
+                status_disconnected: "Chưa kết nối", status_connecting: "Đang kết nối...", status_connected: "Đã vào phòng",
+                room_title: "Phòng kết nối", room_label: "Mã kết nối của nhóm", room_placeholder: "Nhập mã...", btn_connect: "Bắt đầu kết nối",
+                share_link_label: "Gửi link này cho đối tác (Cần phê duyệt nếu nhóm > 1 người):", btn_copy: "Chép",
+                media_title: "Cuộc gọi & Chia sẻ", btn_audio: "Gọi Thoại", btn_video: "Gọi Video", btn_screen: "Chia sẻ màn hình (Trình chiếu)", btn_record: "Ghi lại màn hình (Lưu MP4)",
+                cinema_label: "Phát tệp phim cùng xem (Cinema):", btn_choose_movie: "Chọn phim từ máy", btn_end_call: "Kết thúc cuộc gọi",
+                btn_chess: "Giao lưu Cờ Tướng P2P", chess_title: "Chiến Trường P2P", chess_color_red: "Tôi cầm Cờ Đỏ (Đi trước)", chess_color_black: "Tôi cầm Cờ Đen", chess_reset: "Ván Mới", chess_loading: "Đang nạp bàn cờ...",
+                ip_title: "Danh sách IP Nhóm", ip_yours: "IP Của Bạn:", ip_fetching: "Đang lấy...", ip_others: "Thành viên khác:", ip_none: "Chưa có ai",
+                ip_note_title: "Lưu ý:", ip_note_desc: "Mỗi người tham gia mới cần được sự xác nhận của các thành viên đang có trong phòng.",
+                screen_title: "Màn Hình Giao Tiếp", mic_on: "Microphone của bạn đang bật", you: "Bạn",
+                cinema_wait: "Cuộc gọi đang chờ. Bạn có thể nhấn <b>Gọi Thoại</b> hoặc <b>Gọi Video</b> để bắt đầu chia sẻ với nhóm.",
+                chat_placeholder: "Kết nối phòng để bắt đầu nhắn tin và chia sẻ file an toàn.", processing: "Đang xử lý...", attach_file: "Đính kèm File", msg_placeholder: "Nhập tin nhắn chat nhóm...",
+                approval_title: "Yêu cầu tham gia", btn_reject: "Từ chối", btn_accept: "Đồng ý",
+                
+                msg_copied: "Đã sao chép liên kết!", msg_conn_error: "Lỗi kết nối Server", msg_allow_join: "Bạn đã cho phép Thành viên [{0}] kết nối.",
+                msg_reject_join: "Đã từ chối kết nối với Thành viên [{0}].", msg_connected_peer: "Đã kết nối an toàn với Thành viên [{0}]", msg_disconnected_peer: "Mất kết nối với Thành viên [{0}]",
+                msg_peer: "Thành viên", msg_file_received: "Đã nhận file: <b>{0}</b> từ Thành viên {1}", msg_audio_started: "Bạn đã bắt đầu cuộc Gọi Thoại nhóm.",
+                msg_mic_error: "Lỗi truy cập Microphone", msg_cam_eco: "Đã bật Camera (Chế độ tiết kiệm băng thông đa điểm)", msg_cam_hd: "Bạn đã bật Camera trong nhóm.",
+                msg_cam_error: "Lỗi truy cập Camera", msg_movie_playing: "Đang phát phim cho toàn phòng: {0}", msg_movie_error: "Không thể phát phim",
+                msg_media_ended: "Đã kết thúc chia sẻ phương tiện.", msg_record_saved: "Đã lưu video ghi màn hình thành công về máy.", msg_recording_start: "Bắt đầu ghi lại màn hình...",
+                msg_record_cancel: "Bạn đã hủy ghi màn hình", msg_mic_muted: "Đã tắt Microphone của bạn.", msg_mic_unmuted: "Đã bật Microphone.",
+                msg_cam_muted: "Đã tắt Camera của bạn.", msg_cam_unmuted: "Đã bật Camera.", msg_file_sent: "Đã gửi hoàn tất file: <b>{0}</b> cho toàn phòng",
+                peer_speaking: "Thành viên [{0}] đang nói...", approval_req: "Người dùng ẩn danh <b>[{0}]</b> muốn tham gia phòng. Bạn có đồng ý kết nối không?", record_btn_recording: "Đang ghi hình... (Nhấn để dừng)",
+                chess_turn_red: "Lượt đi: Cờ Đỏ", chess_turn_black: "Lượt đi: Cờ Đen", chess_check: " (BỊ CHIẾU!)", chess_checkmate: "CHIẾU BÍ! {0} Thắng!", chess_draw: "HÒA CỜ (HẾT NƯỚC)!",
+                chess_not_your_turn: "Chưa đến lượt của bạn!", chess_opp_moved: "Đối phương vừa đi cờ!", chess_opp_reset: "Đối tác đã tạo ván cờ mới."
+            },
+            en: {
+                lang_name: "English", subtitle: "Voice, Video Call & Direct File Transfer",
+                status_disconnected: "Disconnected", status_connecting: "Connecting...", status_connected: "Joined Room",
+                room_title: "Connection Room", room_label: "Group Connection Code", room_placeholder: "Enter code...", btn_connect: "Start Connection",
+                share_link_label: "Send this link to partner (Needs approval if group > 1):", btn_copy: "Copy",
+                media_title: "Call & Share", btn_audio: "Voice Call", btn_video: "Video Call", btn_screen: "Share Screen (Present)", btn_record: "Record Screen (Save MP4)",
+                cinema_label: "Play movie file together (Cinema):", btn_choose_movie: "Choose movie from device", btn_end_call: "End Call",
+                btn_chess: "P2P Chess Match", chess_title: "P2P Battlefield", chess_color_red: "I play Red (First)", chess_color_black: "I play Black", chess_reset: "New Game", chess_loading: "Loading board...",
+                ip_title: "Group IP List", ip_yours: "Your IP:", ip_fetching: "Fetching...", ip_others: "Other members:", ip_none: "No one yet",
+                ip_note_title: "Note:", ip_note_desc: "Each new participant needs confirmation from current room members.",
+                screen_title: "Communication Screen", mic_on: "Your microphone is on", you: "You",
+                cinema_wait: "Call waiting. You can press <b>Voice Call</b> or <b>Video Call</b> to start sharing with the group.",
+                chat_placeholder: "Connect to room to start messaging and sharing files securely.", processing: "Processing...", attach_file: "Attach File", msg_placeholder: "Enter group chat message...",
+                approval_title: "Join Request", btn_reject: "Reject", btn_accept: "Accept",
+                
+                msg_copied: "Link copied!", msg_conn_error: "Server connection error", msg_allow_join: "You allowed Member [{0}] to connect.",
+                msg_reject_join: "Rejected connection with Member [{0}].", msg_connected_peer: "Securely connected with Member [{0}]", msg_disconnected_peer: "Lost connection with Member [{0}]",
+                msg_peer: "Member", msg_file_received: "Received file: <b>{0}</b> from Member {1}", msg_audio_started: "You started a group Voice Call.",
+                msg_mic_error: "Microphone access error", msg_cam_eco: "Camera turned on (Multi-point bandwidth saving mode)", msg_cam_hd: "You turned on Camera in group.",
+                msg_cam_error: "Camera access error", msg_movie_playing: "Playing movie for the whole room: {0}", msg_movie_error: "Cannot play movie",
+                msg_media_ended: "Ended media sharing.", msg_record_saved: "Screen recording saved successfully to device.", msg_recording_start: "Started screen recording...",
+                msg_record_cancel: "You cancelled screen recording", msg_mic_muted: "Muted your microphone.", msg_mic_unmuted: "Unmuted microphone.",
+                msg_cam_muted: "Turned off your camera.", msg_cam_unmuted: "Turned on camera.", msg_file_sent: "Completed sending file: <b>{0}</b> to the whole room",
+                peer_speaking: "Member [{0}] is speaking...", approval_req: "Anonymous user <b>[{0}]</b> wants to join the room. Do you agree to connect?", record_btn_recording: "Recording... (Click to stop)",
+                chess_turn_red: "Turn: Red", chess_turn_black: "Turn: Black", chess_check: " (CHECK!)", chess_checkmate: "CHECKMATE! {0} Wins!", chess_draw: "DRAW (STALEMATE)!",
+                chess_not_your_turn: "Not your turn!", chess_opp_moved: "Opponent made a move!", chess_opp_reset: "Opponent started a new game."
+            },
+            zh: {
+                lang_name: "中文", subtitle: "语音、视频通话 & 直接文件传输",
+                status_disconnected: "未连接", status_connecting: "连接中...", status_connected: "已加入房间",
+                room_title: "连接房间", room_label: "群组连接代码", room_placeholder: "输入代码...", btn_connect: "开始连接",
+                share_link_label: "将此链接发送给伙伴 (如果群组 > 1人需要批准):", btn_copy: "复制",
+                media_title: "通话 & 分享", btn_audio: "语音通话", btn_video: "视频通话", btn_screen: "分享屏幕 (演示)", btn_record: "录制屏幕 (保存MP4)",
+                cinema_label: "一起播放电影文件 (影院):", btn_choose_movie: "从设备选择电影", btn_end_call: "结束通话",
+                btn_chess: "P2P 中国象棋", chess_title: "P2P 战场", chess_color_red: "我执红 (先手)", chess_color_black: "我执黑", chess_reset: "新游戏", chess_loading: "正在加载棋盘...",
+                ip_title: "群组 IP 列表", ip_yours: "你的 IP:", ip_fetching: "获取中...", ip_others: "其他成员:", ip_none: "暂无",
+                ip_note_title: "注意:", ip_note_desc: "每个新参与者都需要当前房间成员的确认。",
+                screen_title: "通信屏幕", mic_on: "你的麦克风已开启", you: "你",
+                cinema_wait: "呼叫等待中。你可以按 <b>语音通话</b> 或 <b>视频通话</b> 开始与群组分享。",
+                chat_placeholder: "连接到房间以开始安全地发送消息和共享文件。", processing: "处理中...", attach_file: "附加文件", msg_placeholder: "输入群聊消息...",
+                approval_title: "加入请求", btn_reject: "拒绝", btn_accept: "接受",
+                
+                msg_copied: "链接已复制！", msg_conn_error: "服务器连接错误", msg_allow_join: "你已允许成员 [{0}] 连接。",
+                msg_reject_join: "已拒绝与成员 [{0}] 的连接。", msg_connected_peer: "已与成员 [{0}] 安全连接", msg_disconnected_peer: "与成员 [{0}] 失去连接",
+                msg_peer: "成员", msg_file_received: "收到文件：<b>{0}</b> 来自成员 {1}", msg_audio_started: "你开始了一个群组语音通话。",
+                msg_mic_error: "麦克风访问错误", msg_cam_eco: "摄像头已开启 (多点带宽节省模式)", msg_cam_hd: "你在群组中开启了摄像头。",
+                msg_cam_error: "摄像头访问错误", msg_movie_playing: "正在为全房间播放电影：{0}", msg_movie_error: "无法播放电影",
+                msg_media_ended: "已结束媒体共享。", msg_record_saved: "屏幕录像已成功保存到设备。", msg_recording_start: "开始录制屏幕...",
+                msg_record_cancel: "你已取消屏幕录制", msg_mic_muted: "已将你的麦克风静音。", msg_mic_unmuted: "已取消麦克风静音。",
+                msg_cam_muted: "已关闭你的摄像头。", msg_cam_unmuted: "已开启摄像头。", msg_file_sent: "已完成发送文件：<b>{0}</b> 到全房间",
+                peer_speaking: "成员 [{0}] 正在说话...", approval_req: "匿名用户 <b>[{0}]</b> 想加入房间。你同意连接吗？", record_btn_recording: "录制中... (点击停止)",
+                chess_turn_red: "轮到: 红方", chess_turn_black: "轮到: 黑方", chess_check: " (将军!)", chess_checkmate: "将死! {0} 胜!", chess_draw: "和棋 (无子可动)!",
+                chess_not_your_turn: "还没到你的回合!", chess_opp_moved: "对手刚走了一步!", chess_opp_reset: "对手开始了新游戏。"
+            }
+        };
+
+        let currentLang = 'vi';
+        function t(key, ...args) { let str = translations[currentLang][key] || translations['vi'][key] || key; for (let i = 0; i < args.length; i++) { str = str.replace(`{${i}}`, args[i]); } return str; }
+
+        function changeLanguage(lang) {
+            if (!translations[lang]) return;
+            currentLang = lang;
+            document.querySelectorAll('[data-i18n]').forEach(el => { const key = el.getAttribute('data-i18n'); if (translations[lang][key]) el.innerHTML = translations[lang][key]; });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { const key = el.getAttribute('data-i18n-placeholder'); if (translations[lang][key]) el.placeholder = translations[lang][key]; });
+            document.getElementById('current-lang-text').innerText = translations[lang].lang_name;
+            updateIPListUI();
+            if(isRecording) document.getElementById('record-text').innerText = t('record_btn_recording'); else document.getElementById('record-text').innerText = t('btn_record');
+            if (mqttClient && mqttClient.connected) document.getElementById('connection-status-text').innerText = t('status_connected');
+            if (board.size > 0) updateChessStatus();
+        }
+
+        lucide.createIcons();
+
+        let room = "";
+        let peerId = "peer_" + Math.random().toString(36).substring(2, 9);
+        let mqttClient = null;
+        let peers = {}; let dataChannels = {}; let peerIPs = {}; let incomingFiles = {}; 
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+        let localStream = null;
+        const CHUNK_SIZE = 16384; let currentSendingFile = null, currentSendingOffset = 0;
+        let mediaRecorder; let recordedChunks = []; let isRecording = false;  
+        let approvalQueue = []; 
+
+        window.onload = () => {
+            fetchLocalIP(); 
+            const rParam = new URLSearchParams(window.location.search).get('room');
+            if (rParam) document.getElementById('room-input').value = rParam; else generateRandomRoom();
+        };
+
+        async function fetchLocalIP() {
+            try { const res = await fetch('https://api.ipify.org?format=json'); const data = await res.json(); document.getElementById('local-ip').innerText = data.ip; document.getElementById('local-ip').className = 'font-mono font-medium text-emerald-400'; } catch (e) { document.getElementById('local-ip').innerText = t('ip_fetching').replace('...', ''); }
+        }
+
+        function extractIP(candidateStr) {
+            const ipMatch = candidateStr.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/);
+            if (ipMatch) { const ip = ipMatch[0]; if (ip.startsWith('192.168.') || ip.startsWith('10.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) return { ip: ip, type: 'LAN' }; if (ip.startsWith('127.')) return null; return { ip: ip, type: 'Public' }; }
+            return null;
+        }
+
+        function updateIPListUI() {
+            const list = document.getElementById('peer-ip-list'); list.innerHTML = ''; const peerIds = Object.keys(peerIPs);
+            if (peerIds.length === 0) { list.innerHTML = `<div class="flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800"><span class="text-slate-400">${t('ip_others')}</span><span class="font-mono font-medium text-slate-500">${t('ip_none')}</span></div>`; return; }
+            peerIds.forEach(id => { const info = peerIPs[id]; const shortId = id.substring(0, 5); const colorClass = info.type === 'Public' ? 'text-emerald-400' : 'text-amber-500'; list.innerHTML += `<div class="flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800"><span class="text-slate-400 text-[11px]">${t('msg_peer')} [${shortId}]:</span><span class="font-mono text-xs font-medium ${colorClass}">${info.ip} (${info.type})</span></div>`; });
+        }
+
+        function generateRandomRoom() { document.getElementById('room-input').value = Math.floor(100000 + Math.random() * 900000).toString(); }
+
+        function updateVideoLayout() {
+            const grid = document.getElementById('video-grid'); const localWrapper = document.getElementById('local-video-wrapper'); const placeholder = document.getElementById('cinema-placeholder'); const moviePlayer = document.getElementById('local-movie-player');
+            const remoteWrappers = document.querySelectorAll('#remote-videos-container > div:not(.hidden)'); const totalScreens = (localWrapper.classList.contains('hidden') ? 0 : 1) + remoteWrappers.length;
+            const isPlayingMovie = !moviePlayer.classList.contains('hidden');
+            if (isPlayingMovie) { grid.classList.add('hidden'); placeholder.classList.add('hidden'); return; }
+            if (totalScreens > 0) {
+                placeholder.classList.add('hidden'); grid.classList.remove('hidden');
+                if (totalScreens === 1) grid.className = "w-full h-full p-2 gap-2 grid grid-cols-1"; else if (totalScreens === 2) grid.className = "w-full h-full p-2 gap-2 grid grid-cols-1 sm:grid-cols-2"; else if (totalScreens <= 4) grid.className = "w-full h-full p-2 gap-2 grid grid-cols-2"; else grid.className = "w-full h-full p-2 gap-2 grid grid-cols-3";
+            } else { placeholder.classList.remove('hidden'); grid.classList.add('hidden'); }
+        }
+
+        function createRemoteVideoElement(targetPeerId) {
+            if(document.getElementById(`wrapper-${targetPeerId}`)) return;
+            const container = document.getElementById('remote-videos-container'); const shortId = targetPeerId.substring(0, 5); const speakingText = t('peer_speaking', shortId); const peerText = t('msg_peer');
+            const html = `<div id="wrapper-${targetPeerId}" class="relative w-full h-full bg-slate-900/80 rounded-xl overflow-hidden border border-slate-800 hidden group"><video id="video-${targetPeerId}" autoplay playsinline class="w-full h-full object-contain bg-black"></video><div id="audio-ui-${targetPeerId}" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center hidden"><div class="w-20 h-20 rounded-full bg-slate-800 border-4 border-slate-700 flex items-center justify-center ripple shadow-xl"><i data-lucide="user" class="w-8 h-8 text-slate-400"></i></div><p class="mt-4 text-xs font-medium text-emerald-400 animate-pulse">${speakingText}</p></div><div class="absolute bottom-3 left-3 bg-black/60 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-slate-200 flex items-center gap-2 backdrop-blur-md z-10"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> ${peerText} [${shortId}]</div><button onclick="toggleVideoMute('video-${targetPeerId}')" class="absolute top-3 right-3 bg-black/60 p-2 rounded-lg text-slate-300 hover:text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity z-10"><i data-lucide="volume-2" id="icon-mute-${targetPeerId}" class="w-3 h-3"></i></button></div>`;
+            container.insertAdjacentHTML('beforeend', html); lucide.createIcons();
+        }
+
+        function startSignaling() {
+            room = document.getElementById('room-input').value.trim(); if (!room) return;
+            document.getElementById('room-input').disabled = true; document.getElementById('connect-btn').disabled = true; updateStatusUI("connecting", t('status_connecting'));
+            const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
+            try {
+                mqttClient = mqtt.connect(brokerUrl, { rejectUnauthorized: false });
+                mqttClient.on('connect', () => { mqttClient.subscribe(`p2p_share/room/${room}/signals`, () => { sendSignal(null, { type: "hello", sender: peerId }); setupShareLink(); updateStatusUI("connected", t('status_connected')); enableControls(); document.getElementById('chat-placeholder').classList.add('hidden'); }); });
+                mqttClient.on('message', (topic, message) => { const data = JSON.parse(message.toString()); if (data.sender !== peerId && (!data.target || data.target === peerId)) { handleSignal(data); } });
+            } catch (err) { showNotification(t('msg_conn_error'), "error"); }
+        }
+
+        function setupShareLink() { const url = new URL(window.location.href); url.searchParams.set('room', room); document.getElementById('share-url').value = url.href; document.getElementById('share-link-container').classList.remove('hidden'); }
+        function sendSignal(target, payload) { if (target) payload.target = target; if (mqttClient && mqttClient.connected) { mqttClient.publish(`p2p_share/room/${room}/signals`, JSON.stringify(payload)); } }
+        function copyShareUrl() { document.getElementById('share-url').select(); document.execCommand('copy'); showNotification(t('msg_copied'), "success"); }
+
+        function processApprovalQueue() {
+            const modal = document.getElementById('approval-modal'); if (approvalQueue.length === 0 || !modal.classList.contains('hidden')) return;
+            const req = approvalQueue.shift(); window.currentApprovalTarget = req; document.getElementById('approval-text').innerHTML = t('approval_req', req.substring(0, 5)); modal.classList.remove('hidden'); modal.classList.add('flex');
+        }
+
+        function acceptJoin() { document.getElementById('approval-modal').classList.add('hidden'); document.getElementById('approval-modal').classList.remove('flex'); sendSignal(window.currentApprovalTarget, { type: "welcome", sender: peerId, approved: true }); appendSystemMessage(t('msg_allow_join', window.currentApprovalTarget.substring(0,5))); processApprovalQueue(); }
+        function rejectJoin() { document.getElementById('approval-modal').classList.add('hidden'); document.getElementById('approval-modal').classList.remove('flex'); appendSystemMessage(t('msg_reject_join', window.currentApprovalTarget.substring(0,5))); processApprovalQueue(); }
+
+        async function handleSignal(data) {
+            const sender = data.sender;
+            switch(data.type) {
+                case "hello": if (Object.keys(peers).length > 0) { approvalQueue.push(sender); processApprovalQueue(); } else { sendSignal(sender, { type: "welcome", sender: peerId, approved: true }); } break;
+                case "welcome": if (data.approved) { initWebRTCPeer(sender, true); } break;
+                case "offer": initWebRTCPeer(sender, false); await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp)); const answer = await peers[sender].createAnswer(); await peers[sender].setLocalDescription(answer); sendSignal(sender, { type: "answer", sdp: answer, sender: peerId }); break;
+                case "answer": if (peers[sender]) await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp)); break;
+                case "candidate": if (peers[sender] && data.candidate) { peers[sender].addIceCandidate(new RTCIceCandidate(data.candidate)); const ipInfo = extractIP(data.candidate.candidate); if (ipInfo) { if (ipInfo.type === 'Public' || !peerIPs[sender] || peerIPs[sender].type !== 'Public') { peerIPs[sender] = ipInfo; updateIPListUI(); } } } break;
+                case "renegotiate-offer": if (peers[sender]) { await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp)); const rAnswer = await peers[sender].createAnswer(); await peers[sender].setLocalDescription(rAnswer); sendSignal(sender, { type: "renegotiate-answer", sdp: rAnswer, sender: peerId }); } break;
+                case "renegotiate-answer": if (peers[sender]) await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp)); break;
+            }
+        }
+
+        function addTracksWithOptimization(pc, stream) {
+            const peerCount = Object.keys(peers).length;
+            stream.getTracks().forEach(track => {
+                const sender = pc.addTrack(track, stream);
+                if (track.kind === 'video') {
+                    const params = sender.getParameters(); if (!params.encodings) params.encodings = [{}];
+                    if (peerCount >= 2) { params.encodings[0].maxBitrate = 150000; params.encodings[0].scaleResolutionDownBy = 2; } else { params.encodings[0].maxBitrate = 500000; params.encodings[0].scaleResolutionDownBy = 1; }
+                    sender.setParameters(params).catch(e => console.warn("Cannot set bitrate limit:", e));
+                }
+            });
+        }
+
+        function initWebRTCPeer(targetPeerId, initiator) {
+            if(peers[targetPeerId]) return;
+            const pc = new RTCPeerConnection(rtcConfig); peers[targetPeerId] = pc; createRemoteVideoElement(targetPeerId); 
+
+            pc.onicecandidate = (e) => { if (e.candidate) sendSignal(targetPeerId, { type: "candidate", candidate: e.candidate, sender: peerId }); };
+            pc.ontrack = (event) => {
+                const stream = event.streams[0]; const remoteVideo = document.getElementById(`video-${targetPeerId}`); const remoteWrapper = document.getElementById(`wrapper-${targetPeerId}`); const remoteAudioUI = document.getElementById(`audio-ui-${targetPeerId}`); const hasVideo = stream.getVideoTracks().length > 0;
+                remoteVideo.srcObject = stream; remoteWrapper.classList.remove('hidden');
+                if (hasVideo) { remoteVideo.classList.remove('hidden'); remoteAudioUI.classList.add('hidden'); } else { remoteVideo.classList.add('hidden'); remoteAudioUI.classList.remove('hidden'); }
+                stream.onremovetrack = () => { remoteWrapper.classList.add('hidden'); updateVideoLayout(); }; updateVideoLayout();
+            };
+
+            if (initiator) {
+                const dc = pc.createDataChannel("p2p-channel"); dataChannels[targetPeerId] = dc; setupDataChannelEvents(targetPeerId, dc);
+                pc.createOffer().then(offer => { pc.setLocalDescription(offer); sendSignal(targetPeerId, { type: "offer", sdp: offer, sender: peerId }); });
+            } else {
+                pc.ondatachannel = (e) => { dataChannels[targetPeerId] = e.channel; setupDataChannelEvents(targetPeerId, e.channel); };
+            }
+
+            pc.onconnectionstatechange = () => {
+                if (pc.connectionState === 'connected') { appendSystemMessage(t('msg_connected_peer', targetPeerId.substring(0,5))); } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') { appendSystemMessage(t('msg_disconnected_peer', targetPeerId.substring(0,5))); delete peers[targetPeerId]; delete dataChannels[targetPeerId]; delete peerIPs[targetPeerId]; updateIPListUI(); const wrapper = document.getElementById(`wrapper-${targetPeerId}`); if(wrapper) wrapper.remove(); updateVideoLayout(); }
+            };
+            if(localStream) { addTracksWithOptimization(pc, localStream); }
+        }
+
+        // ================= XỬ LÝ SỰ KIỆN DATA CHANNEL =================
+        function setupDataChannelEvents(targetPeerId, dc) {
+            dc.onopen = () => {
+                // Tự động đồng bộ ma trận cờ nếu ván đấu đã bắt đầu trước đó
+                if (board.size > 0) {
+                    const boardArray = Array.from(board.entries());
+                    dc.send(JSON.stringify({ type: 'chess-sync', board: boardArray, turn: turn }));
+                }
+            };
+            dc.binaryType = 'arraybuffer';
+            dc.onmessage = (event) => {
+                const rawData = event.data; const shortId = targetPeerId.substring(0, 5);
+                
+                if (typeof rawData === 'string') {
+                    try {
+                        const msg = JSON.parse(rawData);
+                        if (msg.type === 'chat') { appendChatMessage(`${t('msg_peer')} ${shortId}`, msg.text, "peer"); } 
+                        else if (msg.type === 'file-start') { incomingFiles[targetPeerId] = { name: msg.name, size: msg.size, chunks: [], receivedSize: 0 }; showProgressUI(msg.name); } 
+                        else if (msg.type === 'file-end') { const fileData = incomingFiles[targetPeerId]; downloadFile(new Blob(fileData.chunks), fileData.name); hideProgressUI(); appendSystemMessage(t('msg_file_received', fileData.name, shortId)); delete incomingFiles[targetPeerId]; }
+                        // --- ĐỒNG BỘ CỜ TƯỚNG TỪ XA ---
+                        else if (msg.type === 'chess-move') {
+                            if (board.size === 0) resetChessGame(false); // Vá lỗi: Ép khởi tạo nếu đối phương đi trước
+                            executeChessMove(msg.start, msg.end, false);
+                            document.getElementById('chess-theater').classList.remove('hidden');
+                            showNotification(t('chess_opp_moved') || "Đối phương vừa đi cờ!", "info");
+                        } 
+                        else if (msg.type === 'chess-reset') {
+                            resetChessGame(false);
+                            document.getElementById('chess-theater').classList.remove('hidden');
+                            showNotification(t('chess_opp_reset') || "Đối tác đã tạo ván cờ mới.", "info");
+                        }
+                        else if (msg.type === 'chess-sync') {
+                            board.clear();
+                            msg.board.forEach(item => board.set(item[0], item[1]));
+                            turn = msg.turn;
+                            document.getElementById('chess-theater').classList.remove('hidden');
+                            renderChess(); updateChessStatus();
+                        }
+                    } catch(e) { console.error("Lỗi Parse DataChannel", e); }
+                } else {
+                    const fileData = incomingFiles[targetPeerId]; if (fileData) { fileData.chunks.push(rawData); fileData.receivedSize += rawData.byteLength; updateProgressUI(fileData.receivedSize, fileData.size); }
+                }
+            };
+        }
+
+        // ================= MEDIA LOGIC =================
+        async function triggerRenegotiation() { for (const [id, pc] of Object.entries(peers)) { if(pc.connectionState === 'connected') { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); sendSignal(id, { type: "renegotiate-offer", sdp: offer, sender: peerId }); } } }
+        
+        async function toggleAudioCall() { try { if (localStream) stopAllMediaStreams(); localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true }); const localWrapper = document.getElementById('local-video-wrapper'); const localVideo = document.getElementById('local-video'); const localAudioUI = document.getElementById('local-audio-ui'); localVideo.classList.add('hidden'); localAudioUI.classList.remove('hidden'); localWrapper.classList.remove('hidden'); Object.values(peers).forEach(pc => { addTracksWithOptimization(pc, localStream); }); document.getElementById('btn-stop-stream').classList.remove('hidden'); updateVideoLayout(); await triggerRenegotiation(); appendSystemMessage(t('msg_audio_started')); } catch (err) { showNotification(t('msg_mic_error'), "error"); } }
+        async function toggleWebcam() { try { if (localStream) stopAllMediaStreams(); const peerCount = Object.keys(peers).length; let videoSettings = (peerCount >= 2) ? { width: { max: 480 }, height: { max: 360 }, frameRate: { max: 15 } } : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }; localStream = await navigator.mediaDevices.getUserMedia({ video: videoSettings, audio: true }); const localWrapper = document.getElementById('local-video-wrapper'); const localVideo = document.getElementById('local-video'); const localAudioUI = document.getElementById('local-audio-ui'); localVideo.srcObject = localStream; localVideo.classList.remove('hidden'); localAudioUI.classList.add('hidden'); localVideo.classList.add('scale-x-[-1]'); localWrapper.classList.remove('hidden'); Object.values(peers).forEach(pc => { addTracksWithOptimization(pc, localStream); }); document.getElementById('btn-stop-stream').classList.remove('hidden'); updateVideoLayout(); await triggerRenegotiation(); appendSystemMessage(peerCount >= 2 ? t('msg_cam_eco') : t('msg_cam_hd')); } catch (err) { showNotification(t('msg_cam_error'), "error"); } }
+        async function toggleScreenShare() { try { if (localStream) stopAllMediaStreams(); const peerCount = Object.keys(peers).length; let displaySettings = (peerCount >= 2) ? { frameRate: { max: 15 } } : { frameRate: { ideal: 30 } }; localStream = await navigator.mediaDevices.getDisplayMedia({ video: displaySettings, audio: true }); const localWrapper = document.getElementById('local-video-wrapper'); const localVideo = document.getElementById('local-video'); localVideo.srcObject = localStream; localVideo.classList.remove('hidden'); document.getElementById('local-audio-ui').classList.add('hidden'); localVideo.classList.remove('scale-x-[-1]'); localWrapper.classList.remove('hidden'); Object.values(peers).forEach(pc => { addTracksWithOptimization(pc, localStream); }); document.getElementById('btn-stop-stream').classList.remove('hidden'); updateVideoLayout(); await triggerRenegotiation(); localStream.getVideoTracks()[0].onended = stopAllMediaStreams; } catch (err) { console.error(err); } }
+        document.getElementById('movie-file-input').addEventListener('change', async function() { const file = this.files[0]; if (!file) return; stopAllMediaStreams(true); const localMoviePlayer = document.getElementById('local-movie-player'); localMoviePlayer.src = URL.createObjectURL(file); localMoviePlayer.classList.remove('hidden'); localMoviePlayer.onloadedmetadata = () => { localMoviePlayer.play(); updateVideoLayout(); setTimeout(async () => { try { localStream = localMoviePlayer.captureStream ? localMoviePlayer.captureStream(30) : localMoviePlayer.mozCaptureStream(30); Object.values(peers).forEach(pc => { addTracksWithOptimization(pc, localStream); }); document.getElementById('btn-stop-stream').classList.remove('hidden'); await triggerRenegotiation(); appendSystemMessage(t('msg_movie_playing', file.name)); } catch (e) { showNotification(t('msg_movie_error'), "error"); } }, 500); }; });
+        function stopAllMediaStreams(skipRenegotiation = false) { if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; } for (const pc of Object.values(peers)) { const senders = pc.getSenders(); senders.forEach(s => pc.removeTrack(s)); } if (!skipRenegotiation) triggerRenegotiation(); document.getElementById('local-video').srcObject = null; document.getElementById('local-video-wrapper').classList.add('hidden'); document.getElementById('local-audio-ui').classList.add('hidden'); const moviePlayer = document.getElementById('local-movie-player'); moviePlayer.pause(); moviePlayer.src = ""; moviePlayer.classList.add('hidden'); document.getElementById('btn-stop-stream').classList.add('hidden'); document.getElementById('movie-file-input').value = ""; updateVideoLayout(); resetLocalMediaUI(); appendSystemMessage(t('msg_media_ended')); }
+        
+        async function toggleRecording() { if (isRecording) { stopRecording(); } else { startRecording(); } }
+        async function startRecording() { try { const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); recordedChunks = []; mediaRecorder = new MediaRecorder(stream); mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) recordedChunks.push(event.data); }; mediaRecorder.onstop = () => { const blob = new Blob(recordedChunks, { type: 'video/mp4' }); downloadFile(blob, `Record_${new Date().getTime()}.mp4`); document.getElementById('record-text').innerText = t('btn_record'); document.getElementById('btn-record').classList.remove('bg-red-600', 'text-white', 'animate-pulse'); document.getElementById('btn-record').classList.add('bg-slate-800', 'text-slate-300'); isRecording = false; appendSystemMessage(t('msg_record_saved')); stream.getTracks().forEach(track => track.stop()); }; mediaRecorder.start(); isRecording = true; document.getElementById('record-text').innerText = t('record_btn_recording'); document.getElementById('btn-record').classList.remove('bg-slate-800', 'text-slate-300'); document.getElementById('btn-record').classList.add('bg-red-600', 'text-white', 'animate-pulse'); appendSystemMessage(t('msg_recording_start')); stream.getVideoTracks()[0].onended = () => { if (isRecording) stopRecording(); }; } catch (err) { showNotification(t('msg_record_cancel'), "error"); } }
+        function stopRecording() { if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop(); }
+        function toggleVideoMute(videoId) { const vid = document.getElementById(videoId); vid.muted = !vid.muted; document.getElementById('icon-mute-' + videoId.replace('video-','')).setAttribute('data-lucide', vid.muted ? 'volume-x' : 'volume-2'); lucide.createIcons(); }
+        function toggleCinemaFullscreen() { const c = document.getElementById('cinema-theater'); if (!document.fullscreenElement) c.requestFullscreen(); else document.exitFullscreen(); }
+
+        let isLocalMicMuted = false; let isLocalCamOff = false;
+        function toggleLocalMic() { if (!localStream) return; const audioTracks = localStream.getAudioTracks(); if (audioTracks.length === 0) { showNotification(t('msg_mic_error'), "error"); return; } isLocalMicMuted = !isLocalMicMuted; audioTracks.forEach(track => track.enabled = !isLocalMicMuted); const icon = document.getElementById('icon-local-mic'); const btn = document.getElementById('btn-local-mic'); if (isLocalMicMuted) { icon.setAttribute('data-lucide', 'mic-off'); btn.classList.add('bg-red-500/80', 'hover:bg-red-600'); btn.classList.remove('bg-slate-800', 'hover:bg-slate-700'); } else { icon.setAttribute('data-lucide', 'mic'); btn.classList.remove('bg-red-500/80', 'hover:bg-red-600'); btn.classList.add('bg-slate-800', 'hover:bg-slate-700'); } lucide.createIcons(); appendSystemMessage(isLocalMicMuted ? t('msg_mic_muted') : t('msg_mic_unmuted')); }
+        function toggleLocalCamera() { if (!localStream) return; const videoTracks = localStream.getVideoTracks(); if (videoTracks.length === 0) { showNotification(t('msg_cam_error'), "error"); return; } isLocalCamOff = !isLocalCamOff; videoTracks.forEach(track => track.enabled = !isLocalCamOff); const icon = document.getElementById('icon-local-cam'); const btn = document.getElementById('btn-local-cam'); if (isLocalCamOff) { icon.setAttribute('data-lucide', 'video-off'); btn.classList.add('bg-red-500/80', 'hover:bg-red-600'); btn.classList.remove('bg-slate-800', 'hover:bg-slate-700'); } else { icon.setAttribute('data-lucide', 'video'); btn.classList.remove('bg-red-500/80', 'hover:bg-red-600'); btn.classList.add('bg-slate-800', 'hover:bg-slate-700'); } lucide.createIcons(); appendSystemMessage(isLocalCamOff ? t('msg_cam_muted') : t('msg_cam_unmuted')); }
+        function resetLocalMediaUI() { isLocalMicMuted = false; isLocalCamOff = false; const iconMic = document.getElementById('icon-local-mic'); const btnMic = document.getElementById('btn-local-mic'); if(iconMic) iconMic.setAttribute('data-lucide', 'mic'); if(btnMic) { btnMic.classList.remove('bg-red-500/80', 'hover:bg-red-600'); btnMic.classList.add('bg-slate-800', 'hover:bg-slate-700'); } const iconCam = document.getElementById('icon-local-cam'); const btnCam = document.getElementById('btn-local-cam'); if(iconCam) iconCam.setAttribute('data-lucide', 'video'); if(btnCam) { btnCam.classList.remove('bg-red-500/80', 'hover:bg-red-600'); btnCam.classList.add('bg-slate-800', 'hover:bg-slate-700'); } lucide.createIcons(); }
+
+        // ================= FILE TRANSFER & CHAT LOGIC =================
+        function sendChatMessage() { const input = document.getElementById('msg-input'); const text = input.value.trim(); if (!text || Object.keys(dataChannels).length === 0) return; const payload = JSON.stringify({ type: 'chat', text }); Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); }); appendChatMessage(t('you'), text, "me"); input.value = ""; }
+        function appendChatMessage(sender, text, role) { const box = document.getElementById('chat-box'); const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); box.innerHTML += `<div class="flex flex-col ${role === 'me' ? 'items-end' : 'items-start'}"><div class="max-w-[80%] rounded-2xl px-4 py-2 text-sm ${role === 'me' ? 'bg-indigo-600 text-white rounded-tr-none shadow-md shadow-indigo-600/20' : 'bg-slate-800 border border-slate-700/50 text-slate-100 rounded-tl-none'}">${text}</div><span class="text-[10px] text-slate-500 mt-1 px-1">${sender} • ${time}</span></div>`; box.scrollTop = box.scrollHeight; }
+        function appendSystemMessage(text) { const box = document.getElementById('chat-box'); box.innerHTML += `<div class="bg-slate-800/40 border border-slate-700/50 rounded-xl p-2.5 text-center text-[11px] font-medium text-slate-400 mx-auto my-2">${text}</div>`; box.scrollTop = box.scrollHeight; }
+        document.getElementById('file-input').addEventListener('change', function() { const file = this.files[0]; if (!file || Object.keys(dataChannels).length === 0) return; const payload = JSON.stringify({ type: 'file-start', name: file.name, size: file.size }); Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); }); showProgressUI(file.name); currentSendingFile = file; currentSendingOffset = 0; sendFileChunks(); });
+        function sendFileChunks() { const reader = new FileReader(); reader.onload = (e) => { const chunk = e.target.result; let bufferFull = false; Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') { dc.send(chunk); if(dc.bufferedAmount > 16000000) bufferFull = true; } }); currentSendingOffset += chunk.byteLength; updateProgressUI(currentSendingOffset, currentSendingFile.size); if (currentSendingOffset < currentSendingFile.size) { if (bufferFull) setTimeout(sendFileChunks, 50); else sendFileChunks(); } else { const payload = JSON.stringify({ type: 'file-end' }); Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); }); appendSystemMessage(t('msg_file_sent', currentSendingFile.name)); hideProgressUI(); document.getElementById('file-input').value = ""; } }; reader.readAsArrayBuffer(currentSendingFile.slice(currentSendingOffset, currentSendingOffset + CHUNK_SIZE)); }
+        function downloadFile(blob, fileName) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url); }
+        function showProgressUI(fileName) { document.getElementById('progress-container').classList.remove('hidden'); document.getElementById('progress-filename').innerText = fileName; }
+        function updateProgressUI(current, total) { const pct = Math.min(Math.round((current / total) * 100), 100); document.getElementById('progress-bar-fill').style.width = pct + "%"; document.getElementById('progress-percent').innerText = pct + "%"; }
+        function hideProgressUI() { document.getElementById('progress-container').classList.add('hidden'); }
+        function enableControls() { ['msg-input', 'send-btn', 'file-input', 'btn-audio', 'btn-webcam', 'btn-screen', 'movie-file-input', 'btn-record', 'btn-chess'].forEach(id => document.getElementById(id).disabled = false); }
+        function updateStatusUI(state, text) { const dot = document.getElementById('connection-dot'); const label = document.getElementById('connection-status-text'); label.innerText = text; dot.className = `w-2.5 h-2.5 rounded-full ${state==='connected'?'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]':state==='connecting'?'bg-amber-500 animate-pulse':'bg-red-500 animate-ping'}`; label.className = `font-medium ${state==='connected'?'text-emerald-400':state==='connecting'?'text-amber-500':'text-slate-500'}`; }
+        function showNotification(message, type = "info") { const container = document.getElementById('notification-area'); const alert = document.createElement('div'); alert.className = `flex items-center gap-3 px-4 py-3 border rounded-xl shadow-lg transition-all duration-300 ${type === 'success' ? 'bg-emerald-950/90 text-emerald-300 border-emerald-800' : type === 'error' ? 'bg-red-950/90 text-red-300 border-red-800' : 'bg-slate-900 text-slate-300 border-slate-800'}`; alert.innerHTML = `<span class="text-xs font-medium">${message}</span>`; container.appendChild(alert); setTimeout(() => alert.remove(), 3000); }
+
+        // ================= LOGIC CỜ TƯỚNG P2P ĐÃ VÁ LỖI TỌA ĐỘ VÀ ĐỒNG BỘ =================
+        const CELL_SIZE = 60; const BOARD_WIDTH = 9; const BOARD_HEIGHT = 10;
+        const chessCanvas = document.getElementById('chessCanvas');
+        const ctx = chessCanvas.getContext('2d');
+        const PIECE_ICONS = { "Xe": "🚙", "Mã": "🐎", "Tượng": "🐘", "Sĩ": "🛡️", "Tướng": "👑", "Pháo": "🚀", "Tốt": "🪖" };
+        
+        let board = new Map();
+        let turn = "red";
+        let selectedPos = null;
+        let myPlayerColor = "red"; 
+
+        function toggleChessBoard() {
+            const theater = document.getElementById('chess-theater');
+            if (theater.classList.contains('hidden')) {
+                theater.classList.remove('hidden');
+                // VÁ LỖI: Bắt buộc True để ép máy bên kia cùng tạo cờ
+                if (board.size === 0) resetChessGame(true); 
+                renderChess();
+                theater.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else { theater.classList.add('hidden'); }
+        }
+
+        function initPieces() {
+            board.clear();
+            const initPositions = {
+                "0,0": ["Xe", "black"], "1,0": ["Mã", "black"], "2,0": ["Tượng", "black"], "3,0": ["Sĩ", "black"], "4,0": ["Tướng", "black"], "5,0": ["Sĩ", "black"], "6,0": ["Tượng", "black"], "7,0": ["Mã", "black"], "8,0": ["Xe", "black"], "1,2": ["Pháo", "black"], "7,2": ["Pháo", "black"], "0,3": ["Tốt", "black"], "2,3": ["Tốt", "black"], "4,3": ["Tốt", "black"], "6,3": ["Tốt", "black"], "8,3": ["Tốt", "black"],
+                "0,9": ["Xe", "red"], "1,9": ["Mã", "red"], "2,9": ["Tượng", "red"], "3,9": ["Sĩ", "red"], "4,9": ["Tướng", "red"], "5,9": ["Sĩ", "red"], "6,9": ["Tượng", "red"], "7,9": ["Mã", "red"], "8,9": ["Xe", "red"], "1,7": ["Pháo", "red"], "7,7": ["Pháo", "red"], "0,6": ["Tốt", "red"], "2,6": ["Tốt", "red"], "4,6": ["Tốt", "red"], "6,6": ["Tốt", "red"], "8,6": ["Tốt", "red"]
+            };
+            for (let pos in initPositions) board.set(pos, {name: initPositions[pos][0], color: initPositions[pos][1]});
+        }
+
+        function checkPieceRules(currBoard, start, end) {
+            let piece = currBoard.get(start), targetPiece = currBoard.get(end);
+            if(!piece || (targetPiece && targetPiece.color === piece.color)) return false;
+            let [sx, sy] = start.split(',').map(Number), [ex, ey] = end.split(',').map(Number);
+            let dx = ex - sx, dy = ey - sy;
+
+            if (piece.name === "Tướng") { if (Math.abs(dx) + Math.abs(dy) !== 1 || ex < 3 || ex > 5) return false; if (piece.color === "red" && ey < 7) return false; if (piece.color === "black" && ey > 2) return false; return true; }
+            if (piece.name === "Sĩ") { if (Math.abs(dx) !== 1 || Math.abs(dy) !== 1 || ex < 3 || ex > 5) return false; if (piece.color === "red" && ey < 7) return false; if (piece.color === "black" && ey > 2) return false; return true; }
+            if (piece.name === "Tượng") { if (Math.abs(dx) !== 2 || Math.abs(dy) !== 2) return false; if (piece.color === "red" && ey <= 4) return false; if (piece.color === "black" && ey >= 5) return false; return !currBoard.has(`${sx + dx/2},${sy + dy/2}`); }
+            if (piece.name === "Mã") { if (Math.abs(dx) === 2 && Math.abs(dy) === 1) return !currBoard.has(`${sx + dx/2},${sy}`); if (Math.abs(dx) === 1 && Math.abs(dy) === 2) return !currBoard.has(`${sx},${sy + dy/2}`); return false; }
+            if (piece.name === "Xe") { if (dx !== 0 && dy !== 0) return false; let cx = sx + Math.sign(dx), cy = sy + Math.sign(dy); while (cx !== ex || cy !== ey) { if (currBoard.has(`${cx},${cy}`)) return false; cx += Math.sign(dx); cy += Math.sign(dy); } return true; }
+            if (piece.name === "Pháo") { if (dx !== 0 && dy !== 0) return false; let cx = sx + Math.sign(dx), cy = sy + Math.sign(dy), count = 0; while (cx !== ex || cy !== ey) { if (currBoard.has(`${cx},${cy}`)) count++; cx += Math.sign(dx); cy += Math.sign(dy); } return targetPiece ? count === 1 : count === 0; }
+            if (piece.name === "Tốt") { let dir = piece.color === "red" ? -1 : 1, crossed = piece.color === "red" ? sy <= 4 : sy >= 5; if (dx === 0 && dy === dir) return true; return (crossed && dy === 0 && Math.abs(dx) === 1); }
+            return false;
+        }
+
+        function kingsFacing(currBoard) {
+            let rKing = null, bKing = null;
+            for (let [pos, piece] of currBoard) { if (piece.name === "Tướng") piece.color === "red" ? rKing = pos : bKing = pos; }
+            if (!rKing || !bKing) return false;
+            let [rx, ry] = rKing.split(',').map(Number), [bx, by] = bKing.split(',').map(Number);
+            if (rx === bx) { for (let y = Math.min(ry, by) + 1; y < Math.max(ry, by); y++) if (currBoard.has(`${rx},${y}`)) return false; return true; }
+            return false;
+        }
+
+        function isInCheck(currBoard, checkColor) {
+            let kingPos = null;
+            for (let [pos, piece] of currBoard) { if (piece.name === "Tướng" && piece.color === checkColor) { kingPos = pos; break; } }
+            if (!kingPos) return true;
+            let enemyColor = checkColor === "red" ? "black" : "red";
+            for (let [pos, piece] of currBoard) { if (piece.color === enemyColor && checkPieceRules(currBoard, pos, kingPos)) return true; }
+            return false;
+        }
+
+        function isSafeMove(start, end) {
+            if (!checkPieceRules(board, start, end)) return false;
+            let simBoard = new Map(board); simBoard.set(end, simBoard.get(start)); simBoard.delete(start);
+            return !kingsFacing(simBoard) && !isInCheck(simBoard, turn);
+        }
+
+        function updateChessStatus() {
+            const st = document.getElementById('chess-status');
+            let text = turn === 'red' ? t('chess_turn_red') : t('chess_turn_black');
+            if (isInCheck(board, turn)) text += t('chess_check');
+            st.innerText = text; st.style.color = turn === 'red' ? '#ef4444' : '#38bdf8';
+        }
+
+        function checkGameOver() {
+            let hasMove = false;
+            for (let [pos, piece] of board) {
+                if (piece.color === turn) {
+                    for (let x = 0; x < BOARD_WIDTH; x++) { for (let y = 0; y < BOARD_HEIGHT; y++) { if (isSafeMove(pos, `${x},${y}`)) { hasMove = true; break; } } if(hasMove) break; }
+                }
+                if(hasMove) break;
+            }
+            if (!hasMove) {
+                const winner = turn === "black" ? "Đỏ (Red)" : "Đen (Black)";
+                setTimeout(() => showNotification(isInCheck(board, turn) ? t('chess_checkmate', winner) : t('chess_draw'), "success"), 200);
+                return true;
+            }
+            return false;
+        }
+
+        function executeChessMove(start, end, isLocal = true) {
+            if (!board.has(start)) return; // Vá lỗi: Failsafe chặn đồ họa crash nếu không tìm thấy cờ
+            board.set(end, board.get(start)); board.delete(start);
+            selectedPos = null; turn = turn === "red" ? "black" : "red"; renderChess();
+            if (isLocal) { const payload = JSON.stringify({ type: 'chess-move', start, end }); Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); }); }
+            checkGameOver(); updateChessStatus();
+        }
+
+        function resetChessGame(isLocal = true) {
+            initPieces(); turn = "red"; selectedPos = null; updateChessStatus(); renderChess();
+            if (isLocal) { Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(JSON.stringify({ type: 'chess-reset' })); }); appendSystemMessage(t('chess_reset') || "Ván mới"); }
+        }
+
+        chessCanvas.addEventListener('click', (event) => {
+            if (turn !== myPlayerColor) { showNotification(t('chess_not_your_turn'), "error"); return; }
+            const rect = chessCanvas.getBoundingClientRect();
+            const scaleX = chessCanvas.width / rect.width; const scaleY = chessCanvas.height / rect.height;
+            const x = (event.clientX - rect.left) * scaleX; const y = (event.clientY - rect.top) * scaleY;
+            
+            let gridX = Math.round((x - CELL_SIZE / 2) / CELL_SIZE), gridY = Math.round((y - CELL_SIZE / 2) / CELL_SIZE);
+            
+            // VÁ LỖI: Lật ngược tọa độ click chuột tương ứng với giao diện khi ở Phe Đen
+            if (myPlayerColor === 'black') { gridX = 8 - gridX; gridY = 9 - gridY; }
+
+            let clickedPos = `${gridX},${gridY}`;
+            if (gridX < 0 || gridX >= BOARD_WIDTH || gridY < 0 || gridY >= BOARD_HEIGHT) return;
+
+            if (selectedPos) {
+                if (clickedPos === selectedPos) selectedPos = null;
+                else if (isSafeMove(selectedPos, clickedPos)) executeChessMove(selectedPos, clickedPos, true);
+                else if (board.get(clickedPos)?.color === myPlayerColor) selectedPos = clickedPos;
+            } else if (board.get(clickedPos)?.color === myPlayerColor) selectedPos = clickedPos;
+            renderChess();
+        });
+
+        function renderChess() {
+            ctx.clearRect(0, 0, chessCanvas.width, chessCanvas.height);
+            let offset = CELL_SIZE / 2; ctx.strokeStyle = "#334155"; ctx.lineWidth = 2;
+            
+            for (let y = 0; y < BOARD_HEIGHT; y++) { ctx.beginPath(); ctx.moveTo(offset, offset + y * CELL_SIZE); ctx.lineTo(offset + 8 * CELL_SIZE, offset + y * CELL_SIZE); ctx.stroke(); }
+            for (let x = 0; x < BOARD_WIDTH; x++) {
+                ctx.beginPath(); ctx.moveTo(offset + x * CELL_SIZE, offset); ctx.lineTo(offset + x * CELL_SIZE, offset + (x===0||x===8?9:4) * CELL_SIZE); ctx.stroke();
+                if(x!==0&&x!==8) { ctx.beginPath(); ctx.moveTo(offset + x * CELL_SIZE, offset + 5 * CELL_SIZE); ctx.lineTo(offset + x * CELL_SIZE, offset + 9 * CELL_SIZE); ctx.stroke(); }
+            }
+            const cross = (sx, sy, ex, ey) => { ctx.beginPath(); ctx.moveTo(offset+sx*CELL_SIZE, offset+sy*CELL_SIZE); ctx.lineTo(offset+ex*CELL_SIZE, offset+ey*CELL_SIZE); ctx.stroke(); };
+            cross(3,0, 5,2); cross(5,0, 3,2); cross(3,7, 5,9); cross(5,7, 3,9);
+            
+            ctx.font = "bold 20px Tahoma"; ctx.fillStyle = "#475569"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText("SỞ HÀ", offset + 2*CELL_SIZE, offset + 4.5*CELL_SIZE); ctx.fillText("HÁN GIỚI", offset + 6*CELL_SIZE, offset + 4.5*CELL_SIZE);
+
+            for (let [pos, piece] of board) {
+                if (!piece) continue; // Vá lỗi Failsafe
+                
+                let [x, y] = pos.split(',').map(Number);
+                if (myPlayerColor === 'black') { x = 8 - x; y = 9 - y; } // Đồ họa người cầm quân Đen
+
+                let cx = offset + x * CELL_SIZE; let cy = offset + y * CELL_SIZE;
+                let isRed = piece.color === "red"; let glow = isRed ? "#ef4444" : "#0ea5e9";
+                
+                ctx.shadowBlur = selectedPos === pos ? 25 : 8; ctx.shadowColor = glow;
+                ctx.strokeStyle = selectedPos === pos ? "#fff" : glow; ctx.lineWidth = selectedPos === pos ? 3 : 2;
+                ctx.fillStyle = "#1e293b"; ctx.beginPath(); ctx.arc(cx, cy, CELL_SIZE*0.42, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+                
+                ctx.shadowBlur = 0; ctx.font = "24px Arial"; ctx.fillText(PIECE_ICONS[piece.name], cx, cy - 4);
+                ctx.font = "bold 10px Tahoma"; ctx.fillStyle = isRed ? "#fca5a5" : "#bae6fd"; ctx.fillText(piece.name.toUpperCase(), cx, cy + 18);
+            }
+        }
+    </script>
+</body>
+</html>
