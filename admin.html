@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TANTRA OS - Trung Tâm Quản Trị Bảo Mật SHA-256</title>
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --card-bg: #1f2833;
+            --primary-gold: #c5a059;
+            --light-gold: #e5c158;
+            --text-color: #c5c6c7;
+            --text-light: #ffffff;
+            --danger-red: #ff4d4d;
+            --success-green: #2ecc71;
+            --shield-blue: #4ba3e3;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+        }
+
+        /* --- BỨC TƯỜNG LỬA ĐĂNG NHẬP --- */
+        #login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1f2833 0%, #0b0c10 100%);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-box {
+            background-color: var(--card-bg);
+            border: 2px solid var(--primary-gold);
+            border-radius: 8px;
+            padding: 40px 30px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 0 35px rgba(197, 160, 89, 0.25);
+        }
+
+        .login-box h2 {
+            color: var(--light-gold);
+            font-size: 1.45rem;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+
+        .role-hint {
+            font-size: 0.88rem;
+            color: var(--text-color);
+            margin-bottom: 25px;
+        }
+
+        .login-input {
+            width: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            border: 1px solid rgba(197, 160, 89, 0.5);
+            padding: 13px;
+            border-radius: 4px;
+            outline: none;
+            font-size: 1.05rem;
+            text-align: center;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            transition: 0.3s;
+        }
+
+        .login-input:focus {
+            border-color: var(--light-gold);
+            box-shadow: 0 0 12px rgba(229, 193, 88, 0.35);
+        }
+
+        .login-btn {
+            width: 100%;
+            background-color: var(--primary-gold);
+            color: var(--bg-color);
+            border: none;
+            padding: 13px;
+            font-size: 1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .login-btn:hover {
+            background-color: var(--light-gold);
+            box-shadow: 0 0 15px var(--primary-gold);
+        }
+
+        .error-msg {
+            color: var(--danger-red);
+            font-size: 0.9rem;
+            margin-top: 15px;
+            display: none;
+        }
+
+        /* --- DASHBOARD QUẢN TRỊ --- */
+        #admin-content {
+            display: none;
+            padding: 30px 5%;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--primary-gold);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .admin-title {
+            color: var(--text-light);
+            font-size: 1.6rem;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .role-badge {
+            font-size: 0.8rem;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .role-master {
+            background-color: rgba(229, 193, 88, 0.2);
+            color: var(--light-gold);
+            border: 1px solid var(--light-gold);
+        }
+
+        .role-ho-phap {
+            background-color: rgba(75, 163, 227, 0.2);
+            color: var(--shield-blue);
+            border: 1px solid var(--shield-blue);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: 0.3s;
+            border: none;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary-gold);
+            color: var(--primary-gold);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--primary-gold);
+            color: #0b0c10;
+        }
+
+        .btn-logout {
+            background: transparent;
+            border: 1px solid #777;
+            color: #ccc;
+        }
+
+        .btn-danger {
+            background: transparent;
+            border: 1px solid var(--danger-red);
+            color: var(--danger-red);
+        }
+
+        .btn-danger:hover {
+            background-color: var(--danger-red);
+            color: #fff;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(197, 160, 89, 0.25);
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-card h4 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: var(--primary-gold);
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--text-light);
+        }
+
+        .table-container {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(197, 160, 89, 0.25);
+            border-radius: 6px;
+            overflow-x: auto;
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            min-width: 860px;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(197, 160, 89, 0.1);
+            font-size: 0.92rem;
+        }
+
+        th {
+            background-color: rgba(11, 12, 16, 0.6);
+            color: var(--primary-gold);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .status-cod {
+            background-color: rgba(197, 160, 89, 0.2);
+            color: var(--primary-gold);
+        }
+
+        .status-bank {
+            background-color: rgba(46, 204, 113, 0.2);
+            color: var(--success-green);
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--danger-red);
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 35px;
+            color: #777;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- MÀN HÌNH KHÓA ĐĂNG NHẬP -->
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2>TANTRA_OS CRYPTO SECURITY</h2>
+            <div class="role-hint">Xác thực thần thức bằng mã băm SHA-256</div>
+            <input type="password" id="admin-password" class="login-input" placeholder="Nhập mật mã tối mật..." autofocus onkeypress="if(event.key==='Enter') verifyPassword()">
+            <button type="button" class="login-btn" onclick="verifyPassword()">Khai Mở Trung Tâm</button>
+            <div id="login-error" class="error-msg">Mật mã không hợp lệ! Dữ liệu đã được niêm phong.</div>
+        </div>
+    </div>
+
+    <!-- MÀN HÌNH QUẢN TRỊ -->
+    <div id="admin-content">
+        <div class="admin-header">
+            <h1 class="admin-title">
+                TANTRA_OS // <span style="color:var(--primary-gold);">TRUNG TÂM PHÁN QUYẾT</span>
+                <span id="role-badge" class="role-badge">Đang xác thực...</span>
+            </h1>
+            <div class="header-actions">
+                <a href="index.html" class="btn btn-outline">← Về Cửa Hàng</a>
+                <button id="btn-clear-all" class="btn btn-danger" style="display:none;" onclick="clearAllData()">Xóa Toàn Bộ Đơn</button>
+                <button class="btn btn-logout" onclick="logout()">Đăng Xuất</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Tổng Số Đơn Hàng</h4>
+                <div class="stat-value" id="stat-orders">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Đan Dược Đã Xuất</h4>
+                <div class="stat-value" id="stat-dan">0 Hũ</div>
+            </div>
+            <div class="stat-card">
+                <h4>Bí Kíp Đã Xuất</h4>
+                <div class="stat-value" id="stat-sach">0 Bản</div>
+            </div>
+            <div class="stat-card" style="border-color: var(--primary-gold);">
+                <h4>Quỹ Ngân Lượng Tích Lũy</h4>
+                <div class="stat-value" style="color:var(--primary-gold);" id="stat-revenue">0 NL</div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <h2 style="color:var(--text-light); font-size:1.2rem; margin-bottom:15px;">Danh Sách Mật Chỉ Đơn Hàng</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Mã Đơn</th>
+                        <th>Thời Gian</th>
+                        <th>Người Nhận</th>
+                        <th>Số Điện Thoại</th>
+                        <th>Địa Chỉ</th>
+                        <th>Chi Tiết</th>
+                        <th>Phương Thức</th>
+                        <th>Tổng Tiền</th>
+                        <th id="th-action" style="display:none;">Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody id="order-table-body"></tbody>
+            </table>
+            <div id="no-data-msg" class="no-data">Chưa có đơn hàng nào đổ về...</div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // MÃ BĂM MẬT MÃ SHA-256 (Người khác View Source chỉ thấy chuỗi băm vô nghĩa)
+        // =========================================================================
+        // HASH của lao to:
+        const HASH_MASTER = "ea183df5e96ebcc7a1953258838a39e83ec4a67e4113e61ffba8623ad973b984";
+        // HASH của ho phap:
+        const HASH_HOPHAP = "8ff5521b44ec80bc1a81dc1f24d168ceb205cb6b38c2efee062089ef06f6580e";
+
+        let currentRole = null;
+
+        // Hàm băm mật mã bằng Web Crypto API có sẵn trong trình duyệt
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedRole = sessionStorage.getItem('tantra_role');
+            if (savedRole === 'MASTER' || savedRole === 'HOPHAP') {
+                currentRole = savedRole;
+                unlockView();
+            }
+        });
+
+        async function verifyPassword() {
+            const input = document.getElementById('admin-password').value.trim();
+            const errEl = document.getElementById('login-error');
+
+            if (!input) return;
+
+            const inputHash = await sha256(input);
+
+            if (inputHash === HASH_MASTER) {
+                currentRole = 'MASTER';
+                sessionStorage.setItem('tantra_role', 'MASTER');
+                unlockView();
+            } else if (inputHash === HASH_HOPHAP) {
+                currentRole = 'HOPHAP';
+                sessionStorage.setItem('tantra_role', 'HOPHAP');
+                unlockView();
+            } else {
+                errEl.style.display = 'block';
+                document.getElementById('admin-password').value = '';
+            }
+        }
+
+        function unlockView() {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('admin-content').style.display = 'block';
+
+            const badge = document.getElementById('role-badge');
+            const clearBtn = document.getElementById('btn-clear-all');
+            const thAction = document.getElementById('th-action');
+
+            if (currentRole === 'MASTER') {
+                badge.innerText = 'LÃO TỔ (TOÀN QUYỀN)';
+                badge.className = 'role-badge role-master';
+                clearBtn.style.display = 'inline-block';
+                thAction.style.display = 'table-cell';
+            } else {
+                badge.innerText = 'HỘ PHÁP (CHỈ XEM)';
+                badge.className = 'role-badge role-ho-phap';
+                clearBtn.style.display = 'none';
+                thAction.style.display = 'none';
+            }
+
+            loadOrders();
+        }
+
+        function logout() {
+            sessionStorage.removeItem('tantra_role');
+            currentRole = null;
+            document.getElementById('admin-password').value = '';
+            document.getElementById('login-error').style.display = 'none';
+            document.getElementById('admin-content').style.display = 'none';
+            document.getElementById('login-overlay').style.display = 'flex';
+        }
+
+        function loadOrders() {
+            const orders = JSON.parse(localStorage.getItem('tantra_orders')) || [];
+            const tbody = document.getElementById('order-table-body');
+            const noData = document.getElementById('no-data-msg');
+
+            if (orders.length === 0) {
+                tbody.innerHTML = '';
+                noData.style.display = 'block';
+                document.getElementById('stat-orders').innerText = '0';
+                document.getElementById('stat-dan').innerText = '0 Hũ';
+                document.getElementById('stat-sach').innerText = '0 Bản';
+                document.getElementById('stat-revenue').innerText = '0 NL';
+                return;
+            }
+
+            noData.style.display = 'none';
+            let html = '';
+            let totalDan = 0, totalSach = 0, totalRev = 0;
+
+            orders.forEach((o, idx) => {
+                totalDan += (o.qtyDan || 0);
+                totalSach += (o.qtySach || 0);
+                totalRev += (o.total || 0);
+
+                const isBank = o.method === 'BANK';
+                const actionBtn = (currentRole === 'MASTER')
+                    ? `<td><button class="delete-btn" onclick="deleteOrder(${idx})">Xóa</button></td>`
+                    : '';
+
+                html += `<tr>
+                    <td style="font-weight:bold; color:var(--light-gold);">${o.id}</td>
+                    <td style="white-space:nowrap;">${o.time}</td>
+                    <td style="color:var(--text-light); font-weight:bold;">${o.name}</td>
+                    <td>${o.phone}</td>
+                    <td>${o.address}</td>
+                    <td>${o.details}</td>
+                    <td><span class="status-badge ${isBank ? 'status-bank' : 'status-cod'}">${isBank ? 'Chuyển Khoản' : 'COD'}</span></td>
+                    <td style="font-weight:bold; color:var(--primary-gold);">${o.total.toLocaleString('vi-VN')} NL</td>
+                    ${actionBtn}
+                </tr>`;
+            });
+
+            tbody.innerHTML = html;
+            document.getElementById('stat-orders').innerText = orders.length;
+            document.getElementById('stat-dan').innerText = `${totalDan} Hũ`;
+            document.getElementById('stat-sach').innerText = `${totalSach} Bản`;
+            document.getElementById('stat-revenue').innerText = `${totalRev.toLocaleString('vi-VN')} NL`;
+        }
+
+        function deleteOrder(index) {
+            if (confirm("Xác nhận xóa mật chỉ đơn hàng này?")) {
+                let orders = JSON.parse(localStorage.getItem('tantra_orders')) || [];
+                orders.splice(index, 1);
+                localStorage.setItem('tantra_orders', JSON.stringify(orders));
+                loadOrders();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm("CẢNH BÁO: Xóa sạch toàn bộ đơn hàng trong bộ nhớ?")) {
+                localStorage.removeItem('tantra_orders');
+                loadOrders();
+            }
+        }
+    </script>
+</body>
+</html>
