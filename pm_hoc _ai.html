@@ -1,0 +1,2216 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusBrain OS - Ultimate 3D Hyper-Graph, SuperMemo SM-2 & Secure Shield</title>
+    <!-- 1. Cytoscape 2D -->
+    <script src="lib/cytoscape.min.js"></script>
+    <script>window.cytoscape || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"><\/script>')</script>
+
+    <!-- 2. Three.js Core (BẮT BUỘC cho 3D Force Graph và SpriteText) -->
+    <script src="lib/three.min.js"></script>
+    <script>window.THREE || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>')</script>
+
+    <!-- 3. Three SpriteText (nhãn chữ nổi 3D) -->
+    <script src="lib/three-spritetext.min.js"></script>
+    <script>window.SpriteText || document.write('<script src="https://cdn.jsdelivr.net/npm/three-spritetext@1.8.2/dist/three-spritetext.min.js"><\/script>')</script>
+
+    <!-- 4. 3D Force-Directed Graph -->
+    <script src="lib/3d-force-graph.min.js"></script>
+    <script>window.ForceGraph3D || document.write('<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"><\/script>')</script>
+
+    <!-- 5. MathJax 3 Engine (Hỗ trợ toàn diện công thức toán học LaTeX & MathML) -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            },
+            startup: {
+                typeset: false
+            }
+        };
+    </script>
+    <script src="lib/tex-mml-chtml.js"></script>
+    <script>
+        if (!window.MathJax || !window.MathJax.typesetPromise) {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"><\/script>');
+        }
+    </script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #030712; color: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            position: relative;
+        }
+        
+        /* Topbar Hệ thống */
+        header {
+            height: 48px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 50;
+        }
+        .logo-area { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #818cf8; letter-spacing: 0.05em; }
+        .sys-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; transition: all 0.3s; }
+        
+        .header-actions { display: flex; align-items: center; gap: 6px; }
+        .btn-header {
+            background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; color: #cbd5e1;
+            padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .btn-header:hover { background: #334155; color: #fff; }
+        .btn-header.accent { background: rgba(99, 102, 241, 0.25); border-color: #6366f1; color: #a5b4fc; }
+        .btn-header.accent:hover { background: #4f46e5; color: #fff; }
+        .btn-header.danger { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+        .btn-header.danger:hover { background: #ef4444; color: #fff; }
+
+        /* Vùng điều khiển Tab điều hướng */
+        .tab-bar { display: flex; gap: 4px; background: #090d16; padding: 6px 12px 0 12px; border-bottom: 1px solid #1e293b; overflow-x: auto; }
+        .tab-btn {
+            background: transparent; border: 1px solid transparent; color: #64748b;
+            padding: 8px 16px; border-radius: 8px 8px 0 0; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .tab-btn:hover { color: #cbd5e1; background: rgba(255,255,255,0.02); }
+        .tab-btn.active { color: #818cf8; background: #030712; border-color: #1e293b #1e293b transparent #1e293b; }
+
+        /* Không gian Workspace động */
+        .workspace { flex: 1; display: flex; height: calc(100vh - 88px); width: 100%; overflow: hidden; position: relative; }
+        .tab-content { width: 100%; height: 100%; display: none; }
+        .tab-content.active { display: flex; }
+
+        /* Biểu mẫu, nút và thanh cuộn */
+        .panel-title { font-size: 10px; font-weight: 700; color: #475569; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+        input, textarea, select {
+            width: 100%; background: #0f172a; border: 1px solid #1e293b; border-radius: 6px;
+            padding: 8px 12px; color: #f8fafc; font-size: 12px; outline: none; transition: border 0.2s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: #6366f1; }
+        
+        .color-picker-box {
+            display: flex; align-items: center; gap: 8px; background: #0f172a; border: 1px solid #1e293b;
+            padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;
+        }
+        input[type="color"] {
+            width: 32px; height: 26px; border: 1px solid #334155; border-radius: 4px;
+            background: transparent; padding: 0; cursor: pointer;
+        }
+
+        .btn-core {
+            background: #4f46e5; color: white; border: none; padding: 8px 14px;
+            border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; width: 100%;
+            transition: background 0.2s;
+        }
+        .btn-core:hover { background: #4338ca; }
+
+        /* Flashcard Styles */
+        .flashcard-box {
+            background: #0f172a; border: 1px solid #334155; border-radius: 12px;
+            padding: 32px; min-height: 280px; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        }
+        .flashcard-box:hover {
+            border-color: #6366f1; transform: translateY(-2px);
+            box-shadow: 0 15px 30px -5px rgba(99, 102, 241, 0.2);
+        }
+
+        /* SM-2 Rating Buttons */
+        .sm2-rate-bar { display: flex; gap: 8px; width: 100%; margin-top: 14px; }
+        .btn-sm2 {
+            flex: 1; padding: 8px 6px; border: none; border-radius: 6px; font-size: 11px;
+            font-weight: 600; cursor: pointer; transition: opacity 0.2s; color: #fff;
+        }
+        .btn-sm2:hover { opacity: 0.85; }
+
+        /* Quiz Button Styles */
+        .quiz-option-btn {
+            background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
+            padding: 14px 18px; color: #cbd5e1; font-size: 13px; text-align: left;
+            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px;
+        }
+        .quiz-option-btn:hover:not(:disabled) {
+            background: #1e293b; border-color: #6366f1; color: #fff;
+        }
+        .quiz-option-btn.correct {
+            background: rgba(16, 185, 129, 0.15) !important;
+            border-color: #10b981 !important; color: #34d399 !important; font-weight: 600;
+        }
+        .quiz-option-btn.wrong {
+            background: rgba(244, 63, 94, 0.15) !important;
+            border-color: #f43f5e !important; color: #fb7185 !important;
+        }
+
+        /* Huy hiệu trạng thái Due Date */
+        .badge-overdue {
+            background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; display: inline-block;
+        }
+        .badge-future {
+            background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; display: inline-block;
+        }
+
+        /* Toast thông báo */
+        #toast {
+            position: fixed; top: 60px; right: 20px; background: #10b981; color: #fff;
+            padding: 10px 18px; border-radius: 6px; font-size: 12px; font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4); display: none; z-index: 20000;
+        }
+
+        /* MÀN HÌNH KHÓA BẢO MẬT CẤP HỆ ĐIỀU HÀNH (LOCKSCREEN OS) */
+        #secure-lockscreen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(3, 7, 18, 0.9); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+            z-index: 99999; display: none; align-items: center; justify-content: center;
+            transition: opacity 0.4s ease;
+        }
+        .lockbox-card {
+            background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px; padding: 36px 32px; width: 100%; max-width: 390px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); text-align: center;
+        }
+
+        /* MODAL CÀI ĐẶT BẢO MẬT MẬT KHẨU */
+        #security-modal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(3, 7, 18, 0.75); backdrop-filter: blur(8px);
+            z-index: 99990; display: none; align-items: center; justify-content: center;
+        }
+        /* STYLING CHO CÔNG THỨC TOÁN HỌC MATHJAX & MATHML */
+        mjx-container {
+            outline: none !important;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            vertical-align: middle;
+        }
+        mjx-container[display="true"] {
+            margin: 10px auto !important;
+            padding: 8px 12px;
+            background: rgba(15, 23, 42, 0.65);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .math-preview-box {
+            margin-top: 6px;
+            margin-bottom: 8px;
+            padding: 10px;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px dashed #6366f1;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #e2e8f0;
+            max-height: 120px;
+            overflow-y: auto;
+            display: none;
+        }
+        .math-btn-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+        .btn-math-helper {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-math-helper:hover {
+            background: #334155;
+            color: #818cf8;
+            border-color: #6366f1;
+        }
+        .internal-link {
+            color: #818cf8;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .internal-link:hover {
+            color: #a5b4fc;
+        }
+        .tag-badge {
+            color: #38bdf8;
+            font-size: 11px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- MÀN HÌNH KHÓA BẢO MẬT (LOCKSCREEN OS) -->
+    <div id="secure-lockscreen">
+        <div class="lockbox-card">
+            <div id="lock-icon" style="font-size: 40px; margin-bottom: 12px;">🔒</div>
+            <h2 id="lock-title" style="font-size: 16px; font-weight: 700; letter-spacing: 0.05em; color: #f8fafc; margin-bottom: 6px;">NEXUSBRAIN OS // SECURE SHIELD</h2>
+            <p id="lock-subtitle" style="font-size: 12px; color: #64748b; margin-bottom: 22px;">Nhập mật khẩu hoặc mã PIN để mở khóa cơ sở tri thức.</p>
+            
+            <div style="text-align: left; margin-bottom: 16px;">
+                <input type="password" id="sys-password-input" placeholder="••••••••" style="padding: 12px; font-size: 15px; text-align: center; letter-spacing: 0.25em; border: 1px solid #334155;" onkeypress="if(event.key==='Enter') unlockSystem()">
+                <div id="lock-error-msg" style="color: #ef4444; font-size: 11px; margin-top: 6px; display: none; text-align: center;">Mật khẩu không chính xác!</div>
+            </div>
+
+            <button class="btn-core" onclick="unlockSystem()" style="background: #4f46e5; padding: 12px; font-size: 12px; font-weight: 700; margin-bottom: 10px;">🔓 MỞ KHÓA HỆ THỐNG</button>
+            
+            <div id="lock-setup-options" style="display: none; margin-top: 10px;">
+                <button onclick="skipSetupPassword()" style="background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; text-decoration: underline;">Bỏ qua, không dùng mật khẩu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL THIẾT LẬP / ĐỔI MẬT KHẨU BẢO MẬT -->
+    <div id="security-modal">
+        <div class="lockbox-card" style="text-align: left;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #818cf8;">⚙️ CÀI ĐẶT BẢO MẬT MẬT KHẨU</h3>
+                <button onclick="closeSecurityModal()" style="background:none; border:none; color:#64748b; cursor:pointer; font-size:16px;">✕</button>
+            </div>
+            
+            <p style="font-size: 11px; color: #94a3b8; margin-bottom: 16px; line-height: 1.5;">
+                Thiết lập mã PIN hoặc mật khẩu đăng nhập. Khi bật, phần mềm sẽ khóa toàn bộ dữ liệu mỗi khi mở ứng dụng hoặc khi nhấn nút Khóa (Ctrl+L).
+            </p>
+
+            <div class="panel-title">Mật khẩu mới:</div>
+            <input type="password" id="new-password-input" placeholder="Nhập mật khẩu mới...">
+
+            <div class="panel-title">Xác nhận mật khẩu:</div>
+            <input type="password" id="confirm-password-input" placeholder="Xác nhận lại mật khẩu...">
+
+            <div style="display: flex; gap: 8px; margin-top: 14px;">
+                <button class="btn-core" onclick="saveNewPassword()" style="background: #10b981;">💾 Lưu Mật Khẩu</button>
+                <button class="btn-core" onclick="removePassword()" style="background: #ef4444; width: auto; padding: 8px 12px;" title="Tắt tính năng hỏi mật khẩu">Hủy Mật Khẩu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER HỆ THỐNG -->
+    <header>
+        <div class="logo-area">
+            <div class="sys-dot" id="header-status-dot"></div>
+            <span>NEXUSBRAIN OS // SECURE 3D HYPER-GRAPH</span>
+        </div>
+        
+        <div class="header-actions">
+            <!-- NÚT KHÓA MÀN HÌNH NGAY -->
+            <button class="btn-header danger" onclick="lockSystemNow()" title="Khóa màn hình ngay lập tức (Phím tắt: Ctrl + L)">
+                🔒 Khóa Màn Hình
+            </button>
+            <!-- NÚT CÀI ĐẶT BẢO MẬT -->
+            <button class="btn-header" onclick="openSecurityModal()" title="Cài đặt mật khẩu bảo vệ ứng dụng">
+                ⚙️ Bảo Mật
+            </button>
+            <!-- NÚT TOÀN MÀN HÌNH -->
+            <button id="btn-fullscreen" class="btn-header" onclick="toggleFullscreen()" title="Chế độ toàn màn hình không viền (Fullscreen)">
+                ⛶ Toàn màn hình
+            </button>
+            <!-- NÚT ÂM THANH -->
+            <button id="btn-sound-toggle" class="btn-header" onclick="toggleSound()" title="Bật/Tắt hiệu ứng âm thanh tổng hợp Web Audio API">
+                🔊 Âm thanh: BẬT
+            </button>
+            <button class="btn-header accent" onclick="exportMarkdownReport()" title="Xuất toàn bộ cơ sở tri thức ra báo cáo Markdown tiêu chuẩn">
+                📄 Xuất Báo Cáo (.MD)
+            </button>
+            <button class="btn-header" onclick="exportJSON()" title="Xuất toàn bộ dữ liệu ra tệp JSON để sao lưu">
+                📥 Xuất JSON
+            </button>
+            <button class="btn-header" onclick="document.getElementById('import-file').click()" title="Khôi phục dữ liệu từ tệp JSON">
+                📤 Nhập JSON
+            </button>
+            <input type="file" id="import-file" accept=".json" style="display:none;" onchange="handleImportJSON(event)">
+            <button class="btn-header" onclick="resetToDefaultData()" style="color:#f87171; border-color:#7f1d1d;" title="Khôi phục dữ liệu mẫu ban đầu">
+                🔄 Đặt lại
+            </button>
+        </div>
+    </header>
+
+    <!-- Hệ thống chuyển đổi Tab điều hướng -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('graph-view', this)">🌐 GRAPH VIEW (Mạng lưới 2D/3D)</button>
+        <button class="tab-btn" onclick="switchTab('base-view', this)">📊 BASE VIEW (Ma trận & Lịch SM-2)</button>
+        <button class="tab-btn" onclick="switchTab('tiles-view', this)">🗂️ TILES VIEW (Kho tài liệu ô gạch)</button>
+        <button class="tab-btn" onclick="switchTab('quiz-view', this)">🎯 QUIZ & SM-2 FLASHCARD (Ôn tập tối ưu)</button>
+    </div>
+
+    <div class="workspace">
+        
+        <!-- ================= TAB 1: GRAPH VIEW (2D & 3D LIVE LABELS + FOCUS MODE) ================= -->
+        <div id="graph-view" class="tab-content active" style="width:100%; height:100%;">
+            <!-- Sidebar biên tập và bộ lọc nâng cao -->
+            <div style="width: 25%; min-width: 295px; background: #090d16; border-right: 1px solid #1e293b; padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
+                
+                <!-- BĂNG BÁO CHẾ ĐỘ TIÊU ĐIỂM (FOCUS MODE) -->
+                <div id="focus-indicator-box" style="display: none; align-items: center; justify-content: space-between; background: rgba(99, 102, 241, 0.15); border: 1px solid #6366f1; padding: 8px 12px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #a5b4fc;">
+                        🎯 <b>Tiêu điểm:</b> <span id="focus-node-name">--</span>
+                    </div>
+                    <button onclick="clearFocusMode()" style="background: none; border: none; color: #f87171; font-size: 11px; cursor: pointer; text-decoration: underline;">
+                        Hủy tiêu điểm
+                    </button>
+                </div>
+
+                <!-- BỘ LỌC TÌM KIẾM NÂNG CAO & NGÀY HẸN ÔN TẬP (DUE DATE) -->
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid #1e293b;">
+                    <div class="panel-title">🔍 Bộ Lọc & Tìm Kiếm Nâng Cao</div>
+                    <input type="text" id="search-keyword" placeholder="Tìm tên khái niệm, nội dung..." style="margin-bottom: 8px;" oninput="applyFiltersAndRefreshAll()">
+                    
+                    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Trạng thái ngày hẹn ôn tập (SM-2):</div>
+                    <select id="filter-due-date" onchange="applyFiltersAndRefreshAll()" style="margin-bottom: 8px;">
+                        <option value="all">🔍 Tất cả các Nodes</option>
+                        <option value="overdue">⚠️ Đã đến hạn hoặc trễ hạn ôn tập</option>
+                        <option value="future">🗓️ Chưa đến hạn (Hẹn tương lai)</option>
+                    </select>
+
+                    <div id="filter-stats-badge" style="font-size: 11px; color: #38bdf8;">
+                        Đang hiển thị: 0/0 nodes
+                    </div>
+                </div>
+
+                <!-- CHỌN CHẾ ĐỘ HIỂN THỊ ĐỒ THỊ 2D HOẶC 3D -->
+                <div style="display: flex; gap: 6px;">
+                    <button id="btn-graph-2d" class="btn-core" onclick="setGraphDimension('2d')" style="background: #1e293b; flex: 1;">🌐 2D Cytoscape</button>
+                    <button id="btn-graph-3d" class="btn-core" onclick="setGraphDimension('3d')" style="background: #06b6d4; flex: 1;">🪐 3D Vũ Trụ (Labels)</button>
+                </div>
+
+                <hr style="border-color: #1e293b;">
+
+                <div>
+                    <div class="panel-title">Quản lý / Thêm Node Mới</div>
+                    <input type="text" id="node-title" placeholder="Tiêu đề (Ví dụ: Mang_Neural, Tri_Tue_AI)" style="margin-bottom: 8px;">
+                    <textarea id="node-content" placeholder="Nội dung nghiên cứu... Dùng [[Tên_Node]] để liên kết, #hashtag, gõ $..$ hoặc $$..$$ cho LaTeX hoặc thẻ <math> cho MathML." style="height: 75px; margin-bottom: 6px;" oninput="updateMathPreview()"></textarea>
+                    
+                    <!-- THANH CÔNG CỤ CHÈN NHANH CÔNG THỨC TOÁN -->
+                    <div class="math-btn-bar">
+                        <button type="button" class="btn-math-helper" onclick="insertMathSnippet('inline')" title="Chèn LaTeX nội dòng: $ f(x) $">$ LaTeX $</button>
+                        <button type="button" class="btn-math-helper" onclick="insertMathSnippet('block')" title="Chèn LaTeX khối: $$ \sum $$">$$ Khối $$</button>
+                        <button type="button" class="btn-math-helper" onclick="insertMathSnippet('fraction')" title="Chèn phân số: \frac{a}{b}">\frac{a}{b}</button>
+                        <button type="button" class="btn-math-helper" onclick="insertMathSnippet('sqrt')" title="Chèn căn thức: \sqrt{x}">\sqrt{x}</button>
+                        <button type="button" class="btn-math-helper" onclick="insertMathSnippet('mathml')" title="Chèn mẫu MathML">&lt;math&gt;</button>
+                    </div>
+                    <div id="node-math-preview" class="math-preview-box">
+                        <div style="font-size:10px; color:#818cf8; font-weight:700; margin-bottom:4px;">👁️ XEM TRƯỚC CÔNG THỨC TOÁN (MATHJAX):</div>
+                        <div id="math-preview-content"></div>
+                    </div>
+                    
+                    <!-- COLOR PICKER CHO NODE -->
+                    <div class="panel-title">🎨 Tùy chọn màu sắc bong bóng 3D / 2D:</div>
+                    <div class="color-picker-box">
+                        <input type="color" id="node-color" value="#3b82f6" oninput="document.getElementById('color-hex-label').innerText = this.value">
+                        <span id="color-hex-label" style="font-size: 11px; font-family: monospace; color: #94a3b8;">#3b82f6</span>
+                        <span style="font-size: 11px; color: #64748b; margin-left: auto;">(Chọn màu riêng)</span>
+                    </div>
+
+                    <button class="btn-core" onclick="saveSingleNode()">💾 Lưu Ghi Chú Đơn Lẻ</button>
+                </div>
+                
+                <hr style="border-color: #1e293b;">
+                
+                <div>
+                    <div class="panel-title">⚡ Nhập Nhanh Đề Cương / Batch Import</div>
+                    <textarea id="batch-content" placeholder="Dán mục lục sách, đề cương nghiên cứu chứa các [[Từ_Khóa]] vào đây..." style="height: 65px; margin-bottom: 8px;"></textarea>
+                    <button class="btn-core" onclick="triggerBatchImport()" style="background: #059669;">🚀 Kích Hoạt Nhập Hàng Loạt</button>
+                </div>
+
+                <div style="margin-top:auto;">
+                    <button class="btn-core" onclick="exportMarkdownReport()" style="background: #818cf8; font-weight: 700; margin-bottom: 8px;">
+                        📄 Xuất Báo Cáo Nghiên Cứu (.MD)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Khu vực đồ thị trực quan (2D hoặc 3D tự thích ứng siêu đại) -->
+            <div style="flex: 1; height: 100%; position: relative; background: #020617; overflow: hidden;" id="graph-viewport-container">
+                <!-- Vùng chứa đồ thị 2D Cytoscape -->
+                <div id="cy" style="width: 100%; height: 100%; display: none;"></div>
+                
+                <!-- Vùng chứa đồ thị 3D Force-Directed Graph -->
+                <div id="3d-cy" style="width: 100%; height: 100%; display: block; background: #000000;"></div>
+                
+                <!-- Bản X-Ray Hover Panel hiển thị tóm tắt & Nút bật tiêu điểm -->
+                <div id="xray-panel" style="position: absolute; bottom: 16px; left: 16px; right: 16px; background: rgba(15,23,42,0.85); backdrop-filter: blur(12px); border: 1px solid #1e293b; border-radius: 10px; padding: 12px; display: none; z-index: 100;">
+                    <div style="display:flex; justify-content:space-between; font-size:10px; color:#06b6d4; font-family:monospace; margin-bottom:4px;">
+                        <span id="xray-tags">#CHUA_PHAN_LOAI</span>
+                        <span id="xray-sm2-info">HẸN ÔN: --</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                        <h4 id="xray-title" style="font-size: 13px; color: #f8fafc;">Tiêu đề Node</h4>
+                        <button id="btn-xray-focus" onclick="toggleFocusFromXray()" style="background:#4f46e5; border:none; color:#fff; padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer;">🎯 Bật Tiêu Điểm</button>
+                    </div>
+                    <div id="xray-desc" style="font-size: 11px; color: #94a3b8; line-height: 1.5; max-height: 90px; overflow-y: auto;">Nội dung hiển thị...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 2: BASE VIEW (Ma trận & Chỉ số SM-2) ================= -->
+        <div id="base-view" class="tab-content" style="padding: 24px; flex-direction: column; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div class="panel-title" style="font-size: 12px; margin-bottom: 0;">📊 Ma Trận Liên Kết & Trạng Thái Ôn Tập (SuperMemo SM-2 Metrics)</div>
+                <button class="btn-core" onclick="exportMarkdownReport()" style="width: auto; padding: 6px 14px; background: #6366f1;">📄 Tải Báo Cáo Markdown</button>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
+                <thead>
+                    <tr style="background: #0f172a; border-bottom: 2px solid #1e293b;">
+                        <th style="padding: 12px;">Khái Niệm (Node)</th>
+                        <th style="padding: 12px;">Màu Sắc</th>
+                        <th style="padding: 12px;">Danh Mục (Tags)</th>
+                        <th style="padding: 12px; text-align: center;">Liên Kết (Xuất / Đến)</th>
+                        <th style="padding: 12px; text-align: center;">Chu Kỳ (Interval)</th>
+                        <th style="padding: 12px; text-align: center;">Hệ Số Phục Hồi (EF)</th>
+                        <th style="padding: 12px;">Ngày Cần Ôn Tập Tiếp Theo</th>
+                        <th style="padding: 12px; text-align: center;">Thao Tác</th>
+                    </tr>
+                </thead>
+                <tbody id="matrix-table-body">
+                    <!-- Sinh tự động qua JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ================= TAB 3: TILES VIEW (Kho ô gạch) ================= -->
+        <div id="tiles-view" class="tab-content" style="padding: 24px; flex-direction: column; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div class="panel-title" style="font-size: 12px; margin-bottom: 0;">🗂️ Kho Ghi Chú Định Dạng Ô Gạch (Document Tiles)</div>
+                <div id="tiles-count" style="font-size: 12px; color: #64748b;">Tổng số: 0 nodes</div>
+            </div>
+            <div id="tiles-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; width: 100%;">
+                <!-- Vẽ tự động qua JavaScript -->
+            </div>
+        </div>
+
+        <!-- ================= TAB 4: QUIZ & SM-2 FLASHCARD ================= -->
+        <div id="quiz-view" class="tab-content" style="padding: 24px; flex-direction: column; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 16px;">
+                <div>
+                    <h2 style="font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 4px;">🎯 Ôn Tập Ngắt Quãng SuperMemo (SM-2) & Trắc Nghiệm Sound FX</h2>
+                    <p style="color: #64748b; font-size: 12px;">Tích hợp hiệu ứng âm thanh tổng hợp Web Audio API (Ching! / Buzz!) kích hoạt phản xạ học tập dài hạn.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-mode-flashcard" class="btn-core" onclick="setQuizMode('flashcard')" style="width: auto; padding: 8px 16px;">🎴 Thẻ Ghi Nhớ & Đánh Giá SM-2</button>
+                    <button id="btn-mode-mcq" class="btn-core" onclick="setQuizMode('mcq')" style="width: auto; padding: 8px 16px; background: #1e293b;">📝 Bài Trắc Nghiệm 4 Lựa Chọn</button>
+                </div>
+            </div>
+
+            <!-- CHẾ ĐỘ 1: FLASHCARD TÍCH HỢP ĐÁNH GIÁ CHẤT LƯỢNG GHI NHỚ SM-2 -->
+            <div id="quiz-flashcard-container" style="max-width: 680px; width: 100%; margin: 10px auto; display: flex; flex-direction: column; gap: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #94a3b8;">
+                    <span id="flashcard-counter">Thẻ 1 / 1</span>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #f87171;">
+                            <input type="checkbox" id="chk-only-overdue" onchange="toggleOnlyOverdueCards(this.checked)" style="width:auto;">
+                            Chỉ ôn các Node đến hạn
+                        </label>
+                        <button onclick="shuffleFlashcards()" style="background:none; border:none; color:#818cf8; font-size:12px; cursor:pointer;">🔀 Xáo trộn</button>
+                    </div>
+                </div>
+
+                <div id="flashcard-element" class="flashcard-box" onclick="flipFlashcard()">
+                    <div id="flashcard-badge" style="position: absolute; top: 16px; left: 20px; font-size: 10px; font-family: monospace; color: #818cf8; text-transform: uppercase;">MẶT TRƯỚC (CÂU HỎI)</div>
+                    <div id="flashcard-sm2-badge" style="position: absolute; top: 16px; right: 20px; font-size: 10px; font-family: monospace;">EF: 2.5 | INT: 0d</div>
+                    <div id="flashcard-title" style="font-size: 20px; font-weight: 700; color: #f8fafc; margin-bottom: 12px;">Tiêu đề Khái Niệm</div>
+                    <div id="flashcard-body" style="font-size: 13px; color: #94a3b8; line-height: 1.6; max-width: 520px;">Bấm vào đây để lật thẻ và xem định nghĩa chi tiết...</div>
+                    <div id="flashcard-footer" style="position: absolute; bottom: 14px; font-size: 11px; color: #475569;">💡 Nhấp vào thẻ hoặc nhấn phím Cách (Space) để lật</div>
+                </div>
+
+                <!-- THANH CHẤM ĐIỂM CHẤT LƯỢNG SM-2 -->
+                <div id="flashcard-sm2-controls" style="display: none; background: rgba(15,23,42,0.6); padding: 14px; border-radius: 8px; border: 1px solid #1e293b;">
+                    <div class="panel-title" style="text-align: center; margin-bottom: 8px;">Đánh giá mức độ nhớ bài để thuật toán SuperMemo (SM-2) xếp lịch:</div>
+                    <div class="sm2-rate-bar">
+                        <button class="btn-sm2" style="background:#ef4444;" onclick="rateCurrentCardSM2(0)" title="Quên hoàn toàn, cần học lại ngay">
+                            0: Quên sạch (Lặp lại ngay)
+                        </button>
+                        <button class="btn-sm2" style="background:#f59e0b;" onclick="rateCurrentCardSM2(3)" title="Nhớ được nhưng mất nhiều công sức">
+                            3: Khó khăn (Tạm nhớ)
+                        </button>
+                        <button class="btn-sm2" style="background:#10b981;" onclick="rateCurrentCardSM2(5)" title="Nhớ hoàn hảo, cực kỳ dễ dàng">
+                            5: Thuộc làu (Rất dễ)
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; gap: 12px; margin-top: 4px;">
+                    <button class="btn-core" onclick="prevFlashcard()" style="background: #1e293b;">⬅️ Thẻ Trước</button>
+                    <button class="btn-core" onclick="flipFlashcard()" style="background: #4f46e5;">🔄 Lật Thẻ (Space)</button>
+                    <button class="btn-core" onclick="nextFlashcard()" style="background: #1e293b;">Thẻ Kế Tiếp ➡️</button>
+                </div>
+            </div>
+
+            <!-- CHẾ ĐỘ 2: TRẮC NGHIỆM TỰ ĐỘNG (MCQ) -->
+            <div id="quiz-mcq-container" style="max-width: 720px; width: 100%; margin: 10px auto; display: none; flex-direction: column; gap: 18px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 12px 18px; border-radius: 8px; border: 1px solid #1e293b;">
+                    <div id="mcq-progress" style="font-size: 12px; font-weight: 600; color: #818cf8;">Câu hỏi 1 / 5</div>
+                    <div id="mcq-score-display" style="font-size: 12px; color: #10b981; font-weight: 600;">Điểm số: 0</div>
+                </div>
+
+                <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 24px;">
+                    <div id="mcq-type-badge" style="display:inline-block; font-size: 10px; font-weight:700; color:#818cf8; background:rgba(99,102,241,0.15); padding:3px 8px; border-radius:4px; margin-bottom:12px;">NHẬN DIỆN KHÁI NIỆM</div>
+                    <h3 id="mcq-question-text" style="font-size: 15px; color: #f8fafc; line-height: 1.6; margin-bottom: 20px;">Đang tạo câu hỏi trắc nghiệm...</h3>
+                    
+                    <div id="mcq-options" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Lựa chọn A, B, C, D -->
+                    </div>
+
+                    <div id="mcq-explanation" style="display: none; margin-top: 18px; padding: 14px; background: rgba(30,41,59,0.5); border-left: 3px solid #6366f1; border-radius: 4px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                        <!-- Giải thích đáp án -->
+                    </div>
+
+                    <!-- Thanh đánh giá SM-2 sau khi trả lời trắc nghiệm -->
+                    <div id="mcq-sm2-scoring" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid #1e293b;">
+                        <div class="panel-title" style="margin-bottom: 6px;">Cập nhật chu kỳ SuperMemo SM-2 cho Node này:</div>
+                        <div class="sm2-rate-bar">
+                            <button class="btn-sm2" style="background:#ef4444;" onclick="rateCurrentMCQNode(0)">0 (Quên)</button>
+                            <button class="btn-sm2" style="background:#f59e0b;" onclick="rateCurrentMCQNode(3)">3 (Tạm nhớ)</button>
+                            <button class="btn-sm2" style="background:#10b981;" onclick="rateCurrentMCQNode(5)">5 (Thuộc làu)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                    <button id="btn-restart-quiz" class="btn-core" onclick="generateMCQQuiz()" style="background: #1e293b; width: auto; padding: 10px 18px;">🔄 Làm bộ câu hỏi mới</button>
+                    <button id="btn-next-question" class="btn-core" onclick="nextQuestion()" style="width: auto; padding: 10px 24px; display: none;">Câu tiếp theo ➡️</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="toast">Đã lưu thành công!</div>
+
+    <script>
+        // =========================================================================
+        // HỆ THỐNG MÃ HÓA & KHÓA BẢO MẬT CẤP HỆ ĐIỀU HÀNH (LOCKSCREEN SECURITY)
+        // =========================================================================
+        const PWD_STORAGE_KEY = "nexusbrain_pwd_hash";
+        let isSystemUnlocked = false;
+
+        async function hashPassword(str) {
+            if (!str) return '';
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(str + "_nexusbrain_secure_salt_2026");
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch(e) {
+                // Fallback băm cơ bản nếu crypto API bị hạn chế
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                    hash |= 0;
+                }
+                return String(hash);
+            }
+        }
+
+        async function checkInitialLockStatus() {
+            const savedHash = localStorage.getItem(PWD_STORAGE_KEY);
+            const lockscreen = document.getElementById('secure-lockscreen');
+            const setupOpt = document.getElementById('lock-setup-options');
+            const dot = document.getElementById('header-status-dot');
+
+            if (!savedHash) {
+                // Chưa cài đặt mật khẩu: mở khóa tự động nhưng người dùng có thể cài đặt bất kỳ lúc nào
+                isSystemUnlocked = true;
+                lockscreen.style.display = 'none';
+                if (dot) dot.style.background = '#10b981';
+            } else {
+                // Đã cài mật khẩu: khóa giao diện ngay lập tức
+                isSystemUnlocked = false;
+                lockscreen.style.display = 'flex';
+                setupOpt.style.display = 'none';
+                if (dot) dot.style.background = '#ef4444';
+                setTimeout(() => {
+                    document.getElementById('sys-password-input').focus();
+                }, 100);
+            }
+        }
+
+        async function unlockSystem() {
+            const input = document.getElementById('sys-password-input').value;
+            const savedHash = localStorage.getItem(PWD_STORAGE_KEY);
+            const errMsg = document.getElementById('lock-error-msg');
+            const dot = document.getElementById('header-status-dot');
+
+            if (!savedHash) {
+                // Nếu chưa có mật khẩu, mở khóa luôn
+                hideLockscreen();
+                return;
+            }
+
+            const inputHash = await hashPassword(input);
+            if (inputHash === savedHash) {
+                errMsg.style.display = 'none';
+                document.getElementById('sys-password-input').value = '';
+                hideLockscreen();
+                playSoundFX('success');
+                showToast("🔓 Xác thực bảo mật thành công! Chào mừng trở lại.");
+            } else {
+                errMsg.style.display = 'block';
+                playSoundFX('fail');
+                document.getElementById('sys-password-input').select();
+            }
+        }
+
+        function hideLockscreen() {
+            isSystemUnlocked = true;
+            const lockscreen = document.getElementById('secure-lockscreen');
+            lockscreen.style.opacity = '0';
+            setTimeout(() => {
+                lockscreen.style.display = 'none';
+                lockscreen.style.opacity = '1';
+                resize3DCanvas();
+            }, 300);
+            const dot = document.getElementById('header-status-dot');
+            if (dot) dot.style.background = '#10b981';
+        }
+
+        function lockSystemNow() {
+            const savedHash = localStorage.getItem(PWD_STORAGE_KEY);
+            if (!savedHash) {
+                if (confirm("Hệ thống chưa thiết lập mật khẩu bảo vệ. Bạn có muốn thiết lập mật khẩu ngay bây giờ không?")) {
+                    openSecurityModal();
+                }
+                return;
+            }
+
+            isSystemUnlocked = false;
+            const lockscreen = document.getElementById('secure-lockscreen');
+            const errMsg = document.getElementById('lock-error-msg');
+            errMsg.style.display = 'none';
+            document.getElementById('sys-password-input').value = '';
+            lockscreen.style.display = 'flex';
+            const dot = document.getElementById('header-status-dot');
+            if (dot) dot.style.background = '#ef4444';
+            playSoundFX('flip');
+            setTimeout(() => {
+                document.getElementById('sys-password-input').focus();
+            }, 100);
+        }
+
+        function openSecurityModal() {
+            document.getElementById('security-modal').style.display = 'flex';
+            document.getElementById('new-password-input').value = '';
+            document.getElementById('confirm-password-input').value = '';
+            setTimeout(() => { document.getElementById('new-password-input').focus(); }, 100);
+        }
+
+        function closeSecurityModal() {
+            document.getElementById('security-modal').style.display = 'none';
+        }
+
+        async function saveNewPassword() {
+            const p1 = document.getElementById('new-password-input').value;
+            const p2 = document.getElementById('confirm-password-input').value;
+
+            if (!p1) {
+                alert("Vui lòng nhập mật khẩu mới!");
+                return;
+            }
+            if (p1 !== p2) {
+                alert("Mật khẩu xác nhận không khớp!");
+                return;
+            }
+
+            const hash = await hashPassword(p1);
+            localStorage.setItem(PWD_STORAGE_KEY, hash);
+            closeSecurityModal();
+            playSoundFX('success');
+            showToast("🔒 Đã thiết lập mật khẩu bảo vệ thành công!");
+        }
+
+        function removePassword() {
+            if (confirm("Bạn có chắc chắn muốn HỦY BỎ mật khẩu bảo vệ? Bất kỳ ai mở phần mềm đều sẽ xem được dữ liệu.")) {
+                localStorage.removeItem(PWD_STORAGE_KEY);
+                closeSecurityModal();
+                playSoundFX('fail');
+                showToast("🔓 Đã hủy bỏ mật khẩu bảo vệ.");
+            }
+        }
+
+        function skipSetupPassword() {
+            hideLockscreen();
+        }
+
+        // Phím tắt Ctrl + L để khóa màn hình lập tức
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+                e.preventDefault();
+                lockSystemNow();
+            }
+        });
+
+        // =========================================================================
+        // HỆ THỐNG TOÀN MÀN HÌNH (FULLSCREEN & EXPANDED CANVAS ENGINE)
+        // =========================================================================
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log("Không thể mở toàn màn hình: ", err);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            const btn = document.getElementById('btn-fullscreen');
+            if (btn) {
+                btn.innerHTML = document.fullscreenElement ? '⛶ Thu nhỏ' : '⛶ Toàn màn hình';
+            }
+            setTimeout(resize3DCanvas, 120);
+        });
+
+        function resize3DCanvas() {
+            const container = document.getElementById('3d-cy');
+            if (graph3DInstance && container && currentGraphDimension === '3d') {
+                const w = container.clientWidth || (window.innerWidth * 0.75);
+                const h = container.clientHeight || (window.innerHeight - 88);
+                graph3DInstance.width(w).height(h);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            resize3DCanvas();
+            if (cyInstance && currentGraphDimension === '2d') {
+                cyInstance.resize();
+            }
+        });
+
+        // =========================================================================
+        // HỆ THỐNG HIỆU ỨNG ÂM THANH (SOUND FX) WEB AUDIO API
+        // =========================================================================
+        let isSoundEnabled = true;
+
+        function toggleSound() {
+            isSoundEnabled = !isSoundEnabled;
+            const btn = document.getElementById('btn-sound-toggle');
+            if (btn) {
+                btn.innerHTML = isSoundEnabled ? '🔊 Âm thanh: BẬT' : '🔇 Âm thanh: TẮT';
+                btn.style.color = isSoundEnabled ? '#34d399' : '#94a3b8';
+            }
+            showToast(isSoundEnabled ? '🔊 Đã bật âm thanh phản hồi' : '🔇 Đã tắt âm thanh');
+        }
+
+        function playSoundFX(type) {
+            if (!isSoundEnabled) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'success') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+                    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.35);
+                } else if (type === 'fail') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(140, ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(70, ctx.currentTime + 0.28);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.3);
+                } else if (type === 'flip') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(350, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(650, ctx.currentTime + 0.05);
+                    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.07);
+                }
+            } catch (e) {
+                console.log("AudioContext:", e);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getTodayISO() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.background = isError ? '#ef4444' : '#10b981';
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 2600);
+        }
+
+        // =========================================================================
+        // BỘ CÔNG CỤ XỬ LÝ & DỰNG HÌNH CÔNG THỨC TOÁN HỌC (LATEX & MATHML)
+        // =========================================================================
+        function renderMath(target) {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                try {
+                    const elements = target ? (Array.isArray(target) ? target : [target]) : [document.body];
+                    window.MathJax.typesetPromise(elements).catch(err => console.log('MathJax typeset:', err));
+                } catch(e) {
+                    console.log('MathJax exception:', e);
+                }
+            }
+        }
+
+        function formatContentWithMath(rawText) {
+            if (!rawText) return '';
+            
+            // 1. Tách và bảo vệ các khối MathML (<math>...</math>)
+            const mathmlBlocks = [];
+            let text = String(rawText).replace(/<math[\s\S]*?<\/math>/gi, (match) => {
+                const placeholder = `___MATHML_BLOCK_${mathmlBlocks.length}___`;
+                mathmlBlocks.push(match);
+                return placeholder;
+            });
+
+            // 2. Tách và bảo vệ các khối công thức LaTeX ($$...$$ hoặc $...$)
+            const latexBlocks = [];
+            // LaTeX khối ($$...$$ hoặc \\[...\\])
+            text = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\])/g, (match) => {
+                const placeholder = `___LATEX_BLOCK_${latexBlocks.length}___`;
+                latexBlocks.push(match);
+                return placeholder;
+            });
+            // LaTeX nội dòng ($...$ hoặc \\(...\\))
+            text = text.replace(/(\$(?!\$)([^$\n]+?)\$|\\\([\s\S]*?\\\))/g, (match) => {
+                const placeholder = `___LATEX_INLINE_${latexBlocks.length}___`;
+                latexBlocks.push(match);
+                return placeholder;
+            });
+
+            // 3. Escape HTML an toàn cho phần văn bản thông thường (tránh phá vỡ giao diện)
+            text = escapeHtml(text);
+
+            // 4. Định dạng Obsidian Backlinks [[Tên_Node]] thành thẻ liên kết tương tác
+            text = text.replace(/\[\[(.*?)\]\]/g, (match, nodeName) => {
+                const cleanName = nodeName.trim();
+                const targetId = findNodeId(cleanName) || normalizeId(cleanName);
+                return `<span class="internal-link" onclick="openOrFocusNode('${escapeHtml(targetId)}')" title="Xem chi tiết: ${escapeHtml(cleanName)}">[[${escapeHtml(cleanName)}]]</span>`;
+            });
+
+            // 5. Định dạng Hashtag #tag thành huy hiệu màu
+            text = text.replace(/#([\p{L}\p{N}_-]+)/gu, (match, tag) => {
+                return `<span class="tag-badge">#${tag}</span>`;
+            });
+
+            // 6. Chuyển đổi xuống dòng thành <br>
+            text = text.replace(/\n/g, '<br>');
+
+            // 7. Khôi phục lại các khối công thức LaTeX
+            text = text.replace(/___LATEX_BLOCK_(\d+)___/g, (match, idx) => {
+                return `<div class="tex2jax_process">${latexBlocks[parseInt(idx)]}</div>`;
+            });
+            text = text.replace(/___LATEX_INLINE_(\d+)___/g, (match, idx) => {
+                return `<span class="tex2jax_process">${latexBlocks[parseInt(idx)]}</span>`;
+            });
+
+            // 8. Khôi phục lại các khối MathML nguyên bản để MathJax hoặc trình duyệt dựng hình
+            text = text.replace(/___MATHML_BLOCK_(\d+)___/g, (match, idx) => {
+                return `<div class="tex2jax_process">${mathmlBlocks[parseInt(idx)]}</div>`;
+            });
+
+            return text;
+        }
+
+        function openOrFocusNode(nodeId) {
+            if (knowledgeBase[nodeId]) {
+                toggleFocusMode(nodeId);
+            }
+        }
+
+        function updateMathPreview() {
+            const content = document.getElementById('node-content').value;
+            const box = document.getElementById('node-math-preview');
+            const target = document.getElementById('math-preview-content');
+            if (!box || !target) return;
+            
+            if (!content.trim() || (!content.includes('$') && !content.includes('<math'))) {
+                box.style.display = 'none';
+                return;
+            }
+            box.style.display = 'block';
+            target.innerHTML = formatContentWithMath(content);
+            renderMath(target);
+        }
+
+        function insertMathSnippet(type) {
+            const textarea = document.getElementById('node-content');
+            if (!textarea) return;
+            let snippet = '';
+            if (type === 'inline') {
+                snippet = ' $f(x) = x^2$ ';
+            } else if (type === 'block') {
+                snippet = '\n\n$$ \\sum_{i=1}^{n} x_i = \\frac{n(n+1)}{2} $$\n\n';
+            } else if (type === 'fraction') {
+                snippet = ' $\\frac{a}{b}$ ';
+            } else if (type === 'sqrt') {
+                snippet = ' $\\sqrt{x^2 + y^2}$ ';
+            } else if (type === 'mathml') {
+                snippet = '\n<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">\n  <mrow>\n    <mi>x</mi>\n    <mo>=</mo>\n    <mfrac>\n      <mrow>\n        <mo>-</mo><mi>b</mi><mo>&PlusMinus;</mo>\n        <msqrt>\n          <msup><mi>b</mi><mn>2</mn></msup>\n          <mo>-</mo><mn>4</mn><mi>a</mi><mi>c</mi>\n        </msqrt>\n      </mrow>\n      <mrow><mn>2</mn><mi>a</mi></mrow>\n    </mfrac>\n  </mrow>\n</math>\n';
+            }
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const val = textarea.value;
+            textarea.value = val.substring(0, start) + snippet + val.substring(end);
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = start + snippet.length;
+            updateMathPreview();
+        }
+
+        function normalizeId(str) {
+            if (!str) return '';
+            return str.toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[đĐ]/g, 'd')
+                .replace(/\s+/g, '_')
+                .trim();
+        }
+
+        // =========================================================================
+        // CƠ SỞ DỮ LIỆU & LOCALSTORAGE ENGINE
+        // =========================================================================
+        const DEFAULT_KNOWLEDGE_BASE = {
+            "00_tong_quan_de_tai": {
+                title: "00_Tổng_Quan_Đề_Tài",
+                content: "Chào mừng đến với hệ sinh thái nghiên cứu NexusBrain OS. Hệ thống hỗ trợ biên dịch công thức toán học chuyên sâu qua **LaTeX** như $E = mc^2$ và **MathML**. Các khái niệm cốt lõi liên kết gồm [[Mang_Neural]] và [[Tri_Tue_AI]]. #master",
+                tags: ["#master"],
+                repetitions: 0,
+                interval: 0,
+                efactor: 2.5,
+                nextReview: getTodayISO(),
+                colorHex: "#ef4444"
+            },
+            "mang_neural": {
+                title: "Mạng_Neural",
+                content: "Mạng nơ-ron học sâu. Hàm kích hoạt Sigmoid biểu diễn bằng LaTeX:\n\n$$ \\sigma(z) = \\frac{1}{1 + e^{-z}} $$\n\nGiải thuật lan truyền ngược cập nhật trọng số:\n\n$$ W^{(l)} := W^{(l)} - \\alpha \\frac{\\partial \\mathcal{L}}{\\partial W^{(l)}} $$\n\nHệ thống liên kết trực tiếp với [[Tri_Tue_AI]]. #cong_nghe",
+                tags: ["#cong_nghe"],
+                repetitions: 0,
+                interval: 0,
+                efactor: 2.5,
+                nextReview: getTodayISO(),
+                colorHex: "#3b82f6"
+            },
+            "tri_tue_ai": {
+                title: "Trí_Tuệ_AI",
+                content: "Hệ thống trí tuệ nhân tạo thế hệ mới. Định lý xác suất Bayes biểu diễn bằng MathML:\n\n<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mi>P</mi><mo>(</mo><mi>A</mi><mo>|</mo><mi>B</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mi>P</mi><mo>(</mo><mi>B</mi><mo>|</mo><mi>A</mi><mo>)</mo><mi>P</mi><mo>(</mo><mi>A</mi><mo>)</mo></mrow><mrow><mi>P</mi><mo>(</mo><mi>B</mi><mo>)</mo></mrow></mfrac></math>\n\nHàm mục tiêu học máy: $$\min_\\theta \\mathbb{E}_{(x,y) \\sim \\mathcal{D}}[\\ell(f_\\theta(x), y)]$$. Kế thừa cấu trúc từ [[Mang_Neural]]. #nghien_cuu",
+                tags: ["#nghien_cuu"],
+                repetitions: 0,
+                interval: 0,
+                efactor: 2.5,
+                nextReview: getTodayISO(),
+                colorHex: "#10b981"
+            }
+        };
+
+        const STORAGE_KEY = "nexusbrain_kb_data";
+
+        function loadKnowledgeBase() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                        const today = getTodayISO();
+                        for (let id in parsed) {
+                            if (parsed[id].repetitions === undefined) parsed[id].repetitions = 0;
+                            if (parsed[id].interval === undefined) parsed[id].interval = 0;
+                            if (parsed[id].efactor === undefined) parsed[id].efactor = 2.5;
+                            if (!parsed[id].nextReview) parsed[id].nextReview = today;
+                            if (!parsed[id].colorHex) {
+                                parsed[id].colorHex = parsed[id].tags?.includes('#master') ? '#ef4444' :
+                                    parsed[id].tags?.includes('#cong_nghe') ? '#3b82f6' :
+                                    parsed[id].tags?.includes('#nghien_cuu') ? '#10b981' : '#818cf8';
+                            }
+                        }
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.error("Lỗi đọc LocalStorage", e);
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_KNOWLEDGE_BASE));
+        }
+
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(knowledgeBase));
+            } catch (e) {
+                console.error("Lỗi ghi LocalStorage", e);
+                showToast("Không thể ghi vào LocalStorage!", true);
+            }
+        }
+
+        let knowledgeBase = loadKnowledgeBase();
+        let cyInstance = null;
+        let graph3DInstance = null;
+        let currentGraphDimension = '3d';
+        let currentXrayNodeId = null;
+
+        // =========================================================================
+        // TÍNH NĂNG ĐẶC QUYỀN: CHẾ ĐỘ TIÊU ĐIỂM (FOCUS MODE / LOCAL GRAPH)
+        // =========================================================================
+        let focusNodeId = null;
+
+        function toggleFocusMode(nodeId) {
+            if (focusNodeId === nodeId) {
+                clearFocusMode();
+            } else {
+                focusNodeId = nodeId;
+                const nodeTitle = knowledgeBase[nodeId]?.title || nodeId;
+                playSoundFX('success');
+                showToast(`🎯 Đang bật Chế độ Tiêu điểm cho: "${nodeTitle}"`);
+                updateFocusIndicator();
+                applyFiltersAndRefreshAll();
+            }
+        }
+
+        function clearFocusMode() {
+            if (focusNodeId) {
+                focusNodeId = null;
+                playSoundFX('flip');
+                showToast("🌐 Đã tắt Chế độ Tiêu điểm, hiển thị toàn bộ mạng lưới.");
+                updateFocusIndicator();
+                applyFiltersAndRefreshAll();
+            }
+        }
+
+        function updateFocusIndicator() {
+            const box = document.getElementById('focus-indicator-box');
+            if (!box) return;
+            if (focusNodeId && knowledgeBase[focusNodeId]) {
+                box.style.display = 'flex';
+                document.getElementById('focus-node-name').innerText = knowledgeBase[focusNodeId].title;
+            } else {
+                box.style.display = 'none';
+            }
+        }
+
+        function toggleFocusFromXray() {
+            if (currentXrayNodeId) {
+                toggleFocusMode(currentXrayNodeId);
+            }
+        }
+
+        // =========================================================================
+        // THUẬT TOÁN ÔN TẬP NGẮT QUÃNG SUPERMEMO SM-2 LÕI
+        // =========================================================================
+        function calculateSM2(quality, repetitions, interval, efactor) {
+            if (quality >= 3) {
+                if (repetitions === 0) {
+                    interval = 1;
+                } else if (repetitions === 1) {
+                    interval = 6;
+                } else {
+                    interval = Math.round(interval * efactor);
+                }
+                repetitions++;
+            } else {
+                repetitions = 0;
+                interval = 1;
+            }
+
+            efactor = efactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+            if (efactor < 1.3) efactor = 1.3;
+
+            return { repetitions, interval, efactor };
+        }
+
+        function findNodeId(nameOrId) {
+            if (!nameOrId) return null;
+            let rawKey = nameOrId.toLowerCase().replace(/\s+/g, '_');
+            if (knowledgeBase[rawKey]) return rawKey;
+            
+            let norm = normalizeId(nameOrId);
+            if (knowledgeBase[norm]) return norm;
+            
+            for (let id in knowledgeBase) {
+                if (normalizeId(knowledgeBase[id].title) === norm || normalizeId(id) === norm) {
+                    return id;
+                }
+            }
+            return null;
+        }
+
+        // =========================================================================
+        // BỘ LỌC DỮ LIỆU NÂNG CAO (KEYWORD, DUE DATE & FOCUS MODE)
+        // =========================================================================
+        function getFilteredNodes() {
+            const keywordEl = document.getElementById('search-keyword');
+            const keyword = keywordEl ? keywordEl.value.trim().toLowerCase() : '';
+            const dueFilterEl = document.getElementById('filter-due-date');
+            const dueFilter = dueFilterEl ? dueFilterEl.value : 'all';
+            const todayStr = getTodayISO();
+
+            const result = {};
+            for (let id in knowledgeBase) {
+                const node = knowledgeBase[id];
+                const isOverdue = !node.nextReview || node.nextReview <= todayStr;
+
+                if (dueFilter === 'overdue' && !isOverdue) continue;
+                if (dueFilter === 'future' && isOverdue) continue;
+
+                if (keyword) {
+                    const matchTitle = (node.title || '').toLowerCase().includes(keyword);
+                    const matchContent = (node.content || '').toLowerCase().includes(keyword);
+                    const matchTags = (node.tags || []).some(t => t.toLowerCase().includes(keyword));
+                    if (!matchTitle && !matchContent && !matchTags) continue;
+                }
+
+                result[id] = node;
+            }
+
+            // NẾU ĐANG BẬT FOCUS MODE: CHỈ GIỮ LẠI NODE TIÊU ĐIỂM VÀ CÁC LIÊN KẾT TRỰC TIẾP
+            if (focusNodeId && knowledgeBase[focusNodeId]) {
+                const connectedIds = new Set([focusNodeId]);
+                for (let id in knowledgeBase) {
+                    let content = knowledgeBase[id].content || '';
+                    let regex = /\[\[(.*?)\]\]/g;
+                    let match;
+                    while ((match = regex.exec(content)) !== null) {
+                        let targetId = findNodeId(match[1].trim());
+                        if (id === focusNodeId && targetId) connectedIds.add(targetId);
+                        if (targetId === focusNodeId) connectedIds.add(id);
+                    }
+                }
+
+                for (let id in result) {
+                    if (!connectedIds.has(id)) {
+                        delete result[id];
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        function applyFiltersAndRefreshAll() {
+            const filtered = getFilteredNodes();
+            const total = Object.keys(knowledgeBase).length;
+            const count = Object.keys(filtered).length;
+            const badge = document.getElementById('filter-stats-badge');
+            if (badge) {
+                badge.innerText = `Đang hiển thị: ${count}/${total} nodes${focusNodeId ? ' [TIÊU ĐIỂM]' : ''}`;
+            }
+
+            if (currentGraphDimension === '2d') {
+                init2DGraph();
+            } else {
+                init3DGraph();
+            }
+
+            renderMatrixTable();
+            renderTilesGrid();
+        }
+
+        // =========================================================================
+        // PHÂN HỆ ĐỒ THỊ 2D (CYTOSCAPE) VÀ 3D (SPRITE TEXT LIVE LABELS & AUTO-RESIZE)
+        // =========================================================================
+        function setGraphDimension(dim) {
+            currentGraphDimension = dim;
+            const btn2D = document.getElementById('btn-graph-2d');
+            const btn3D = document.getElementById('btn-graph-3d');
+            const cyDiv = document.getElementById('cy');
+            const cy3DDiv = document.getElementById('3d-cy');
+
+            if (dim === '2d') {
+                btn2D.style.background = '#4f46e5';
+                btn3D.style.background = '#1e293b';
+                cyDiv.style.display = 'block';
+                cy3DDiv.style.display = 'none';
+                init2DGraph();
+            } else {
+                btn3D.style.background = '#06b6d4';
+                btn2D.style.background = '#1e293b';
+                cyDiv.style.display = 'none';
+                cy3DDiv.style.display = 'block';
+                init3DGraph();
+            }
+        }
+
+        function analyzeKnowledgeBase(sourceData = null) {
+            const dataToUse = sourceData || getFilteredNodes();
+            let elements = [];
+            let edgesTracker = new Set();
+            
+            for (let id in dataToUse) {
+                let node = dataToUse[id];
+                elements.push({
+                    group: 'nodes',
+                    data: { 
+                        id: id, 
+                        label: node.title, 
+                        type: (node.tags && node.tags[0]) ? node.tags[0] : '#chua_phan_loai',
+                        desc: node.content || '',
+                        color: node.colorHex || '#818cf8',
+                        nextReview: node.nextReview || getTodayISO(),
+                        efactor: node.efactor || 2.5,
+                        interval: node.interval || 0
+                    }
+                });
+            }
+
+            for (let id in dataToUse) {
+                let content = dataToUse[id].content || '';
+                let regex = /\[\[(.*?)\]\]/g;
+                let match;
+
+                while ((match = regex.exec(content)) !== null) {
+                    let targetName = match[1].trim();
+                    let targetId = findNodeId(targetName);
+
+                    if (targetId && targetId !== id && dataToUse[targetId]) {
+                        let edgeId = `${id}_to_${targetId}`;
+                        let inverseEdgeId = `${targetId}_to_${id}`;
+                        
+                        if (!edgesTracker.has(edgeId) && !edgesTracker.has(inverseEdgeId)) {
+                            elements.push({
+                                group: 'edges',
+                                data: { id: edgeId, source: id, target: targetId, relation: 'LINKED' }
+                            });
+                            edgesTracker.add(edgeId);
+                        }
+                    }
+                }
+            }
+            return elements;
+        }
+
+        function init2DGraph() {
+            if (typeof cytoscape === 'undefined') return;
+
+            if (cyInstance) {
+                try { cyInstance.destroy(); } catch (e) {}
+                cyInstance = null;
+            }
+
+            let graphElements = analyzeKnowledgeBase();
+            
+            cyInstance = cytoscape({
+                container: document.getElementById('cy'),
+                elements: graphElements,
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'label': 'data(label)',
+                            'background-color': 'data(color)',
+                            'color': '#f8fafc', 'font-size': '11px',
+                            'text-valign': 'center', 'text-halign': 'right', 'text-margin-x': '6px',
+                            'width': '20px', 'height': '20px',
+                            'border-width': 1.5, 'border-color': '#ffffff', 'border-opacity': 0.3
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 1.5, 'line-color': '#334155', 'target-arrow-color': '#334155',
+                            'target-arrow-shape': 'triangle', 'curve-style': 'bezier'
+                        }
+                    }
+                ],
+                layout: { name: 'cose', padding: 40, animate: false }
+            });
+
+            const panel = document.getElementById('xray-panel');
+            cyInstance.on('mouseover', 'node', function(evt){
+                let node = evt.target;
+                currentXrayNodeId = node.data('id');
+                document.getElementById('xray-tags').innerText = (node.data('type') || '#CHUA_PHAN_LOAI').toUpperCase();
+                document.getElementById('xray-sm2-info').innerText = `HẸN ÔN: ${node.data('nextReview')} (INT: ${node.data('interval')}d)`;
+                document.getElementById('xray-title').innerText = node.data('label') || '';
+                document.getElementById('xray-desc').innerHTML = formatContentWithMath(node.data('desc') || ''); renderMath(document.getElementById('xray-desc'));
+                document.getElementById('btn-xray-focus').innerText = (focusNodeId === currentXrayNodeId) ? 'Hủy Tiêu Điểm' : '🎯 Bật Tiêu Điểm';
+                panel.style.display = 'block';
+            });
+            cyInstance.on('mouseout', 'node', function(){
+                // Panel sẽ ẩn nếu không hover vào panel
+            });
+        }
+
+        // TỐI ƯU CORE ENGINE 3D: TIÊM SPRITE TEXT, CHỐNG CO CỤM BẰNG LỰC ĐẨY VẬT LÝ
+        function init3DGraph() {
+            if (typeof ForceGraph3D === 'undefined') {
+                console.warn('Thư viện ForceGraph3D chưa sẵn sàng.');
+                return;
+            }
+
+            const container = document.getElementById('3d-cy');
+            container.innerHTML = "";
+
+            const filteredData = getFilteredNodes();
+            const elements = analyzeKnowledgeBase(filteredData);
+            
+            const nodes = elements.filter(el => el.group === 'nodes').map(el => ({
+                id: el.data.id,
+                name: el.data.label,
+                tag: el.data.type,
+                desc: el.data.desc,
+                colorHex: el.data.color,
+                nextReview: el.data.nextReview,
+                interval: el.data.interval,
+                val: (el.data.type === '#master') ? 5.5 : 3.8
+            }));
+
+            const links = elements.filter(el => el.group === 'edges').map(el => ({
+                source: el.data.source,
+                target: el.data.target
+            }));
+
+            const panel = document.getElementById('xray-panel');
+
+            graph3DInstance = ForceGraph3D()(container)
+                .graphData({ nodes, links })
+                .backgroundColor('#000000')
+                .linkColor(() => '#334155')
+                .linkWidth(1.5)
+                // KỸ THUẬT TIÊM ĐỐI TƯỢNG THREE.JS: QUẢ CẦU MÀU SẮC + NHÃN CHỮ NỔI
+                .nodeThreeObject(node => {
+                    if (typeof THREE === 'undefined') return undefined;
+                    const group = new THREE.Group();
+
+                    const radius = node.val || 3.8;
+                    const geometry = new THREE.SphereGeometry(radius, 16, 16);
+                    const material = new THREE.MeshLambertMaterial({
+                        color: node.colorHex || '#3b82f6',
+                        transparent: true,
+                        opacity: 0.88
+                    });
+                    const sphere = new THREE.Mesh(geometry, material);
+                    group.add(sphere);
+
+                    if (typeof SpriteText !== 'undefined') {
+                        const sprite = new SpriteText(node.name);
+                        sprite.color = '#ffffff';
+                        sprite.textHeight = 3.2;
+                        sprite.backgroundColor = 'rgba(15, 23, 42, 0.75)';
+                        sprite.padding = 1.5;
+                        sprite.borderRadius = 3;
+                        sprite.position.y = radius + 4.0;
+                        group.add(sprite);
+                    }
+
+                    return group;
+                })
+                .onNodeHover(node => {
+                    if (node) {
+                        currentXrayNodeId = node.id;
+                        document.getElementById('xray-tags').innerText = (node.tag || '#CHUA_PHAN_LOAI').toUpperCase();
+                        document.getElementById('xray-sm2-info').innerText = `HẸN ÔN: ${node.nextReview} (INT: ${node.interval}d)`;
+                        document.getElementById('xray-title').innerText = node.name;
+                        document.getElementById('xray-desc').innerHTML = formatContentWithMath(node.desc || ''); renderMath(document.getElementById('xray-desc'));
+                        document.getElementById('btn-xray-focus').innerText = (focusNodeId === currentXrayNodeId) ? 'Hủy Tiêu Điểm' : '🎯 Bật Tiêu Điểm';
+                        panel.style.display = 'block';
+                    } else {
+                        // Giữ panel một chút
+                    }
+                })
+                .onNodeClick(node => {
+                    playSoundFX('flip');
+                    const distance = 45;
+                    const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+                    graph3DInstance.cameraPosition(
+                        { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+                        node,
+                        2200
+                    );
+                });
+
+            // TỐI ƯU HÓA LỰC ĐẨY VẬT LÝ D3 FORCE ĐỂ CÁC BONG BÓNG KHÔNG BAO GIỜ CHỒNG LÊN NHAU
+            try {
+                if (graph3DInstance.d3Force) {
+                    graph3DInstance.d3Force('charge').strength(-180);
+                    graph3DInstance.d3Force('link').distance(70);
+                }
+            } catch(e) {}
+
+            resize3DCanvas();
+        }
+
+        // =========================================================================
+        // XUẤT BÁO CÁO NGHIÊN CỨU TỔNG HỢP MARKDOWN (.MD)
+        // =========================================================================
+        function exportMarkdownReport() {
+            const elements = analyzeKnowledgeBase(knowledgeBase);
+            const edges = elements.filter(el => el.group === 'edges').map(el => el.data);
+            const todayStr = getTodayISO();
+            
+            let overdueCount = 0;
+            let totalEF = 0;
+            const ids = Object.keys(knowledgeBase);
+
+            ids.forEach(id => {
+                const n = knowledgeBase[id];
+                if (n.nextReview <= todayStr) overdueCount++;
+                totalEF += (n.efactor || 2.5);
+            });
+
+            const avgEF = ids.length ? (totalEF / ids.length).toFixed(2) : 2.5;
+
+            let md = `# BÁO CÁO TỔNG HỢP KHO TRI THỨC - NEXUSBRAIN OS\n\n`;
+            md += `> **Thời gian tạo:** ${new Date().toLocaleString('vi-VN')}  \n`;
+            md += `> **Thuật toán ghi nhớ:** SuperMemo (SM-2) Spaced Repetition  \n`;
+            md += `> **Không gian hiển thị:** 3D WebGL Live Labels + Sound FX + Security Shield\n\n`;
+            md += `---\n\n`;
+
+            md += `## I. BẢNG ĐIỀU KHIỂN & CHỈ SỐ TOÀN CỤC\n\n`;
+            md += `| Chỉ Số Nghiên Cứu | Giá Trị Thống Kê |\n`;
+            md += `| :--- | :--- |\n`;
+            md += `| 📚 **Tổng số khái niệm (Nodes)** | **${ids.length}** khái niệm |\n`;
+            md += `| 🔗 **Tổng số liên kết mạng lưới (Edges)** | **${edges.length}** liên kết |\n`;
+            md += `| ⚠️ **Số khái niệm cần ôn tập ngay** | **${overdueCount}** khái niệm |\n`;
+            md += `| 🧠 **Hệ số hấp thu trung bình (E-Factor)** | **${avgEF}** |\n\n`;
+
+            md += `## II. MA TRẬN LIÊN KẾT & LỊCH TRÌNH ÔN TẬP (SM-2 MATRIX)\n\n`;
+            md += `| Khái Niệm | Màu Sắc | Tags | Liên Kết Xuất | Trích Dẫn Đến | Chu Kỳ (Ngày) | Hệ Số EF | Ngày Hẹn Ôn | Trạng Thái |\n`;
+            md += `| :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n`;
+
+            for (let id in knowledgeBase) {
+                const node = knowledgeBase[id];
+                const outCount = edges.filter(e => e.source === id).length;
+                const inCount = edges.filter(e => e.target === id).length;
+                const isOverdue = node.nextReview <= todayStr;
+                const statusStr = isOverdue ? '⚠️ Cần ôn tập' : '✅ Đã nắm vững';
+
+                md += `| **${node.title}** | \`${node.colorHex || '#3b82f6'}\` | ${(node.tags || []).join(', ')} | ${outCount} | ${inCount} | ${node.interval || 0}d | ${Number(node.efactor || 2.5).toFixed(2)} | ${node.nextReview || todayStr} | ${statusStr} |\n`;
+            }
+
+            md += `\n## III. NỘI DUNG CHI TIẾT TỪNG NÚT TRI THỨC\n\n`;
+
+            for (let id in knowledgeBase) {
+                const node = knowledgeBase[id];
+                const outgoing = edges.filter(e => e.source === id).map(e => knowledgeBase[e.target]?.title || e.target);
+                const incoming = edges.filter(e => e.target === id).map(e => knowledgeBase[e.source]?.title || e.source);
+
+                md += `### 📄 ${node.title}\n\n`;
+                md += `- **Màu đại diện:** \`${node.colorHex || '#3b82f6'}\`\n`;
+                md += `- **Danh mục (Tags):** ${(node.tags || []).join(', ')}\n`;
+                md += `- **Chỉ số SM-2:** Chu kỳ: ${node.interval || 0} ngày | E-Factor: ${Number(node.efactor || 2.5).toFixed(2)} | Lần lặp: ${node.repetitions || 0}\n`;
+                md += `- **Ngày hẹn ôn tập tiếp theo:** \`${node.nextReview || todayStr}\`\n`;
+                md += `- **Liên kết xuất đi ([[...]]):** ${outgoing.length > 0 ? outgoing.map(t => `[[${t}]]`).join(', ') : 'Không có'}\n`;
+                md += `- **Được nhắc đến bởi (Backlinks):** ${incoming.length > 0 ? incoming.map(t => `[[${t}]]`).join(', ') : 'Chưa có trích dẫn'}\n\n`;
+                md += `**Trích lược nội dung nghiên cứu:**\n`;
+                md += `> ${node.content ? node.content.replace(/\n/g, '\n> ') : '*(Trống)*'}\n\n`;
+                md += `---\n\n`;
+            }
+
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `NexusBrain_BaoCao_NghienCuu_${todayStr}.md`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            playSoundFX('success');
+            showToast("📄 Đã xuất tệp Báo cáo nghiên cứu Markdown (.MD)!");
+        }
+
+        // =========================================================================
+        // THAO TÁC DỮ LIỆU CƠ BẢN (THÊM, XÓA, BATCH IMPORT, JSON)
+        // =========================================================================
+        function saveSingleNode() {
+            let title = document.getElementById('node-title').value.trim();
+            let content = document.getElementById('node-content').value;
+            let pickedColor = document.getElementById('node-color').value;
+            
+            if(!title) { alert("Vui lòng nhập tiêu đề khái niệm!"); return; }
+            
+            let id = normalizeId(title) || title.toLowerCase().replace(/\s+/g, '_');
+            let tags = content.match(/#[\p{L}\p{N}_-]+/gu) || ["#chua_phan_loai"];
+            
+            knowledgeBase[id] = {
+                title: title,
+                content: content,
+                tags: tags.map(t => t.toLowerCase()),
+                repetitions: 0,
+                interval: 0,
+                efactor: 2.5,
+                nextReview: getTodayISO(),
+                colorHex: pickedColor
+            };
+
+            saveToLocalStorage();
+            document.getElementById('node-title').value = "";
+            document.getElementById('node-content').value = "";
+            playSoundFX('success');
+            applyFiltersAndRefreshAll();
+            showToast("💾 Đã lưu Node mới với màu sắc tùy chọn!");
+        }
+
+        function triggerBatchImport() {
+            let text = document.getElementById('batch-content').value;
+            if(!text) { alert("Vui lòng dán nội dung đề cương nghiên cứu!"); return; }
+            
+            let regex = /\[\[(.*?)\]\]/g;
+            let match;
+            let count = 0;
+            const today = getTodayISO();
+
+            while ((match = regex.exec(text)) !== null) {
+                let name = match[1].trim();
+                let id = normalizeId(name) || name.toLowerCase().replace(/\s+/g, '_');
+                
+                if (!findNodeId(name)) {
+                    knowledgeBase[id] = {
+                        title: name,
+                        content: `Khái niệm được khởi tạo tự động dựa trên đề cương nghiên cứu [[00_Tổng_Quan_Đề_Tài]].`,
+                        tags: ["#chua_phan_loai"],
+                        repetitions: 0,
+                        interval: 0,
+                        efactor: 2.5,
+                        nextReview: today,
+                        colorHex: "#818cf8"
+                    };
+                    count++;
+                }
+            }
+            
+            saveToLocalStorage();
+            document.getElementById('batch-content').value = "";
+            playSoundFX('success');
+            applyFiltersAndRefreshAll();
+            alert(`🎉 Đã tự động phân tách cấu trúc và tạo nhanh ${count} Nodes mới vào đồ thị!`);
+        }
+
+        function deleteNode(id) {
+            if (!knowledgeBase[id]) return;
+            const nodeTitle = knowledgeBase[id].title;
+            if (confirm(`Bạn có chắc muốn xóa Node "${nodeTitle}"?`)) {
+                if (focusNodeId === id) focusNodeId = null;
+                delete knowledgeBase[id];
+                saveToLocalStorage();
+                playSoundFX('fail');
+                applyFiltersAndRefreshAll();
+                showToast(`🗑️ Đã xóa node "${nodeTitle}"!`);
+            }
+        }
+
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(knowledgeBase, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `nexusbrain_backup_${getTodayISO()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            playSoundFX('success');
+            showToast("📥 Đã xuất tệp sao lưu JSON thành công!");
+        }
+
+        function handleImportJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (imported && typeof imported === 'object') {
+                        knowledgeBase = imported;
+                        saveToLocalStorage();
+                        applyFiltersAndRefreshAll();
+                        playSoundFX('success');
+                        showToast("📤 Đã khôi phục dữ liệu từ tệp JSON!");
+                    } else {
+                        playSoundFX('fail');
+                        showToast("Định dạng tệp JSON không hợp lệ!", true);
+                    }
+                } catch (err) {
+                    playSoundFX('fail');
+                    showToast("Lỗi khi phân tích tệp JSON!", true);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function resetToDefaultData() {
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ ghi chú hiện tại và đưa về dữ liệu mẫu ban đầu?")) {
+                knowledgeBase = JSON.parse(JSON.stringify(DEFAULT_KNOWLEDGE_BASE));
+                focusNodeId = null;
+                saveToLocalStorage();
+                applyFiltersAndRefreshAll();
+                playSoundFX('fail');
+                showToast("🔄 Đã khôi phục dữ liệu mẫu ban đầu!");
+            }
+        }
+
+        // =========================================================================
+        // HIỂN THỊ BASE VIEW VÀ TILES VIEW
+        // =========================================================================
+        function renderMatrixTable() {
+            let tbody = document.getElementById('matrix-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = "";
+            
+            const filteredData = getFilteredNodes();
+            let elements = analyzeKnowledgeBase(knowledgeBase);
+            let edges = elements.filter(el => el.group === 'edges').map(el => el.data);
+            const todayStr = getTodayISO();
+
+            for (let id in filteredData) {
+                let node = filteredData[id];
+                let outgoing = edges.filter(e => e.source === id).length;
+                let incoming = edges.filter(e => e.target === id).length;
+                let isOverdue = !node.nextReview || node.nextReview <= todayStr;
+                let color = node.colorHex || '#818cf8';
+
+                let tr = document.createElement('tr');
+                tr.style.borderBottom = "1px solid #1e293b";
+                tr.innerHTML = `
+                    <td style="padding: 10px; font-weight:600; color:${color};">
+                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${color}; margin-right:6px;"></span>
+                        ${escapeHtml(node.title)}
+                    </td>
+                    <td style="padding: 10px; font-family: monospace; font-size: 11px; color:${color};">${color}</td>
+                    <td style="padding: 10px; color:#94a3b8;">${escapeHtml((node.tags || []).join(', '))}</td>
+                    <td style="padding: 10px; text-align: center;">${outgoing} / ${incoming}</td>
+                    <td style="padding: 10px; text-align: center; color:#38bdf8;">${node.interval || 0} ngày</td>
+                    <td style="padding: 10px; text-align: center;">${Number(node.efactor || 2.5).toFixed(2)}</td>
+                    <td style="padding: 10px;">
+                        <span class="${isOverdue ? 'badge-overdue' : 'badge-future'}">
+                            ${isOverdue ? '⚠️ ' : '🗓️ '}${node.nextReview || todayStr}
+                        </span>
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <button onclick="toggleFocusMode('${id}')" style="background:#6366f1; border:none; color:#fff; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer; margin-right:4px;">Tiêu điểm</button>
+                        <button onclick="startReviewNode('${id}')" style="background:#4f46e5; border:none; color:#fff; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">Ôn ngay</button>
+                        <button onclick="deleteNode('${id}')" style="background:none; border:none; color:#f43f5e; padding:4px 8px; font-size:10px; cursor:pointer;">Xóa</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function renderTilesGrid() {
+            let grid = document.getElementById('tiles-grid');
+            if (!grid) return;
+            grid.innerHTML = "";
+            const filteredData = getFilteredNodes();
+            const ids = Object.keys(filteredData);
+            document.getElementById('tiles-count').innerText = `Tổng số: ${ids.length} nodes`;
+            const todayStr = getTodayISO();
+
+            for (let id in filteredData) {
+                let node = filteredData[id];
+                let isOverdue = !node.nextReview || node.nextReview <= todayStr;
+                let color = node.colorHex || '#818cf8';
+
+                let card = document.createElement('div');
+                card.style.background = "rgba(15, 23, 42, 0.4)";
+                card.style.border = "1px solid #1e293b";
+                card.style.borderLeft = `4px solid ${color}`;
+                card.style.borderRadius = "8px";
+                card.style.padding = "16px";
+                card.style.display = "flex";
+                card.style.flexDirection = "column";
+                card.style.justifyContent = "space-between";
+                
+                card.innerHTML = `
+                    <div>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                            <h5 style="font-size:14px; color:${color}; font-weight:600;">📄 ${escapeHtml(node.title)}</h5>
+                            <span class="${isOverdue ? 'badge-overdue' : 'badge-future'}">${node.nextReview || todayStr}</span>
+                        </div>
+                        <div style="font-size:10px; color:#64748b; margin-bottom:8px;">Tags: ${escapeHtml((node.tags || []).join(', '))}</div>
+                        <div style="font-size:12px; color:#cbd5e1; line-height:1.6; background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; max-height:180px; overflow-y:auto;">${formatContentWithMath(node.content || '')}</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:10px; color:#64748b; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                        <span>INT: ${node.interval || 0}d | EF: ${Number(node.efactor || 2.5).toFixed(2)}</span>
+                        <div style="display:flex; gap:6px;">
+                            <button onclick="toggleFocusMode('${id}')" style="background:#6366f1; border:none; color:#fff; padding:2px 8px; border-radius:4px; cursor:pointer;">Tiêu điểm</button>
+                            <button onclick="startReviewNode('${id}')" style="background:#334155; border:none; color:#a5b4fc; padding:2px 8px; border-radius:4px; cursor:pointer;">Ôn tập</button>
+                            <button onclick="deleteNode('${id}')" style="background:none; border:none; color:#f43f5e; cursor:pointer;">🗑️</button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            }
+            renderMath(grid);
+        }
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            const targetContent = document.getElementById(tabId);
+            if (targetContent) targetContent.classList.add('active');
+            
+            if (btnElement) {
+                btnElement.classList.add('active');
+            } else {
+                const tabIds = ['graph-view', 'base-view', 'tiles-view', 'quiz-view'];
+                const idx = tabIds.indexOf(tabId);
+                const buttons = document.querySelectorAll('.tab-btn');
+                if (idx >= 0 && buttons[idx]) buttons[idx].classList.add('active');
+            }
+
+            playSoundFX('flip');
+
+            if (tabId === 'base-view') renderMatrixTable();
+            if (tabId === 'tiles-view') renderTilesGrid(); renderMath();
+            if (tabId === 'quiz-view') updateQuizModule();
+            if (tabId === 'graph-view') {
+                if (currentGraphDimension === '2d' && cyInstance) {
+                    setTimeout(() => { cyInstance.resize(); cyInstance.fit(); }, 50);
+                } else if (currentGraphDimension === '3d') {
+                    setTimeout(resize3DCanvas, 50);
+                }
+            }
+        }
+
+        // =========================================================================
+        // PHÂN HỆ FLASHCARD & QUIZ TRẮC NGHIỆM VỚI SM-2 RATING & SOUND FX
+        // =========================================================================
+        let quizMode = 'flashcard';
+        let flashcards = [];
+        let currentFlashcardIndex = 0;
+        let isFlipped = false;
+        let onlyOverdueCards = false;
+
+        let mcqQuestions = [];
+        let currentMCQIndex = 0;
+        let mcqScore = 0;
+        let isAnswered = false;
+
+        function setQuizMode(mode) {
+            quizMode = mode;
+            const btnFlashcard = document.getElementById('btn-mode-flashcard');
+            const btnMCQ = document.getElementById('btn-mode-mcq');
+            const boxFlashcard = document.getElementById('quiz-flashcard-container');
+            const boxMCQ = document.getElementById('quiz-mcq-container');
+
+            playSoundFX('flip');
+
+            if (mode === 'flashcard') {
+                btnFlashcard.style.background = '#4f46e5';
+                btnMCQ.style.background = '#1e293b';
+                boxFlashcard.style.display = 'flex';
+                boxMCQ.style.display = 'none';
+                renderFlashcard();
+            } else {
+                btnMCQ.style.background = '#4f46e5';
+                btnFlashcard.style.background = '#1e293b';
+                boxFlashcard.style.display = 'none';
+                boxMCQ.style.display = 'flex';
+                if (mcqQuestions.length === 0) generateMCQQuiz();
+                renderMCQ();
+            }
+        }
+
+        function updateQuizModule() {
+            initFlashcards();
+            if (quizMode === 'flashcard') {
+                renderFlashcard();
+            } else {
+                renderMCQ();
+            }
+        }
+
+        function toggleOnlyOverdueCards(val) {
+            onlyOverdueCards = val;
+            initFlashcards();
+            renderFlashcard();
+        }
+
+        function initFlashcards() {
+            flashcards = [];
+            const todayStr = getTodayISO();
+            for (let id in knowledgeBase) {
+                const node = knowledgeBase[id];
+                if (onlyOverdueCards && node.nextReview > todayStr) continue;
+                flashcards.push({ id: id, ...node });
+            }
+            if (currentFlashcardIndex >= flashcards.length) currentFlashcardIndex = 0;
+        }
+
+        function shuffleFlashcards() {
+            for (let i = flashcards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [flashcards[i], flashcards[j]] = [flashcards[j], flashcards[i]];
+            }
+            currentFlashcardIndex = 0;
+            isFlipped = false;
+            playSoundFX('flip');
+            renderFlashcard();
+            showToast("🔀 Đã xáo trộn danh sách thẻ ghi nhớ!");
+        }
+
+        function flipFlashcard() {
+            isFlipped = !isFlipped;
+            playSoundFX('flip');
+            renderFlashcard();
+        }
+
+        function prevFlashcard() {
+            if (flashcards.length === 0) return;
+            currentFlashcardIndex = (currentFlashcardIndex - 1 + flashcards.length) % flashcards.length;
+            isFlipped = false;
+            playSoundFX('flip');
+            renderFlashcard();
+        }
+
+        function nextFlashcard() {
+            if (flashcards.length === 0) return;
+            currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcards.length;
+            isFlipped = false;
+            playSoundFX('flip');
+            renderFlashcard();
+        }
+
+        function renderFlashcard() {
+            initFlashcards();
+            const controls = document.getElementById('flashcard-sm2-controls');
+
+            if (flashcards.length === 0) {
+                document.getElementById('flashcard-counter').innerText = '0 / 0';
+                document.getElementById('flashcard-title').innerText = 'Không có thẻ nào phù hợp';
+                document.getElementById('flashcard-body').innerText = onlyOverdueCards 
+                    ? '🎉 Tuyệt vời! Bạn không còn khái niệm nào bị quá hạn ôn tập hôm nay.' 
+                    : 'Vui lòng thêm Node ở Tab Graph View để bắt đầu học.';
+                document.getElementById('flashcard-sm2-badge').innerText = '';
+                controls.style.display = 'none';
+                return;
+            }
+
+            const card = flashcards[currentFlashcardIndex];
+            document.getElementById('flashcard-counter').innerText = `Thẻ ${currentFlashcardIndex + 1} / ${flashcards.length}`;
+            
+            const badge = document.getElementById('flashcard-badge');
+            const sm2Badge = document.getElementById('flashcard-sm2-badge');
+            const title = document.getElementById('flashcard-title');
+            const body = document.getElementById('flashcard-body');
+            const color = card.colorHex || '#818cf8';
+
+            const todayStr = getTodayISO();
+            const isOverdue = card.nextReview <= todayStr;
+
+            sm2Badge.innerHTML = `<span class="${isOverdue ? 'badge-overdue' : 'badge-future'}">Hẹn: ${card.nextReview || todayStr} (Chu kỳ: ${card.interval || 0}d | EF: ${Number(card.efactor || 2.5).toFixed(2)})</span>`;
+
+            if (!isFlipped) {
+                badge.innerText = 'MẶT TRƯỚC (KHÁI NIỆM & DANH MỤC)';
+                badge.style.color = color;
+                title.style.color = color;
+                title.innerText = `📄 ${card.title}`;
+                body.innerHTML = `
+                    <div style="margin-top:12px; font-size:12px; color:#64748b;">Thẻ phân loại: <span style="color:#38bdf8;">${(card.tags || []).join(', ')}</span></div>
+                    <div style="margin-top:18px; color:#94a3b8; font-style:italic;">Khái niệm này có nội dung gì và liên kết chéo với những phần nào?<br><b>(Nhấp để lật mặt sau xem đáp án)</b></div>
+                `;
+                controls.style.display = 'none';
+            } else {
+                badge.innerText = 'MẶT SAU (NỘI DUNG & LIÊN KẾT NGỮ NGHĨA)';
+                badge.style.color = '#10b981';
+                title.style.color = '#f8fafc';
+                title.innerText = `💡 ${card.title}`;
+                body.innerHTML = `
+                    <div style="text-align:left; background:rgba(0,0,0,0.3); padding:14px; border-radius:6px; border:1px solid #1e293b; color:#e2e8f0; line-height:1.6; font-size:13px; border-left: 3px solid ${color};">
+                        ${formatContentWithMath(card.content || '')}
+                    </div>
+                `;
+                controls.style.display = 'block';
+            }
+            renderMath(document.getElementById('flashcard-body'));
+        }
+
+        function rateCurrentCardSM2(quality) {
+            if (flashcards.length === 0) return;
+            const currentCard = flashcards[currentFlashcardIndex];
+            const node = knowledgeBase[currentCard.id];
+            if (!node) return;
+
+            const res = calculateSM2(
+                quality,
+                node.repetitions || 0,
+                node.interval || 0,
+                node.efactor || 2.5
+            );
+
+            let nextDate = new Date();
+            nextDate.setDate(nextDate.getDate() + res.interval);
+            const nextReviewStr = nextDate.toISOString().split('T')[0];
+
+            node.repetitions = res.repetitions;
+            node.interval = res.interval;
+            node.efactor = res.efactor;
+            node.nextReview = nextReviewStr;
+
+            saveToLocalStorage();
+
+            if (quality >= 3) {
+                playSoundFX('success');
+            } else {
+                playSoundFX('fail');
+            }
+
+            showToast(`📅 Đã lên lịch ôn tập tiếp theo sau ${res.interval} ngày (${nextReviewStr})!`);
+            nextFlashcard();
+        }
+
+        function startReviewNode(id) {
+            const node = knowledgeBase[id];
+            if (!node) return;
+            switchTab('quiz-view');
+            setQuizMode('flashcard');
+            initFlashcards();
+            const idx = flashcards.findIndex(f => f.id === id);
+            if (idx >= 0) {
+                currentFlashcardIndex = idx;
+                isFlipped = false;
+                renderFlashcard();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (document.getElementById('quiz-view').classList.contains('active') && quizMode === 'flashcard') {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    flipFlashcard();
+                } else if (e.code === 'ArrowRight') {
+                    nextFlashcard();
+                } else if (e.code === 'ArrowLeft') {
+                    prevFlashcard();
+                } else if (isFlipped) {
+                    if (e.key === '0') rateCurrentCardSM2(0);
+                    if (e.key === '3') rateCurrentCardSM2(3);
+                    if (e.key === '5') rateCurrentCardSM2(5);
+                }
+            }
+        });
+
+        // =========================================================================
+        // THUẬT TOÁN SINH TRẮC NGHIỆM MCQ TỰ ĐỘNG KÈM ÂM THANH
+        // =========================================================================
+        function generateMCQQuiz() {
+            const allNodes = Object.values(knowledgeBase);
+            if (allNodes.length < 2) {
+                mcqQuestions = [];
+                renderMCQ();
+                return;
+            }
+
+            mcqQuestions = [];
+            currentMCQIndex = 0;
+            mcqScore = 0;
+            isAnswered = false;
+
+            allNodes.forEach(node => {
+                const nodeId = findNodeId(node.title);
+
+                if (node.content && node.content.length > 10) {
+                    let cleanContent = node.content.replace(/\[\[(.*?)\]\]/g, '$1').replace(/#[\p{L}\p{N}_-]+/gu, '').trim();
+                    let distractors = allNodes.filter(n => n.title !== node.title).map(n => n.title);
+                    distractors = shuffleArray(distractors).slice(0, 3);
+                    let options = shuffleArray([node.title, ...distractors]);
+
+                    mcqQuestions.push({
+                        nodeId: nodeId,
+                        typeBadge: "ĐỊNH NGHĨA & NỘI DUNG",
+                        question: `Khái niệm hoặc đối tượng nào được mô tả trong đoạn nội dung sau:\n"${cleanContent.slice(0, 180)}${cleanContent.length > 180 ? '...' : ''}"?`,
+                        options: options,
+                        correctAnswer: node.title,
+                        explanation: `Khái niệm chính xác là "${node.title}".`
+                    });
+                }
+
+                let linkRegex = /\[\[(.*?)\]\]/g;
+                let match;
+                let links = [];
+                while ((match = linkRegex.exec(node.content || '')) !== null) {
+                    let targetName = match[1].trim();
+                    if (findNodeId(targetName)) links.push(targetName);
+                }
+
+                if (links.length > 0) {
+                    let correctLink = links[Math.floor(Math.random() * links.length)];
+                    let nonLinks = allNodes.filter(n => n.title !== node.title && !links.includes(n.title)).map(n => n.title);
+                    if (nonLinks.length >= 2) {
+                        let distractors = shuffleArray(nonLinks).slice(0, 3);
+                        let options = shuffleArray([correctLink, ...distractors]);
+
+                        mcqQuestions.push({
+                            nodeId: nodeId,
+                            typeBadge: "LIÊN KẾT MẠNG LƯỚI TRI THỨC",
+                            question: `Trong sơ đồ tri thức, khái niệm "${node.title}" có liên kết trực tiếp với khái niệm nào dưới đây?`,
+                            options: options,
+                            correctAnswer: correctLink,
+                            explanation: `Khái niệm "${node.title}" liên kết đến [[${correctLink}]].`
+                        });
+                    }
+                }
+            });
+
+            mcqQuestions = shuffleArray(mcqQuestions).slice(0, 8);
+            renderMCQ();
+        }
+
+        function shuffleArray(arr) {
+            let res = [...arr];
+            for (let i = res.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [res[i], res[j]] = [res[j], res[i]];
+            }
+            return res;
+        }
+
+        function renderMCQ() {
+            const container = document.getElementById('mcq-options');
+            const progress = document.getElementById('mcq-progress');
+            const scoreDisplay = document.getElementById('mcq-score-display');
+            const typeBadge = document.getElementById('mcq-type-badge');
+            const qText = document.getElementById('mcq-question-text');
+            const expl = document.getElementById('mcq-explanation');
+            const btnNext = document.getElementById('btn-next-question');
+            const sm2Scoring = document.getElementById('mcq-sm2-scoring');
+
+            container.innerHTML = '';
+            expl.style.display = 'none';
+            btnNext.style.display = 'none';
+            sm2Scoring.style.display = 'none';
+            isAnswered = false;
+
+            scoreDisplay.innerText = `Điểm số: ${mcqScore}`;
+
+            if (mcqQuestions.length === 0) {
+                progress.innerText = '0 / 0';
+                typeBadge.innerText = 'CẦN THÊM DỮ LIỆU';
+                qText.innerText = 'Chưa có đủ dữ liệu để tạo bộ câu hỏi trắc nghiệm. Vui lòng thêm ít nhất 2 Node có nội dung và liên kết [[...]].';
+                return;
+            }
+
+            if (currentMCQIndex >= mcqQuestions.length) {
+                progress.innerText = `Hoàn thành`;
+                typeBadge.innerText = 'KẾT QUẢ BÀI THI';
+                qText.innerHTML = `🎉 Bạn đã hoàn thành bài kiểm tra!<br><br>Điểm số chung cuộc: <b style="color:#10b981; font-size:20px;">${mcqScore} / ${mcqQuestions.length}</b> câu đúng (${Math.round((mcqScore / mcqQuestions.length) * 100)}%).`;
+                document.getElementById('btn-restart-quiz').style.background = '#4f46e5';
+                playSoundFX('success');
+                return;
+            }
+
+            const q = mcqQuestions[currentMCQIndex];
+            progress.innerText = `Câu hỏi ${currentMCQIndex + 1} / ${mcqQuestions.length}`;
+            typeBadge.innerText = q.typeBadge;
+            qText.innerHTML = formatContentWithMath(q.question);
+
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'quiz-option-btn';
+                const prefix = String.fromCharCode(65 + idx);
+                btn.innerHTML = `<span style="font-weight:700; color:#818cf8; width:20px;">${prefix}.</span> <span>${formatContentWithMath(opt)}</span>`;
+                btn.onclick = () => selectAnswer(btn, opt, q);
+                container.appendChild(btn);
+            });
+            renderMath(document.getElementById('quiz-mcq-container'));
+        }
+
+        function selectAnswer(btn, selectedOpt, questionObj) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const allButtons = document.querySelectorAll('.quiz-option-btn');
+            const isCorrect = (selectedOpt === questionObj.correctAnswer);
+
+            allButtons.forEach(b => {
+                b.disabled = true;
+                if (b.innerText.includes(questionObj.correctAnswer)) {
+                    b.classList.add('correct');
+                }
+            });
+
+            if (isCorrect) {
+                btn.classList.add('correct');
+                mcqScore++;
+                document.getElementById('mcq-score-display').innerText = `Điểm số: ${mcqScore}`;
+                playSoundFX('success');
+            } else {
+                btn.classList.add('wrong');
+                playSoundFX('fail');
+            }
+
+            const expl = document.getElementById('mcq-explanation');
+            expl.style.display = 'block';
+            expl.innerHTML = `<b>${isCorrect ? '✅ Chính xác!' : '❌ Chưa chính xác!'}</b> ${formatContentWithMath(questionObj.explanation)}`; renderMath(expl);
+
+            if (questionObj.nodeId && knowledgeBase[questionObj.nodeId]) {
+                document.getElementById('mcq-sm2-scoring').style.display = 'block';
+            }
+
+            const btnNext = document.getElementById('btn-next-question');
+            btnNext.style.display = 'inline-block';
+            btnNext.innerText = (currentMCQIndex + 1 >= mcqQuestions.length) ? 'Xem kết quả bài thi 🏁' : 'Câu tiếp theo ➡️';
+        }
+
+        function rateCurrentMCQNode(quality) {
+            const q = mcqQuestions[currentMCQIndex];
+            if (!q || !q.nodeId || !knowledgeBase[q.nodeId]) return;
+
+            const node = knowledgeBase[q.nodeId];
+            const res = calculateSM2(quality, node.repetitions || 0, node.interval || 0, node.efactor || 2.5);
+            let nextDate = new Date();
+            nextDate.setDate(nextDate.getDate() + res.interval);
+            const nextReviewStr = nextDate.toISOString().split('T')[0];
+
+            node.repetitions = res.repetitions;
+            node.interval = res.interval;
+            node.efactor = res.efactor;
+            node.nextReview = nextReviewStr;
+
+            saveToLocalStorage();
+            if (quality >= 3) playSoundFX('success'); else playSoundFX('fail');
+            showToast(`📅 Đã cập nhật lịch SM-2 cho "${node.title}": hẹn sau ${res.interval} ngày!`);
+            document.getElementById('mcq-sm2-scoring').style.display = 'none';
+        }
+
+        function nextQuestion() {
+            currentMCQIndex++;
+            playSoundFX('flip');
+            renderMCQ();
+        }
+
+        // =========================================================================
+        // KHỞI CHẠY HỆ THỐNG KHI TẢI TRANG
+        // =========================================================================
+        window.onload = function() {
+            checkInitialLockStatus();
+            applyFiltersAndRefreshAll();
+        };
+    </script>
+</body>
+</html>
