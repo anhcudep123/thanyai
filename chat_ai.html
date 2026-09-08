@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ Trợ lý AI Phân tích Tài liệu Bảo mật (NotebookLM Edition)</title>
+    <!-- Phông chữ Inter & Thư viện Markdown Renderer -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { display: flex; height: 100vh; background-color: #f7f9fb; color: #2d3748; overflow: hidden; }
+        
+        /* SIDEBAR KHUNG ĐIỀU KHIỂN */
+        .sidebar { width: 330px; background-color: #1e1e2e; color: #fff; padding: 20px; display: flex; flex-direction: column; gap: 14px; border-right: 1px solid #2d2d3f; overflow-y: auto; flex-shrink: 0; }
+        .sidebar h2 { font-size: 1.15rem; font-weight: 600; color: #c3e88d; border-bottom: 1px solid #2d2d3f; padding-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 0.8rem; color: #a6accd; font-weight: 500; }
+        .form-group input, .form-group select { width: 100%; padding: 8px 10px; background-color: #2b2b3d; border: 1px solid #3f3f56; color: #fff; border-radius: 6px; font-size: 0.86rem; transition: border-color 0.2s; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #82aaff; }
+        .slider-container { display: flex; align-items: center; gap: 10px; }
+        .slider-val { font-size: 0.85rem; color: #ffcb6b; font-weight: 600; min-width: 25px; }
+        
+        /* CÁC NÚT ĐIỀU HÀNH SIDEBAR */
+        .btn-artifact { background: linear-gradient(135deg, #7928ca, #ff0080); color: #fff; border: none; border-radius: 8px; padding: 11px; cursor: pointer; font-weight: 600; font-size: 0.88rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(121, 40, 202, 0.3); transition: transform 0.15s, opacity 0.2s; }
+        .btn-artifact:hover { opacity: 0.95; transform: translateY(-1px); }
+        .btn-secondary-action { background-color: #2b2b3d; border: 1px solid #3f3f56; color: #a6accd; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; width: 100%; text-align: center; transition: all 0.2s; }
+        .btn-secondary-action:hover { background-color: #3f3f56; color: #fff; }
+        
+        /* KHU VỰC NỘI DUNG CHÍNH (MAIN CHAT) */
+        .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; position: relative; min-width: 0; }
+        .header { background-color: #fff; padding: 14px 22px; border-bottom: 1px solid #e5e9f0; display: flex; justify-content: space-between; align-items: center; }
+        .header-title h1 { font-size: 1.1rem; font-weight: 600; color: #1a202c; }
+        .header-title p { font-size: 0.78rem; color: #718096; margin-top: 2px; }
+        .status-badge { font-size: 0.8rem; padding: 5px 12px; border-radius: 20px; background-color: #edf2f7; color: #4a5568; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+        
+        /* KHÔNG GIAN CUỘC TRÒ CHUYỆN */
+        .chat-area { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+        .message { display: flex; gap: 14px; max-width: 88%; animation: fadeIn 0.2s ease; }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
+        .message.assistant { align-self: flex-start; }
+        .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .message.user .avatar { background-color: #e2e8f0; }
+        .message.assistant .avatar { background-color: #e6fffa; color: #234e52; }
+        .message-content-wrapper { display: flex; flex-direction: column; gap: 4px; max-width: 100%; }
+        .bubble { padding: 14px 18px; border-radius: 12px; line-height: 1.6; font-size: 0.92rem; word-break: break-word; }
+        .message.user .bubble { background-color: #0d6efd; color: #fff; border-top-right-radius: 2px; }
+        .message.assistant .bubble { background-color: #fff; color: #1a202c; border-top-left-radius: 2px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        
+        /* BUBBLE MARKDOWN FORMATTING */
+        .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin-top: 12px; margin-bottom: 6px; color: #1a202c; }
+        .bubble h1 { font-size: 1.25rem; }
+        .bubble h2 { font-size: 1.1rem; }
+        .bubble h3 { font-size: 1.0rem; }
+        .bubble p { margin-bottom: 8px; }
+        .bubble ul, .bubble ol { margin-left: 20px; margin-bottom: 8px; }
+        .bubble li { margin-bottom: 4px; }
+        .bubble code { background: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #d63384; }
+        .bubble pre { background: #1e1e2e; color: #f8f8f2; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 10px 0; font-family: monospace; font-size: 0.85em; }
+        .bubble pre code { background: none; color: inherit; padding: 0; }
+        .bubble blockquote { border-left: 4px solid #0d6efd; padding-left: 10px; margin: 8px 0; color: #4a5568; font-style: italic; }
+        .bubble table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 0.88rem; }
+        .bubble th, .bubble td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+        .bubble th { background-color: #f7fafc; font-weight: 600; }
+        .bubble-actions { display: flex; gap: 8px; align-self: flex-start; margin-top: 2px; }
+        .btn-copy { background: none; border: none; font-size: 0.75rem; color: #718096; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+        .btn-copy:hover { background-color: #edf2f7; color: #2d3748; }
+        
+        /* THANH GỢI Ý NHANH (QUICK PROMPTS) */
+        .quick-chips { display: flex; gap: 8px; padding: 6px 20px; background-color: #fff; border-top: 1px solid #f0f2f5; overflow-x: auto; white-space: nowrap; }
+        .chip { font-size: 0.78rem; background-color: #f1f5f9; color: #475569; padding: 5px 12px; border-radius: 16px; cursor: pointer; border: 1px solid #e2e8f0; transition: all 0.15s; }
+        .chip:hover { background-color: #e2e8f0; color: #1e293b; border-color: #cbd5e1; }
+        
+        /* KHUNG NHẬP LIỆU (INPUT AREA) */
+        .input-area { background-color: #fff; padding: 14px 20px; border-top: 1px solid #e5e9f0; display: flex; gap: 10px; align-items: center; }
+        .input-area textarea { flex: 1; height: 44px; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; resize: none; font-size: 0.92rem; max-height: 120px; transition: border-color 0.2s; }
+        .input-area textarea:focus { outline: none; border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1); }
+        .btn-send { padding: 0 22px; height: 44px; background-color: #0d6efd; color: #fff; border: none; border-radius: 8px; font-weight: 500; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
+        .btn-send:hover { background-color: #0b5ed7; }
+        .btn-send:disabled { background-color: #cbd5e1; cursor: not-allowed; }
+
+        /* NATIVE ARTIFACT MODAL (NOTEBOOKLM DYNAMIC UI) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(3px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-box { background-color: #1a1a24; color: #f1f5f9; width: 660px; max-width: 95vw; max-height: 90vh; border-radius: 12px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 14px; position: relative; border: 1px solid #33334d; overflow-y: auto; }
+        .modal-header { font-size: 1.15rem; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #2d2d3f; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header span { color: #f8fafc; }
+        .modal-close { cursor: pointer; font-size: 1.3rem; color: #94a3b8; transition: color 0.15s; }
+        .modal-close:hover { color: #fff; }
+        
+        /* Grid Type Cards */
+        .artifact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .artifact-card { background-color: #242433; border: 1px solid #38384f; border-radius: 8px; padding: 12px 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; transition: all 0.2s; }
+        .artifact-card:hover { border-color: #4f4f6f; background-color: #2c2c3d; }
+        .artifact-card.selected { background-color: #3b2a3a; border-color: #ff6584; box-shadow: 0 0 12px rgba(255, 101, 132, 0.2); }
+        .artifact-card .title { font-weight: 600; font-size: 0.88rem; color: #f1f5f9; }
+        .artifact-card .desc { font-size: 0.72rem; color: #94a3b8; line-height: 1.2; }
+        
+        .modal-group { display: flex; flex-direction: column; gap: 6px; }
+        .modal-group label { font-size: 0.8rem; color: #cbd5e1; font-weight: 500; }
+        .modal-group select, .modal-group input, .modal-group textarea { background-color: #242433; border: 1px solid #38384f; padding: 9px 12px; color: #fff; border-radius: 6px; font-size: 0.86rem; }
+        .modal-group select:focus, .modal-group input:focus, .modal-group textarea:focus { outline: none; border-color: #ff6584; }
+        .modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        
+        .btn-generate { background: linear-gradient(135deg, #ff6584, #c0392b); color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; margin-top: 6px; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-generate:hover { opacity: 0.92; }
+
+        .spinner { border: 2px solid #f3f3f3; border-top: 2px solid #0d6efd; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <!-- 1. SIDEBAR CẤU HÌNH -->
+    <div class="sidebar">
+        <h2>🛡️ Cấu hình Hệ thống</h2>
+        
+        <div class="form-group">
+            <label for="apiKey">Google API Key:</label>
+            <input type="password" id="apiKey" placeholder="Dán API Key Gemini tại đây...">
+        </div>
+        
+        <div class="form-group">
+            <label for="modelOption">Mô hình xử lý:</label>
+            <select id="modelOption">
+                <option value="gemini-3.8-flash" selected>gemini-3.8-flash (Siêu tốc & Mới nhất)</option>
+                <option value="gemini-3.8-pro">gemini-3.8-pro (Chuyên sâu & Chuẩn xác)</option>
+                <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="roleOption">Vai trò Chuyên gia (Persona):</label>
+            <select id="roleOption">
+                <option value="default">🤖 Trợ lý Đa năng (Mặc định)</option>
+                <option value="finance">📊 Chuyên gia Tài chính & Đầu tư</option>
+                <option value="legal">⚖️ Cố vấn Pháp lý & Tuân thủ</option>
+                <option value="education">🎓 Giảng viên & Nhà nghiên cứu</option>
+                <option value="tech">💻 Chuyên gia Công nghệ / CTO</option>
+                <option value="medical">🩺 Bác sĩ & Chuyên gia Y khoa</option>
+                <option value="translator">🌐 Biên dịch viên Bản địa Cao cấp</option>
+                <option value="marketing">✍️ Chuyên gia Sáng tạo & Marketing</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Độ sáng tạo (Temperature):</label>
+            <div class="slider-container">
+                <input type="range" id="temperature" min="0" max="2" value="0.2" step="0.1" oninput="document.getElementById('tempVal').innerText = this.value">
+                <span class="slider-val" id="tempVal">0.2</span>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="fileInput">Nạp tài liệu bảo mật (PDF/TXT/MD):</label>
+            <input type="file" id="fileInput" accept=".pdf,.txt,.md">
+        </div>
+        
+        <!-- NÚT MỞ BẢNG NOTEBOOKLM ARTIFACT STUDIO -->
+        <button class="btn-artifact" onclick="toggleModal(true)">✨ Generate Artifact Studio</button>
+        <button class="btn-secondary-action" id="btnExport" onclick="exportChatHistory()" style="display: none;">📥 Xuất toàn bộ phiên làm việc (.txt)</button>
+        <button class="btn-secondary-action" onclick="clearChat()">🗑️ Xóa sạch lịch sử chat</button>
+        
+        <div style="margin-top: auto; font-size: 0.72rem; color: #8888a0; line-height: 1.4; border-top: 1px solid #2d2d3f; padding-top: 10px;">
+            🛡️ <strong>Bảo mật Stateless:</strong> Dữ liệu truyền trực tiếp qua HTTPS tới Google. Không qua máy chủ trung gian, không lưu trữ trên mây.
+        </div>
+    </div>
+
+    <!-- 2. KHÔNG GIAN NỘI DUNG CHÍNH -->
+    <div class="main-content">
+        <div class="header">
+            <div class="header-title">
+                <h1>🛡️ Trợ lý AI Phân tích Tài liệu Bảo mật (NotebookLM Web Edition)</h1>
+                <p>Phân tích sâu, trích xuất cấu trúc đa dạng và trò chuyện thông minh với tài liệu</p>
+            </div>
+            <div class="status-badge" id="statusBadge">Chưa nạp tài liệu</div>
+        </div>
+        
+        <div class="chat-area" id="chatArea">
+            <div class="message assistant">
+                <div class="avatar">🤖</div>
+                <div class="message-content-wrapper">
+                    <div class="bubble">
+                        Xin chào! Hãy dán <strong>Google API Key</strong> ở cột bên trái và tải lên file tài liệu (PDF hoặc TXT) để bắt đầu.
+                        <br><br>
+                        💡 <em>Bạn có thể bấm nút <strong>✨ Generate Artifact Studio</strong> để tự động tạo Tóm tắt, Sơ đồ tư duy (Mindmap), Đồ họa thông tin (Infographic), Bộ câu hỏi trắc nghiệm (Quiz), hoặc Kịch bản Podcast thảo luận hệt như <strong>Google NotebookLM</strong>!</em>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- THANH GỢI Ý NHANH (QUICK CHIPS) -->
+        <div class="quick-chips">
+            <span class="chip" onclick="quickAsk('Hãy tóm tắt ngắn gọn 3 luận điểm cốt lõi nhất của tài liệu.')">📌 3 điểm cốt lõi</span>
+            <span class="chip" onclick="quickAsk('Những rủi ro hoặc điểm cần đặc biệt lưu ý trong tài liệu này là gì?')">⚠️ Rủi ro & Lưu ý</span>
+            <span class="chip" onclick="quickAsk('Trích xuất bảng dữ liệu các con số, mốc thời gian hoặc chỉ số quan trọng.')">📊 Bảng số liệu & Mốc thời gian</span>
+            <span class="chip" onclick="quickAsk('Giải thích các thuật ngữ chuyên môn xuất hiện trong tài liệu này.')">📖 Giải thích thuật ngữ</span>
+        </div>
+        
+        <div class="input-area">
+            <textarea id="userInput" placeholder="Nhập câu hỏi của bạn về tài liệu... (Nhấn Enter để gửi, Shift+Enter để xuống dòng)" rows="1"></textarea>
+            <button class="btn-send" id="btnSend" onclick="handleSendMessage()">Gửi yêu cầu</button>
+        </div>
+    </div>
+
+    <!-- 3. MODAL GENERATE ARTIFACT ĐỘNG (NOTEBOOKLM DYNAMIC UI) -->
+    <div class="modal-overlay" id="artifactModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>✨ NotebookLM Artifact Studio</span>
+                <span class="modal-close" onclick="toggleModal(false)">✕</span>
+            </div>
+            
+            <div class="modal-group">
+                <label>Chọn thể loại Artifact (Artifact Type):</label>
+                <div class="artifact-grid">
+                    <div class="artifact-card selected" id="type-summary" onclick="selectArtifactType('summary')">
+                        <div class="title">📄 Summary</div>
+                        <div class="desc">Bản tóm tắt toàn diện</div>
+                    </div>
+                    <div class="artifact-card" id="type-mindmap" onclick="selectArtifactType('mindmap')">
+                        <div class="title">🌿 Mindmap</div>
+                        <div class="desc">Sơ đồ phân cấp tư duy</div>
+                    </div>
+                    <div class="artifact-card" id="type-infographic" onclick="selectArtifactType('infographic')">
+                        <div class="title">📊 Infographic</div>
+                        <div class="desc">Điểm nhấn số liệu trực quan</div>
+                    </div>
+                    <div class="artifact-card" id="type-quiz" onclick="selectArtifactType('quiz')">
+                        <div class="title">❓ Quiz & Test</div>
+                        <div class="desc">Trắc nghiệm tự kiểm tra</div>
+                    </div>
+                    <div class="artifact-card" id="type-podcast" onclick="selectArtifactType('podcast')">
+                        <div class="title">🎙️ Audio Overview</div>
+                        <div class="desc">Kịch bản Podcast 2 Host</div>
+                    </div>
+                    <div class="artifact-card" id="type-studyguide" onclick="selectArtifactType('studyguide')">
+                        <div class="title">📋 Study Guide</div>
+                        <div class="desc">Cẩm nang ôn tập & FAQ</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NHÓM TÙY CHỌN CHO SUMMARY & MINDMAP -->
+            <div id="group-text-options" class="modal-row">
+                <div class="modal-group">
+                    <label for="artLength">Độ dài (Length):</label>
+                    <select id="artLength">
+                        <option value="Brief">Brief (Ngắn gọn - Ý chính)</option>
+                        <option value="Moderate" selected>Moderate (Tiêu chuẩn cân đối)</option>
+                        <option value="Detailed">Detailed (Chi tiết chuyên sâu toàn diện)</option>
+                    </select>
+                </div>
+                <div class="modal-group">
+                    <label for="artStyle">Phong cách (Style):</label>
+                    <select id="artStyle">
+                        <option value="Bullet Points" selected>Bullet Points (Gạch đầu dòng rõ nét)</option>
+                        <option value="Paragraph">Paragraph (Đoạn văn hoàn chỉnh)</option>
+                        <option value="Academic">Academic (Học thuật & Chuyên môn)</option>
+                        <option value="Key Takeaways">Key Takeaways (Ý chính hành động)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- NHÓM TÙY CHỌN CHO INFOGRAPHIC -->
+            <div id="group-infographic-options" class="modal-row" style="display: none;">
+                <div class="modal-group">
+                    <label for="artDensity">Mật độ thông tin (Density):</label>
+                    <select id="artDensity">
+                        <option value="Compact">Compact (Siêu cô đọng - Chỉ giữ số liệu vàng)</option>
+                        <option value="Standard" selected>Standard (Tiêu chuẩn trực quan)</option>
+                        <option value="Full">Full (Đầy đủ mọi phân mục & mốc tiến trình)</option>
+                    </select>
+                </div>
+                <div class="modal-group">
+                    <label for="artLayout">Trọng tâm đồ họa:</label>
+                    <select id="artLayout">
+                        <option value="Metrics & Timeline">Số liệu & Mốc thời gian</option>
+                        <option value="Core Process">Quy trình & Các bước thực thi</option>
+                        <option value="Pros vs Cons">Phân tích Ưu - Nhược điểm</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- NHÓM TÙY CHỌN CHO QUIZ -->
+            <div id="group-quiz-options" class="modal-row" style="display: none;">
+                <div class="modal-group">
+                    <label for="artQuizCount">Số lượng câu hỏi (3 - 30):</label>
+                    <input type="number" id="artQuizCount" min="3" max="30" value="5">
+                </div>
+                <div class="modal-group">
+                    <label for="artDifficulty">Độ khó (Difficulty):</label>
+                    <select id="artDifficulty">
+                        <option value="Easy">Easy (Cơ bản - Nhận biết nội dung)</option>
+                        <option value="Medium" selected>Medium (Trung bình - Phân tích & Thông hiểu)</option>
+                        <option value="Hard">Hard (Khó - Vận dụng cao & Suy luận logic)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- NHÓM TÙY CHỌN CHO PODCAST (AUDIO OVERVIEW) -->
+            <div id="group-podcast-options" class="modal-row" style="display: none;">
+                <div class="modal-group">
+                    <label for="artPodcastTone">Văn phong Podcast:</label>
+                    <select id="artPodcastTone">
+                        <option value="Engaging & Lively" selected>Hào hứng, cuốn hút & Đời thường</option>
+                        <option value="Professional & In-depth">Chuyên gia phân tích sâu sắc</option>
+                        <option value="Debate & Critical">Tranh luận đa chiều, phản biện gay cấn</option>
+                    </select>
+                </div>
+                <div class="modal-group">
+                    <label for="artPodcastLength">Độ dài ước tính đối thoại:</label>
+                    <select id="artPodcastLength">
+                        <option value="Short (3-5 min read)">Ngắn (Đọc 3-5 phút)</option>
+                        <option value="Medium (5-8 min read)" selected>Vừa (Đọc 5-8 phút)</option>
+                        <option value="Long (8-12 min read)">Sâu (Đọc 8-12 phút)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- NHÓM TÙY CHỌN CHO STUDY GUIDE -->
+            <div id="group-studyguide-options" class="modal-row" style="display: none;">
+                <div class="modal-group">
+                    <label for="artStudyFocus">Mục tiêu cẩm nang:</label>
+                    <select id="artStudyFocus">
+                        <option value="Comprehensive" selected>Toàn diện (Tóm tắt + Thuật ngữ + FAQ)</option>
+                        <option value="Exam Prep">Ôn thi cấp tốc (Câu hỏi trọng tâm)</option>
+                        <option value="Key Concepts">Bộ từ điển khái niệm & công thức</option>
+                    </select>
+                </div>
+                <div class="modal-group">
+                    <label for="artStudyFormat">Cấu trúc trình bày:</label>
+                    <select id="artStudyFormat">
+                        <option value="Structured Modules">Phân chia theo Chương / Phần</option>
+                        <option value="Q&A Style">Hỏi - Đáp trực diện (Q&A)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- YÊU CẦU TÙY CHỈNH THÊM -->
+            <div class="modal-group">
+                <label for="artCustom">Chỉ thị tùy chỉnh bổ sung (Tùy chọn):</label>
+                <textarea id="artCustom" rows="2" placeholder="Ví dụ: Tập trung vào chương 2, giải thích bằng ngôn ngữ dễ hiểu cho người mới..."></textarea>
+            </div>
+
+            <button class="btn-generate" onclick="triggerArtifactGeneration()">✨ Khởi tạo Artifact với Gemini 3.8</button>
+        </div>
+    </div>
+
+    <!-- 4. THƯ VIỆN PDF.JS TỪ CDNJS CHÍNH THỨC -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        let currentFileContent = ""; 
+        let currentFileName = "";    
+        let chatHistory = [];        
+        let selectedArtifactType = "summary"; 
+
+        const ROLES_CONFIG = {
+            "default": "Bạn là một trợ lý AI thông minh, khách quan và chuyên nghiệp. Hãy giúp người dùng phân tích tài liệu và trả lời câu hỏi một cách rõ ràng, ngắn gọn.",
+            "finance": "Bạn là một Giám đốc Tài chính (CFO) và chuyên gia phân tích đầu tư cấp cao. Khi phân tích tài liệu, hãy tập trung vào các con số, chỉ số tài chính, doanh thu, rủi ro thị trường, dữ liệu tăng trưởng và đưa ra nhận định sắc bén dưới góc nhìn kinh tế chuyên sâu.",
+            "legal": "Bạn là một Luật sư kỳ cựu và Chuyên gia tư vấn pháp lý. Hãy rà soát tài liệu dưới góc nhìn luật pháp, tập trung phân tích các điều khoản, tính ràng buộc, quyền và nghĩa vụ các bên, rủi ro pháp lý và các điểm cần lưu ý nghiêm ngặt.",
+            "education": "Bạn là một Giáo sư, Giảng viên đại học giàu kinh nghiệm. Hãy phân tích tài liệu này để trích xuất kiến thức cốt lõi, giải thích các khái niệm phức tạp một cách khoa học, dễ hiểu, có ví dụ minh họa và có thể gợi ý cấu trúc bài giảng/slide PowerPoint nếu người dùng yêu cầu.",
+            "tech": "Bạn là một Giám đốc Công nghệ (CTO) và Kiến trúc sư phần mềm. Hãy phân tích tài liệu dưới góc độ kỹ thuật, tập trung vào kiến trúc hệ thống, thuật toán, bảo mật thông tin, hạ tầng phần cứng và quy trình triển khai công nghệ.",
+            "medical": "Bạn là một Bác sĩ và Chuyên gia Nghiên cứu Y tế lâm sàng. Khi người dùng nạp tài liệu y học, hồ sơ hoặc kết quả xét nghiệm, hãy phân tích dựa trên kiến thức khoa học y khoa thực chứng. Giải thích rõ ràng các thuật ngữ viết tắt, triệu chứng, chỉ số sinh hóa và cơ chế bệnh lý. Lưu ý luôn đưa ra lời khuyên người dùng cần tham khảo ý kiến trực tiếp của bác sĩ điều trị.",
+            "translator": "Bạn là một Chuyên gia Dịch thuật đa ngôn ngữ và Hiệu đính văn bản chuyên nghiệp. Nhiệm vụ của bạn là dịch tài liệu hoặc các phân đoạn văn bản người dùng yêu cầu sang ngôn ngữ đích. Hãy đảm bảo bản dịch chuẩn xác thuật ngữ và mượt mà văn phong bản địa.",
+            "marketing": "Bạn là một Giám đốc Sáng tạo (Creative Director) và Chuyên gia Content Marketing kỳ cựu. Hãy dựa vào thông tin của tài liệu được cung cấp để biến đổi nó thành các định dạng truyền thông hấp dẫn như: Kịch bản video ngắn, bài đăng mạng xã hội cuốn hút."
+        };
+
+        function toggleModal(show) {
+            document.getElementById('artifactModal').style.display = show ? 'flex' : 'none';
+        }
+
+        // --- ĐIỀU HƯỚNG GIAO DIỆN ĐỘNG THEO TỪNG ARTIFACT (DYNAMIC UI) ---
+        function selectArtifactType(type) {
+            selectedArtifactType = type;
+            document.querySelectorAll('.artifact-card').forEach(card => card.classList.remove('selected'));
+            const selectedCard = document.getElementById(`type-${type}`);
+            if (selectedCard) selectedCard.classList.add('selected');
+
+            // Ẩn tất cả các panel
+            document.getElementById('group-text-options').style.display = 'none';
+            document.getElementById('group-infographic-options').style.display = 'none';
+            document.getElementById('group-quiz-options').style.display = 'none';
+            document.getElementById('group-podcast-options').style.display = 'none';
+            document.getElementById('group-studyguide-options').style.display = 'none';
+
+            // Kích hoạt panel tương ứng
+            if (type === 'summary' || type === 'mindmap') {
+                document.getElementById('group-text-options').style.display = 'grid';
+            } else if (type === 'infographic') {
+                document.getElementById('group-infographic-options').style.display = 'grid';
+            } else if (type === 'quiz') {
+                document.getElementById('group-quiz-options').style.display = 'grid';
+            } else if (type === 'podcast') {
+                document.getElementById('group-podcast-options').style.display = 'grid';
+            } else if (type === 'studyguide') {
+                document.getElementById('group-studyguide-options').style.display = 'grid';
+            }
+        }
+
+        // --- LẮNG NGHE SỰ KIỆN TẢI FILE CỤC BỘ ---
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            currentFileName = file.name;
+            const badge = document.getElementById('statusBadge');
+            badge.innerHTML = `<span class='spinner'></span> Đang xử lý file...`;
+            
+            if (file.name.toLowerCase().endsWith('.pdf')) {
+                if (!window.pdfjsLib) {
+                    badge.innerText = `❌ Lỗi: Không thể tải thư viện PDF.js`;
+                    return;
+                }
+                const fileReader = new FileReader();
+                fileReader.onload = function() {
+                    const typedarray = new Uint8Array(this.result);
+                    pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                        let maxPages = pdf.numPages;
+                        let countPromises = [];
+                        for (let j = 1; j <= maxPages; j++) {
+                            countPromises.push(pdf.getPage(j).then(function(page) {
+                                return page.getTextContent().then(function(text) {
+                                    return text.items.map(s => s.str).join(' ');
+                                });
+                            }));
+                        }
+                        Promise.all(countPromises).then(function(texts) {
+                            currentFileContent = texts.join('\n');
+                            badge.innerText = `📄 ${currentFileName} (${maxPages} trang)`;
+                        });
+                    }).catch(err => {
+                        badge.innerText = `❌ Lỗi đọc PDF: ${err.message}`;
+                    });
+                };
+                fileReader.readAsArrayBuffer(file);
+            } else {
+                const fileReader = new FileReader();
+                fileReader.onload = function(e) {
+                    currentFileContent = e.target.result;
+                    badge.innerText = `📄 ${currentFileName}`;
+                };
+                fileReader.readAsText(file);
+            }
+        });
+
+        // --- KÍCH HOẠT GENERATE ARTIFACT ĐẶC BIỆT ---
+        async function triggerArtifactGeneration() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const model = document.getElementById('modelOption').value;
+            const artCustom = document.getElementById('artCustom').value.trim();
+
+            if (!apiKey) {
+                alert("⚠️ Vui lòng nhập Google API Key của bạn trước!");
+                return;
+            }
+            if (!currentFileContent) {
+                alert("⚠️ Vui lòng tải lên một file tài liệu (PDF, TXT, MD) trước khi tạo Artifact!");
+                return;
+            }
+
+            toggleModal(false);
+
+            let systemRolePrompt = "";
+            let userActionPrompt = "";
+            let infoDetails = "";
+
+            if (selectedArtifactType === 'summary') {
+                const length = document.getElementById('artLength').value;
+                const style = document.getElementById('artStyle').value;
+                infoDetails = `📄 Summary | Độ dài: ${length} | Phong cách: ${style}`;
+                systemRolePrompt = "Bạn là chuyên gia tổng hợp thông tin và phân tích tài liệu chuyên sâu.";
+                userActionPrompt = `Hãy tạo một bản Tóm tắt (Summary) toàn diện từ tài liệu được cung cấp.\n- Độ dài yêu cầu: [${length}].\n- Phong cách trình bày: [${style}].\n- Hãy làm nổi bật các luận điểm chính, dữ liệu mấu chốt và kết luận cốt lõi.`;
+                
+            } else if (selectedArtifactType === 'mindmap') {
+                const length = document.getElementById('artLength').value;
+                const style = document.getElementById('artStyle').value;
+                infoDetails = `🌿 Mindmap | Độ dài: ${length} | Phong cách: ${style}`;
+                systemRolePrompt = "Bạn là chuyên gia thiết kế sơ đồ tư duy phân cấp thông tin.";
+                userActionPrompt = `Hãy thiết kế một sơ đồ tư duy (Mindmap) phân rã tri thức từ tài liệu được nạp.\n- Mức độ chi tiết: [${length}].\n- Phong cách: [${style}].\n- Định dạng cấu trúc: Trình bày dạng cây phân cấp Markdown rõ ràng (sử dụng #, ##, ###, và các cấp gạch đầu dòng -, *) để người dùng hình dung trọn vẹn bức tranh tổng thể.`;
+                
+            } else if (selectedArtifactType === 'infographic') {
+                const density = document.getElementById('artDensity').value;
+                const layout = document.getElementById('artLayout').value;
+                infoDetails = `📊 Infographic | Mật độ: ${density} | Trọng tâm: ${layout}`;
+                systemRolePrompt = "Bạn là Giám đốc Sáng tạo thông tin đồ họa (Information Designer).";
+                userActionPrompt = `Hãy chuyển hóa nội dung tài liệu thành một bản đồ họa thông tin (Infographic Outline) bằng văn bản giàu tính trực quan.\n- Mật độ thông tin: [${density}].\n- Trọng tâm: [${layout}].\n- Bố cục yêu cầu: Sử dụng các khối thẻ trực quan, biểu tượng emoji, số liệu thống kê nổi bật (KPIs), và các mốc quy trình rõ ràng.`;
+                
+            } else if (selectedArtifactType === 'quiz') {
+                const qCount = document.getElementById('artQuizCount').value;
+                const diff = document.getElementById('artDifficulty').value;
+                infoDetails = `❓ Quiz & Test | Số câu: ${qCount} | Độ khó: ${diff}`;
+                systemRolePrompt = "Bạn là chuyên gia khảo thí và thiết kế câu hỏi đánh giá năng lực học thuật.";
+                userActionPrompt = `Hãy tạo một bộ câu hỏi trắc nghiệm ôn tập (Quiz) dựa trên nội dung tài liệu nguồn.\n- Số câu hỏi: [${qCount} câu].\n- Mức độ khó: [${diff}].\n- Cấu trúc bắt buộc: Mỗi câu hỏi gồm 4 đáp án A, B, C, D. Ở phần cuối bài, cung cấp bảng đáp án chính xác kèm lời giải thích chi tiết trích dẫn từ tài liệu.`;
+                
+            } else if (selectedArtifactType === 'podcast') {
+                const tone = document.getElementById('artPodcastTone').value;
+                const len = document.getElementById('artPodcastLength').value;
+                infoDetails = `🎙️ Audio Overview (Podcast) | Văn phong: ${tone} | Độ dài: ${len}`;
+                systemRolePrompt = "Bạn là biên kịch sản xuất chương trình Podcast chuyên nghiệp theo chuẩn Google NotebookLM Audio Overview.";
+                userActionPrompt = `Hãy tạo một kịch bản Podcast Audio Overview đối thoại sống động giữa 2 người dẫn chương trình: Alex (nam, giàu tính tò mò, diễn giải dí dỏm) và Taylor (nữ, chuyên gia phân tích sắc sảo, logic).\n- Văn phong: [${tone}].\n- Thời lượng ước tính: [${len}].\n- Yêu cầu: Cuộc trò chuyện phải tự nhiên, có sự tung hứng, giải thích các khái niệm phức tạp trong tài liệu bằng ví dụ đời thực dễ hiểu.`;
+                
+            } else if (selectedArtifactType === 'studyguide') {
+                const focus = document.getElementById('artStudyFocus').value;
+                const format = document.getElementById('artStudyFormat').value;
+                infoDetails = `📋 Study Guide | Mục tiêu: ${focus} | Cấu trúc: ${format}`;
+                systemRolePrompt = "Bạn là Giảng viên Đại học cao cấp xây dựng cẩm nang tự học.";
+                userActionPrompt = `Hãy tạo một Cẩm nang Ôn tập & Hướng dẫn Tự học (Study Guide) toàn diện từ tài liệu.\n- Trọng tâm: [${focus}].\n- Định dạng: [${format}].\n- Yêu cầu: Bao gồm Tóm tắt khái quát, Từ điển thuật ngữ chính yếu, Các câu hỏi thường gặp (FAQ) kèm giải đáp chuyên sâu.`;
+            }
+
+            if (artCustom) {
+                userActionPrompt += `\n- Chỉ thị riêng bổ sung từ người dùng: ${artCustom}`;
+            }
+
+            appendMessage(`✨ **[Yêu cầu tạo Artifact - NotebookLM Studio]**\n- ${infoDetails}\n${artCustom ? `- Ghi chú riêng: ${artCustom}` : ''}`, 'user', '⚙️');
+            chatHistory.push({ role: "Người dùng", content: `Generate Artifact: ${infoDetails}` });
+
+            const assistantMessageId = appendMessage(`<span class='spinner'></span> Đang xử lý tài liệu và khởi tạo Artifact bằng Gemini 3.8...`, 'assistant', '✨');
+            const bubbleElement = document.getElementById(assistantMessageId).querySelector('.bubble');
+
+            const fullPrompt = `Dưới đây là toàn văn tài liệu người dùng đã tải lên:\n"""\n${currentFileContent}\n"""\n\nHãy thực hiện yêu cầu sau dựa trên tài liệu:\n${userActionPrompt}`;
+            await callGeminiApi(apiKey, model, fullPrompt, systemRolePrompt, 0.2, bubbleElement);
+        }
+
+        // --- GỬI TIN NHẮN THƯỜNG TRONG CHAT ---
+        async function handleSendMessage() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const userInput = document.getElementById('userInput').value.trim();
+            const model = document.getElementById('modelOption').value;
+            const roleKey = document.getElementById('roleOption').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const btnSend = document.getElementById('btnSend');
+            
+            if (!apiKey) {
+                alert("⚠️ Vui lòng nhập Google API Key của bạn ở cột bên trái!");
+                return;
+            }
+            if (!userInput) return;
+
+            appendMessage(userInput, 'user', '👤');
+            document.getElementById('userInput').value = "";
+            document.getElementById('userInput').style.height = "44px";
+            chatHistory.push({ role: "Người dùng", content: userInput });
+
+            const assistantMessageId = appendMessage(`<span class='spinner'></span> Chuyên gia đang suy nghĩ...`, 'assistant', '🤖');
+            const bubbleElement = document.getElementById(assistantMessageId).querySelector('.bubble');
+
+            btnSend.disabled = true;
+
+            let fullPrompt = userInput;
+            if (currentFileContent) {
+                fullPrompt = `Dưới đây là tài liệu người dùng đã tải lên:\n"""\n${currentFileContent}\n"""\n\nDựa vào tài liệu và vai trò chuyên gia, hãy giải quyết câu hỏi sau:\n${userInput}`;
+            }
+
+            const systemInstruction = ROLES_CONFIG[roleKey] || ROLES_CONFIG["default"];
+            try {
+                await callGeminiApi(apiKey, model, fullPrompt, systemInstruction, temperature, bubbleElement);
+            } finally {
+                btnSend.disabled = false;
+            }
+        }
+
+        // --- HÀM GỌI API CHUẨN GEMINI 3.8 CÓ CƠ CHẾ RETRY ---
+        async function callGeminiApi(apiKey, model, prompt, systemInstruction, temperature, targetBubble) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: temperature },
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+
+            const maxRetries = 3;
+            let retryDelay = 2000;
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                if (attempt > 0) {
+                    targetBubble.innerHTML = `<span class='spinner'></span> Máy chủ bận, đang tự động kết nối lại... (Lần ${attempt + 1}/${maxRetries})`;
+                }
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        if ((response.status === 503 || (data.error && data.error.status === "UNAVAILABLE")) && attempt < maxRetries - 1) {
+                            await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
+                            continue;
+                        }
+                        throw new Error(data.error ? data.error.message : `Lỗi HTTP: ${response.status}`);
+                    }
+
+                    const candidate = data.candidates && data.candidates[0];
+                    const part = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0];
+                    const aiText = part && part.text 
+                        ? part.text 
+                        : (candidate && candidate.finishReason ? `[Phản hồi kết thúc: ${candidate.finishReason}]` : "Không nhận được phản hồi hợp lệ từ mô hình.");
+
+                    // Định dạng hiển thị Markdown mượt mà
+                    if (window.marked) {
+                        targetBubble.innerHTML = marked.parse(aiText);
+                    } else {
+                        targetBubble.innerText = aiText;
+                    }
+
+                    // Gắn nút copy
+                    const wrapper = targetBubble.parentElement;
+                    let actions = wrapper.querySelector('.bubble-actions');
+                    if (!actions) {
+                        actions = document.createElement('div');
+                        actions.className = 'bubble-actions';
+                        actions.innerHTML = `<button class="btn-copy" onclick="copyText(this)">📋 Sao chép nội dung</button>`;
+                        wrapper.appendChild(actions);
+                    }
+                    actions.dataset.raw = aiText;
+
+                    chatHistory.push({ role: "Trợ lý AI", content: aiText });
+                    document.getElementById('btnExport').style.display = 'block';
+                    return;
+
+                } catch (error) {
+                    if (attempt === maxRetries - 1) {
+                        targetBubble.innerHTML = `<span style="color: #dc3545; font-weight: 500;">❌ Đã xảy ra lỗi: ${error.message}</span>`;
+                    }
+                }
+            }
+        }
+
+        // --- GIAO DIỆN & TIỆN ÍCH ---
+        function appendMessage(text, sender, avatarIcon) {
+            const chatArea = document.getElementById('chatArea');
+            const messageId = 'msg-' + Date.now();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.id = messageId;
+            
+            const renderedContent = (window.marked && sender === 'assistant' && !text.includes("<span class='spinner'>")) 
+                ? marked.parse(text) 
+                : (sender === 'user' && window.marked ? marked.parse(text) : text);
+
+            messageDiv.innerHTML = `
+                <div class="avatar">${avatarIcon}</div>
+                <div class="message-content-wrapper">
+                    <div class="bubble">${renderedContent}</div>
+                    ${sender === 'assistant' && !text.includes("<span class='spinner'>") ? `<div class="bubble-actions" data-raw="${encodeURIComponent(text)}"><button class="btn-copy" onclick="copyText(this)">📋 Sao chép nội dung</button></div>` : ''}
+                </div>
+            `;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return messageId;
+        }
+
+        function copyText(btn) {
+            const wrapper = btn.parentElement;
+            let text = wrapper.dataset.raw ? decodeURIComponent(wrapper.dataset.raw) : wrapper.previousElementSibling.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const old = btn.innerText;
+                btn.innerText = "✅ Đã chép!";
+                setTimeout(() => btn.innerText = old, 1500);
+            });
+        }
+
+        function quickAsk(text) {
+            const input = document.getElementById('userInput');
+            input.value = text;
+            input.focus();
+            handleSendMessage();
+        }
+
+        function clearChat() {
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện trong phiên này?")) {
+                document.getElementById('chatArea').innerHTML = `
+                    <div class="message assistant">
+                        <div class="avatar">🤖</div>
+                        <div class="message-content-wrapper">
+                            <div class="bubble">Phiên trò chuyện đã được làm mới. Hãy nhập câu hỏi hoặc chọn <strong>✨ Generate Artifact Studio</strong>!</div>
+                        </div>
+                    </div>
+                `;
+                chatHistory = [];
+                document.getElementById('btnExport').style.display = 'none';
+            }
+        }
+
+        const tx = document.getElementById('userInput');
+        tx.addEventListener("input", function() {
+            this.style.height = "auto";
+            this.style.height = Math.min(this.scrollHeight, 120) + "px";
+        });
+
+        tx.addEventListener("keydown", function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+            }
+        });
+
+        function exportChatHistory() {
+            let exportText = `--- BÁO CÁO PHÂN TÍCH TÀI LIỆU BẢO MẬT (NOTEBOOKLM EDITION) ---\n`;
+            exportText += `Tài liệu: ${currentFileName || "Không có tệp"}\n`;
+            exportText += `Thời gian xuất: ${new Date().toLocaleString('vi-VN')}\n`;
+            exportText += `---------------------------------------------------------\n\n`;
+            chatHistory.forEach(msg => {
+                exportText += `=== ${msg.role} ===\n${msg.content}\n\n`;
+            });
+            const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `NotebookLM_Report_${Date.now()}.txt`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        }
+    </script>
+</body>
+</html>
