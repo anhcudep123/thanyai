@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Scale Network Scanner & Multi-Station SCADA Pro</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Paho MQTT WebSocket Client CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        * { box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #070d1e; color: #f1f5f9; }
+        .font-mono-num { font-family: 'JetBrains Mono', monospace; }
+        .glass-panel { background: rgba(19, 30, 58, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.2); }
+        .glass-card { background: #0f1a36; border: 1px solid #1e2d56; transition: all 0.25s ease; }
+        .glass-card:hover { border-color: #38bdf8; transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.25); }
+        .digit-glow-green { color: #10b981; text-shadow: 0 0 14px rgba(16, 185, 129, 0.45); }
+        .digit-glow-red { color: #f43f5e; text-shadow: 0 0 14px rgba(244, 63, 94, 0.45); }
+        .pulse-online { animation: pulseGreen 2s infinite; }
+        @keyframes pulseGreen {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.15); }
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b132b; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- TOP INDUSTRIAL NAV HEADER -->
+    <header class="bg-[#0b132b] border-b border-blue-900/40 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40 shadow-xl">
+        <div class="flex items-center space-x-3.5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-extrabold text-xl">
+                ⚖️
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-extrabold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-300 uppercase">
+                        Universal Scale Scanner & SCADA Fleet
+                    </h1>
+                    <span class="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        V3.0 Enterprise
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400">Công cụ tự động dò quét IP cân trong LAN, giám sát tập trung & Gateway Modbus TCP cho PLC</p>
+            </div>
+        </div>
+
+        <div class="flex items-center flex-wrap gap-3">
+            <!-- MQTT Status Badge -->
+            <div class="flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-lg text-xs">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-500" id="mqtt_dot"></span>
+                <span class="text-slate-300 font-medium">MQTT Mesh:</span>
+                <span class="font-bold text-slate-400" id="mqtt_status">Đang kết nối...</span>
+            </div>
+
+            <!-- Total Online Counter -->
+            <div class="flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/30 px-3.5 py-1.5 rounded-lg text-xs font-bold text-emerald-400">
+                <span>ONLINE:</span>
+                <span class="text-base font-extrabold text-emerald-300 font-mono-num" id="stat_online_count">0</span>
+                <span class="text-slate-500">/</span>
+                <span class="text-slate-400 font-mono-num" id="stat_total_count">0 trạm</span>
+            </div>
+
+            <!-- Export Button -->
+            <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                📥 XUẤT CSV
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <main class="flex-1 p-5 max-w-[1700px] w-full mx-auto flex flex-col gap-5">
+
+        <!-- PANEL 1: IP SCANNER CONTROL CENTER -->
+        <div class="glass-panel p-5 rounded-2xl shadow-2xl">
+            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700/60 pb-4 mb-4">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">📡</span>
+                    <div>
+                        <h2 class="font-extrabold text-slate-200 text-sm uppercase tracking-wide">Bộ Dò Quét IP Cân Thông Minh Trong Mạng LAN (Auto-Scanner)</h2>
+                        <p class="text-xs text-slate-400">Tự động phát hiện tất cả các đầu cân ESP8266, đọc địa chỉ IP, mã trạm, khối lượng thời gian thực và trạng thái Modbus</p>
+                    </div>
+                </div>
+
+                <!-- Quick Presets -->
+                <div class="flex items-center gap-1.5 text-xs">
+                    <span class="text-slate-400 font-semibold mr-1">Dải mạng mẫu:</span>
+                    <button onclick="setSubnet('192.168.1.')" class="bg-slate-800 hover:bg-cyan-900/60 border border-slate-700 text-slate-300 px-2.5 py-1 rounded-md font-mono-num transition">192.168.1.x</button>
+                    <button onclick="setSubnet('192.168.0.')" class="bg-slate-800 hover:bg-cyan-900/60 border border-slate-700 text-slate-300 px-2.5 py-1 rounded-md font-mono-num transition">192.168.0.x</button>
+                    <button onclick="setSubnet('192.168.2.')" class="bg-slate-800 hover:bg-cyan-900/60 border border-slate-700 text-slate-300 px-2.5 py-1 rounded-md font-mono-num transition">192.168.2.x</button>
+                    <button onclick="setSubnet('192.168.4.')" class="bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 px-2.5 py-1 rounded-md font-mono-num transition" title="Địa chỉ AP phát trực tiếp từ ESP8266">192.168.4.1 (AP)</button>
+                </div>
+            </div>
+
+            <!-- Scanner Inputs -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end">
+                <div class="md:col-span-4">
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Lớp mạng IP (Subnet Prefix):</label>
+                    <div class="relative">
+                        <input type="text" id="scan_prefix" value="192.168.1." class="w-full bg-slate-900/90 border border-slate-700 focus:border-cyan-500 rounded-lg px-3.5 py-2 text-sm text-cyan-300 font-mono-num outline-none tracking-wider">
+                        <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-mono-num">x.x.x.</span>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Từ Host (Start):</label>
+                    <input type="number" id="scan_start" value="1" min="1" max="254" class="w-full bg-slate-900/90 border border-slate-700 focus:border-cyan-500 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono-num outline-none">
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Đến Host (End):</label>
+                    <input type="number" id="scan_end" value="254" min="1" max="254" class="w-full bg-slate-900/90 border border-slate-700 focus:border-cyan-500 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono-num outline-none">
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Luồng song song (Threads):</label>
+                    <select id="scan_concurrency" class="w-full bg-slate-900/90 border border-slate-700 focus:border-cyan-500 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono-num outline-none">
+                        <option value="15">15 luồng (An toàn)</option>
+                        <option value="25" selected>25 luồng (Cân bằng)</option>
+                        <option value="40">40 luồng (Nhanh)</option>
+                        <option value="60">60 luồng (Cực nhanh)</option>
+                    </select>
+                </div>
+
+                <div class="md:col-span-2 flex gap-2">
+                    <button id="btn_scan" onclick="startScan()" class="flex-1 bg-gradient-to-r from-cyan-600 hover:from-cyan-500 to-blue-600 hover:to-blue-500 text-white font-extrabold py-2 px-3 rounded-lg shadow-lg shadow-cyan-600/30 transition text-sm flex items-center justify-center gap-2">
+                        <span>🔍</span> QUÉT IP CÂN
+                    </button>
+                    <button id="btn_stop" onclick="stopScan()" disabled class="bg-rose-950/80 hover:bg-rose-900 border border-rose-600/60 text-rose-300 font-bold px-3 py-2 rounded-lg text-xs disabled:opacity-40 disabled:cursor-not-allowed">
+                        HỦY
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="scan_progress_wrap" class="mt-4 pt-3 border-t border-slate-800 hidden">
+                <div class="flex justify-between text-xs font-mono-num text-slate-400 mb-1.5">
+                    <span id="scan_status_text">Đang chuẩn bị quét...</span>
+                    <span id="scan_percent_text">0% (0/0)</span>
+                </div>
+                <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                    <div id="scan_progress_bar" class="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full w-0 transition-all duration-150"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLEET HEADER & ACTION BAR -->
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <h3 class="font-extrabold text-base text-slate-200 tracking-wide uppercase flex items-center gap-2">
+                    <span>📋</span> DANH SÁCH CÁC TRẠM CÂN ĐÃ TÌM THẤY
+                </h3>
+                <span class="bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-bold px-2.5 py-0.5 rounded-full" id="pill_device_count">
+                    0 thiết bị
+                </span>
+            </div>
+
+            <div class="flex items-center flex-wrap gap-2.5 text-xs">
+                <!-- Search Filter -->
+                <input type="text" id="table_search" oninput="renderDevices()" placeholder="Lọc theo IP, Tên trạm..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 text-xs outline-none focus:border-cyan-500 w-48">
+
+                <!-- View Switcher -->
+                <div class="bg-slate-900 border border-slate-700 rounded-lg p-0.5 flex">
+                    <button id="btn_view_grid" onclick="switchView('grid')" class="px-2.5 py-1 rounded font-bold bg-cyan-600 text-white transition">Lưới Card</button>
+                    <button id="btn_view_table" onclick="switchView('table')" class="px-2.5 py-1 rounded font-bold text-slate-400 hover:text-white transition">Bảng Chi Tiết</button>
+                </div>
+
+                <!-- Bulk Actions -->
+                <button onclick="broadcastZeroAll()" class="bg-rose-950/70 hover:bg-rose-900 border border-rose-600/50 text-rose-300 font-bold px-3 py-1.5 rounded-lg transition">
+                    ⚠️ QUY 0 TẤT CẢ (ZERO ALL)
+                </button>
+                <button onclick="refreshAll()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold px-3 py-1.5 rounded-lg transition">
+                    🔄 LÀM MỚI TẤT CẢ
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTAINER: GRID VIEW -->
+        <div id="container_grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+            <!-- Template empty state -->
+            <div class="col-span-full py-16 flex flex-col items-center justify-center text-center text-slate-500 glass-panel rounded-2xl border-dashed border-2 border-slate-800">
+                <span class="text-5xl mb-3">🔍</span>
+                <h4 class="text-base font-bold text-slate-300 mb-1">Chưa có đầu cân nào trong danh sách</h4>
+                <p class="text-xs max-w-md text-slate-500 mb-4">
+                    Nhập dải IP mạng LAN ở trên và nhấn nút <b>"QUÉT IP CÂN"</b>, hoặc đảm bảo các cân ESP8266 đã kết nối Wi-Fi để nhận diện tự động qua MQTT Mesh!
+                </p>
+                <button onclick="startScan()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow transition">
+                    BẮT ĐẦU QUÉT NGAY
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTAINER: TABLE VIEW -->
+        <div id="container_table" class="glass-panel rounded-2xl overflow-hidden shadow-2xl hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="bg-slate-900/90 text-slate-400 border-b border-slate-700/80 font-mono-num uppercase">
+                            <th class="py-3 px-4">Trạng Thái</th>
+                            <th class="py-3 px-4">Tên Trạm (ID)</th>
+                            <th class="py-3 px-4">Địa Chỉ IP LAN</th>
+                            <th class="py-3 px-4">Khối Lượng Hiện Tại</th>
+                            <th class="py-3 px-4">Khối Lượng Bì</th>
+                            <th class="py-3 px-4">Chế Độ Tín Hiệu</th>
+                            <th class="py-3 px-4">Modbus TCP (Port 502)</th>
+                            <th class="py-3 px-4">Độ Trễ (Ping)</th>
+                            <th class="py-3 px-4 text-center">Hành Động Trực Tiếp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table_body" class="divide-y divide-slate-800">
+                        <!-- Dynamic rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-[#0b132b] border-t border-slate-800/80 px-6 py-3 text-xs text-slate-500 flex justify-between items-center">
+        <span>Universal Scale Gateway Network Tool • Hỗ trợ mọi PLC (Siemens S7, Mitsubishi FX5U, Delta, Schneider, Modbus TCP/RTU)</span>
+        <span>Rowboat Industrial Automation</span>
+    </footer>
+
+    <!-- MODAL 1: MODBUS PLC HELPER & CODE GENERATOR -->
+    <div id="modal_modbus" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-3xl rounded-2xl border border-cyan-500/40 shadow-2xl p-6 flex flex-col max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">⚡</span>
+                    <div>
+                        <h3 class="font-extrabold text-base text-cyan-300 uppercase tracking-wide">Trình Trợ Giúp Kết Nối Modbus TCP Cho PLC</h3>
+                        <p class="text-xs text-slate-400" id="modbus_modal_subtitle">Trạm: SCALE_01 • IP: 192.168.1.100 • Port: 502</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal_modbus')" class="text-slate-400 hover:text-white text-xl font-bold px-2 py-1">✕</button>
+            </div>
+
+            <div class="flex flex-col gap-4 text-xs">
+                <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-700">
+                    <div class="font-bold text-slate-300 mb-2 flex items-center justify-between">
+                        <span>THÔNG SỐ KẾT NỐI (CONNECTION PARAMETERS)</span>
+                        <span class="text-[10px] text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">Chuẩn Quốc Tế RFC</span>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono-num">
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">Server IP:</span>
+                            <b class="text-cyan-300 text-sm" id="mb_val_ip">192.168.1.100</b>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">TCP Port:</span>
+                            <b class="text-emerald-300 text-sm">502</b>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">Unit / Slave ID:</span>
+                            <b class="text-amber-300 text-sm">1</b>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">Function Code:</span>
+                            <b class="text-purple-300 text-sm">03 (Read Holding)</b>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PLC Instruction Tabs -->
+                <div class="border border-slate-700 rounded-xl overflow-hidden">
+                    <div class="flex bg-slate-900 border-b border-slate-700 font-bold">
+                        <button onclick="switchPlcTab('siemens', this)" class="plc-tab-btn active px-4 py-2.5 bg-blue-600 text-white">Siemens S7-1200 / S7-1500</button>
+                        <button onclick="switchPlcTab('mitsubishi', this)" class="plc-tab-btn px-4 py-2.5 text-slate-400 hover:text-white">Mitsubishi FX5U / Q Series</button>
+                        <button onclick="switchPlcTab('delta', this)" class="plc-tab-btn px-4 py-2.5 text-slate-400 hover:text-white">Delta DVP-SE / AS Series</button>
+                        <button onclick="switchPlcTab('modscan', this)" class="plc-tab-btn px-4 py-2.5 text-slate-400 hover:text-white">Modscan32 / Kepware</button>
+                    </div>
+
+                    <div class="p-4 bg-slate-950 font-mono-num text-[11px] leading-relaxed text-slate-300">
+                        <div id="plc_tab_siemens">
+                            <p class="text-amber-400 font-bold mb-2">// Hướng dẫn cấu hình khối lệnh MB_CLIENT trên TIA Portal:</p>
+                            <p>1. Thêm khối lệnh <b>MB_CLIENT</b> trong TIA Portal (Communication -> Modbus TCP).</p>
+                            <p>2. Khai báo tham số kết nối <b>TCON_Config_IPv4</b>:</p>
+                            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 my-2 text-cyan-300">
+                                InterfaceId = 64 (Cổng PROFINET)<br>
+                                ID = 1<br>
+                                ConnectionType = 11 (TCP)<br>
+                                ActiveEstablished = TRUE<br>
+                                RemoteAddress.ADDR = <span id="siemens_ip">[IP CÂN]</span><br>
+                                RemotePort = 502
+                            </div>
+                            <p>3. Tham số MB_CLIENT:</p>
+                            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 my-2 text-emerald-300">
+                                MB_MODE = 0 (Đọc dữ liệu)<br>
+                                MB_DATA_ADDR = 40003 (Đọc trực tiếp 32-bit Float Gross Weight)<br>
+                                MB_DATA_LEN = 2 (2 Words = 32-bit Real)<br>
+                                MB_DATA_PTR = P#DB1.DBX0.0 REAL (Địa chỉ Tag lưu khối lượng)
+                            </div>
+                        </div>
+
+                        <div id="plc_tab_mitsubishi" class="hidden">
+                            <p class="text-amber-400 font-bold mb-2">// Hướng dẫn cấu hình Modbus TCP trên GX Works 3 (FX5U):</p>
+                            <p>1. Trong Ethernet Port Configuration -> Chọn <b>Modbus/TCP Connection</b>.</p>
+                            <p>2. Lệnh đọc trong chương trình Ladder:</p>
+                            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 my-2 text-cyan-300">
+                                DMOVR K1 D100  (Channel 1)<br>
+                                S.CPRTCL [Channel] [Modbus Read Holding Registers]<br>
+                                Slave Address: 1<br>
+                                Start Address: 0x0002 (Tương ứng 40003)<br>
+                                Length: 2 Words
+                            </div>
+                            <p class="text-xs text-sky-400"><i>Mẹo: Trong phần cài đặt của cân, hãy bật tùy chọn "Word Swap" để số thực 32-bit khớp chuẩn Little-Endian của Mitsubishi!</i></p>
+                        </div>
+
+                        <div id="plc_tab_delta" class="hidden">
+                            <p class="text-amber-400 font-bold mb-2">// Hướng dẫn Delta DVP-SE / AS Series:</p>
+                            <p>Sử dụng lệnh <b>MODRW</b> hoặc cấu hình trong Delta Data Exchange:</p>
+                            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 my-2 text-cyan-300">
+                                Remote Node IP = <span class="delta_ip">[IP CÂN]</span> : 502<br>
+                                Read Function: FC03<br>
+                                Register: H0002 (Read Gross Weight Float)<br>
+                                Length: 2 Words -> Mapping vào D200 (Float)
+                            </div>
+                        </div>
+
+                        <div id="plc_tab_modscan" class="hidden">
+                            <p class="text-amber-400 font-bold mb-2">// Thiết lập trên phần mềm Modscan32:</p>
+                            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 my-2 text-cyan-300">
+                                Connection: Remote Modbus TCP Server<br>
+                                IP Address: <span class="modscan_ip">[IP CÂN]</span><br>
+                                TCP Port: 502<br>
+                                Point Type: 03: HOLDING REGISTER<br>
+                                Address: 0001 (hoặc 0003)<br>
+                                Length: 10<br>
+                                Display: Floating Point (Đọc được ngay số kg thực tế!)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="closeModal('modal_modbus')" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl transition">
+                    ĐÃ HIỂU & ĐÓNG
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: EMBEDDED SCALE WEB DASHBOARD MODAL -->
+    <div id="modal_terminal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-4xl h-[88vh] rounded-2xl border border-cyan-500/40 shadow-2xl flex flex-col overflow-hidden">
+            <div class="bg-slate-900 px-5 py-3 border-b border-slate-700 flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <h3 class="font-bold text-sm text-cyan-300" id="terminal_modal_title">Đầu cân: SCALE_01 (192.168.1.100)</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a id="btn_open_external" href="#" target="_blank" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1 rounded transition">
+                        Mở Tab Mới ↗
+                    </a>
+                    <button onclick="closeModal('modal_terminal')" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+                </div>
+            </div>
+            <iframe id="terminal_iframe" src="" class="flex-1 w-full border-none bg-[#0f172a]"></iframe>
+        </div>
+    </div>
+
+    <!-- AUDIO NOTIFICATION SOUNDS (SYNTHESIZED VIA WEB AUDIO API) -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playChime(freq = 880, type = 'sine', duration = 0.15) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+    </script>
+
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script>
+        // Store for all discovered scales: Map<ipOrId, DeviceObject>
+        const devices = new Map();
+        let isScanning = false;
+        let scanAbortController = null;
+        let currentView = 'grid';
+        let pollTimer = null;
+
+        // ================= MQTT MESH AUTO-DISCOVERY =================
+        let mqttClient = null;
+        function initMQTT() {
+            const clientID = "WebSCADA_Scanner_" + Math.random().toString(16).substr(2, 8);
+            const brokerHost = "broker.emqx.io";
+            const brokerPort = 8084; // Secure WebSocket Port
+
+            try {
+                mqttClient = new Paho.MQTT.Client(brokerHost, brokerPort, "/mqtt", clientID);
+                mqttClient.onConnectionLost = (resp) => {
+                    document.getElementById('mqtt_dot').className = "w-2.5 h-2.5 rounded-full bg-amber-500";
+                    document.getElementById('mqtt_status').innerText = "Mất kết nối MQTT, thử lại...";
+                    setTimeout(initMQTT, 5000);
+                };
+                mqttClient.onMessageArrived = (msg) => {
+                    try {
+                        const topic = msg.destinationName; // factory/scale/{scale_id}/telemetry
+                        const payload = JSON.parse(msg.payloadString);
+                        const parts = topic.split('/');
+                        const scaleId = parts[2] || payload.scale_id || "SCALE_UNKNOWN";
+
+                        handleDiscoveredScaleFromTelemetry(scaleId, payload);
+                    } catch(e) {}
+                };
+
+                mqttClient.connect({
+                    useSSL: true,
+                    timeout: 5,
+                    onSuccess: () => {
+                        document.getElementById('mqtt_dot').className = "w-2.5 h-2.5 rounded-full bg-emerald-400 pulse-online";
+                        document.getElementById('mqtt_status').innerText = "Mesh Active (EMQX Cloud)";
+                        mqttClient.subscribe("factory/scale/+/telemetry", { qos: 0 });
+                    },
+                    onFailure: () => {
+                        document.getElementById('mqtt_dot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+                        document.getElementById('mqtt_status').innerText = "MQTT Offline";
+                    }
+                });
+            } catch(e) {
+                document.getElementById('mqtt_status').innerText = "Không hỗ trợ WebSocket";
+            }
+        }
+
+        // Handle Scale Data from MQTT or Polling
+        function handleDiscoveredScaleFromTelemetry(scaleId, data, ip = null) {
+            let key = ip || scaleId;
+            let existing = devices.get(key) || {};
+
+            let dev = {
+                id: scaleId || existing.id || "SCALE_01",
+                ip: ip || data.ip || existing.ip || "192.168.1.100",
+                gross: parseFloat(data.gross) || 0.0,
+                net: parseFloat(data.net) || 0.0,
+                tare: parseFloat(data.tare) || 0.0,
+                unit: data.unit || existing.unit || "kg",
+                isNet: !!data.isNet,
+                stable: !!data.stable,
+                readyZero: !!data.readyZero,
+                records: parseInt(data.records) || 0,
+                mode: data.mode === 1 ? "MODBUS RTU" : "STREAM PARSER",
+                latency: existing.latency || 25,
+                lastSeen: Date.now(),
+                online: true,
+                source: ip ? "LAN_DIRECT" : "MQTT_MESH"
+            };
+
+            const isNew = !devices.has(key);
+            devices.set(key, dev);
+
+            if (isNew) {
+                playChime(1046, 'sine', 0.2); // Ting! New device found!
+            }
+
+            updateCounts();
+            renderDevices();
+        }
+
+        // ================= MULTI-THREADED LAN IP SCANNER =================
+        function setSubnet(sub) {
+            document.getElementById('scan_prefix').value = sub;
+        }
+
+        async function startScan() {
+            if (isScanning) return;
+            isScanning = true;
+
+            const prefix = document.getElementById('scan_prefix').value.trim();
+            const start = parseInt(document.getElementById('scan_start').value);
+            const end = parseInt(document.getElementById('scan_end').value);
+            const concurrency = parseInt(document.getElementById('scan_concurrency').value);
+
+            if (!prefix || isNaN(start) || isNaN(end) || start > end) {
+                alert("Dải IP không hợp lệ!");
+                isScanning = false;
+                return;
+            }
+
+            document.getElementById('btn_scan').disabled = true;
+            document.getElementById('btn_scan').classList.add('opacity-50');
+            document.getElementById('btn_stop').disabled = false;
+            document.getElementById('scan_progress_wrap').classList.remove('hidden');
+
+            scanAbortController = new AbortController();
+
+            const totalHosts = end - start + 1;
+            let completed = 0;
+            let foundInThisScan = 0;
+
+            const ipsToScan = [];
+            for (let i = start; i <= end; i++) {
+                ipsToScan.push(prefix + i);
+            }
+
+            async function scanWorker() {
+                while (ipsToScan.length > 0 && isScanning) {
+                    const targetIp = ipsToScan.shift();
+                    const startTime = performance.now();
+
+                    try {
+                        // Thử gọi /data với timeout 1200ms
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1200));
+                        const fetchPromise = fetch(`http://${targetIp}/data`, {
+                            signal: scanAbortController.signal,
+                            headers: { 'Accept': 'application/json' },
+                            mode: 'cors'
+                        });
+
+                        const res = await Promise.race([fetchPromise, timeoutPromise]);
+                        if (res.ok) {
+                            const data = await res.json();
+                            const rtt = Math.round(performance.now() - startTime);
+
+                            // Lấy thêm cấu hình trạm nếu có
+                            let devId = "SCALE_SCAN";
+                            try {
+                                const cfgRes = await fetch(`http://${targetIp}/get_config`, { signal: scanAbortController.signal });
+                                if (cfgRes.ok) {
+                                    const cfg = await cfgRes.json();
+                                    devId = cfg.scale_id || devId;
+                                }
+                            } catch(e) {}
+
+                            data.ip = targetIp;
+                            data.latency = rtt;
+                            handleDiscoveredScaleFromTelemetry(devId, data, targetIp);
+                            foundInThisScan++;
+                        }
+                    } catch(e) {
+                        // Not a scale or offline
+                    }
+
+                    completed++;
+                    const pct = Math.round((completed / totalHosts) * 100);
+                    document.getElementById('scan_progress_bar').style.width = pct + '%';
+                    document.getElementById('scan_percent_text').innerText = `${pct}% (${completed}/${totalHosts})`;
+                    document.getElementById('scan_status_text').innerHTML = `Đang quét: <b class="text-cyan-400 font-mono-num">${targetIp}</b> | Đã tìm thấy: <b class="text-emerald-400">${foundInThisScan} cân</b>`;
+                }
+            }
+
+            const workers = [];
+            for (let i = 0; i < concurrency; i++) {
+                workers.push(scanWorker());
+            }
+
+            await Promise.all(workers);
+
+            stopScan();
+            playChime(1318, 'sine', 0.3); // Hoàn thành
+            document.getElementById('scan_status_text').innerHTML = `<span class="text-emerald-400 font-bold">✓ Hoàn tất dò quét! Tìm thấy tổng cộng ${devices.size} đầu cân.</span>`;
+        }
+
+        function stopScan() {
+            isScanning = false;
+            if (scanAbortController) {
+                scanAbortController.abort();
+                scanAbortController = null;
+            }
+            document.getElementById('btn_scan').disabled = false;
+            document.getElementById('btn_scan').classList.remove('opacity-50');
+            document.getElementById('btn_stop').disabled = true;
+        }
+
+        // ================= BACKGROUND POLLING FOR ACTIVE DEVICES =================
+        setInterval(() => {
+            devices.forEach((dev, key) => {
+                if (dev.ip && (Date.now() - dev.lastSeen > 2000)) {
+                    // Poll directly via HTTP
+                    const st = performance.now();
+                    fetch(`http://${dev.ip}/data`, { mode: 'cors' })
+                    .then(r => r.json())
+                    .then(d => {
+                        dev.gross = d.gross;
+                        dev.net = d.net;
+                        dev.tare = d.tare;
+                        dev.unit = d.unit || dev.unit;
+                        dev.isNet = d.isNet;
+                        dev.stable = d.stable;
+                        dev.readyZero = d.readyZero;
+                        dev.records = d.records;
+                        dev.mode = d.mode === 1 ? "MODBUS RTU" : "STREAM PARSER";
+                        dev.latency = Math.round(performance.now() - st);
+                        dev.lastSeen = Date.now();
+                        dev.online = true;
+                        updateDomForDevice(dev);
+                    })
+                    .catch(() => {
+                        if (Date.now() - dev.lastSeen > 6000) {
+                            dev.online = false;
+                            updateDomForDevice(dev);
+                        }
+                    });
+                }
+            });
+        }, 1500);
+
+        function updateCounts() {
+            let online = 0;
+            devices.forEach(d => { if (d.online) online++; });
+            document.getElementById('stat_online_count').innerText = online;
+            document.getElementById('stat_total_count').innerText = devices.size + " trạm";
+            document.getElementById('pill_device_count').innerText = devices.size + " thiết bị";
+        }
+
+        // ================= UI RENDERING (GRID & TABLE) =================
+        function switchView(mode) {
+            currentView = mode;
+            if (mode === 'grid') {
+                document.getElementById('container_grid').classList.remove('hidden');
+                document.getElementById('container_table').classList.add('hidden');
+                document.getElementById('btn_view_grid').className = "px-2.5 py-1 rounded font-bold bg-cyan-600 text-white transition";
+                document.getElementById('btn_view_table').className = "px-2.5 py-1 rounded font-bold text-slate-400 hover:text-white transition";
+            } else {
+                document.getElementById('container_grid').classList.add('hidden');
+                document.getElementById('container_table').classList.remove('hidden');
+                document.getElementById('btn_view_grid').className = "px-2.5 py-1 rounded font-bold text-slate-400 hover:text-white transition";
+                document.getElementById('btn_view_table').className = "px-2.5 py-1 rounded font-bold bg-cyan-600 text-white transition";
+            }
+            renderDevices();
+        }
+
+        function renderDevices() {
+            const gridContainer = document.getElementById('container_grid');
+            const tableBody = document.getElementById('table_body');
+            const query = document.getElementById('table_search').value.toLowerCase();
+
+            if (devices.size === 0) {
+                return;
+            }
+
+            let gridHtml = "";
+            let tableHtml = "";
+
+            devices.forEach((dev) => {
+                if (query && !dev.id.toLowerCase().includes(query) && !dev.ip.includes(query)) return;
+
+                const curWeight = dev.isNet ? dev.net : dev.gross;
+                const weightColor = dev.stable ? 'digit-glow-green' : 'digit-glow-red';
+                const statusDot = dev.online ? 'bg-emerald-400 pulse-online' : 'bg-rose-500';
+                const latencyBadge = dev.latency < 50 ? 'text-emerald-400' : (dev.latency < 120 ? 'text-amber-400' : 'text-rose-400');
+
+                // CARD HTML
+                gridHtml += `
+                <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden" id="card_${dev.ip.replace(/\./g, '_')}">
+                    <!-- Top Info Strip -->
+                    <div class="flex justify-between items-start mb-3 border-b border-slate-800 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full ${statusDot}"></span>
+                            <div>
+                                <h4 class="font-extrabold text-sm text-cyan-300 tracking-wide">${dev.id}</h4>
+                                <span class="text-[11px] text-slate-400 font-mono-num flex items-center gap-1">
+                                    🌐 ${dev.ip}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] bg-slate-900 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-mono-num">
+                                PORT 502
+                            </span>
+                            <div class="text-[10px] ${latencyBadge} font-mono-num mt-0.5">${dev.latency}ms</div>
+                        </div>
+                    </div>
+
+                    <!-- Annunciators -->
+                    <div class="flex justify-between text-[10px] font-bold font-mono-num bg-slate-950/80 px-2.5 py-1 rounded-md mb-2 border border-slate-800">
+                        <span class="${dev.stable ? 'text-emerald-400' : 'text-slate-600'}">STABLE</span>
+                        <span class="${Math.abs(curWeight) < 0.01 ? 'text-emerald-400' : 'text-slate-600'}">ZERO</span>
+                        <span class="${dev.isNet ? 'text-amber-400' : 'text-emerald-400'}">${dev.isNet ? 'NET' : 'GROSS'}</span>
+                        <span class="${!dev.readyZero ? 'text-rose-400' : 'text-slate-600'}">LOCK</span>
+                    </div>
+
+                    <!-- Huge Digits Screen -->
+                    <div class="bg-black/95 rounded-xl p-3 border-2 border-slate-800 mb-3 text-right">
+                        <div class="text-4xl font-extrabold font-mono-num tracking-wider ${weightColor} transition-all duration-100" id="val_${dev.ip.replace(/\./g, '_')}">
+                            ${curWeight.toFixed(2)}
+                            <span class="text-lg text-sky-400 ml-1 font-sans">${dev.unit}</span>
+                        </div>
+                        <div class="flex justify-between text-[11px] text-slate-400 font-mono-num mt-1 border-t border-slate-900 pt-1">
+                            <span>Bì: ${dev.tare.toFixed(2)} ${dev.unit}</span>
+                            <span>Mẻ: ${dev.records}</span>
+                        </div>
+                    </div>
+
+                    <!-- Protocol & Gateway Tags -->
+                    <div class="flex justify-between items-center text-[10px] text-slate-400 mb-3">
+                        <span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-sky-300">
+                            ⚙️ ${dev.mode}
+                        </span>
+                        <button onclick="openModbusHelper('${dev.id}', '${dev.ip}')" class="text-amber-400 hover:text-amber-300 bg-amber-950/40 border border-amber-600/40 px-2 py-0.5 rounded transition">
+                            ⚡ PLC Modbus Helper
+                        </button>
+                    </div>
+
+                    <!-- Direct Action Buttons -->
+                    <div class="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-800 text-xs">
+                        <button onclick="sendRemoteCmd('${dev.ip}', '${dev.id}', 'zero')" class="bg-rose-950/80 hover:bg-rose-900 border border-rose-600/50 text-rose-200 font-bold py-1.5 rounded transition">
+                            ZERO
+                        </button>
+                        <button onclick="sendRemoteCmd('${dev.ip}', '${dev.id}', 'tare')" class="bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 font-bold py-1.5 rounded transition">
+                            TARE
+                        </button>
+                        <button onclick="sendRemoteCmd('${dev.ip}', '${dev.id}', 'toggle_unit')" class="bg-blue-950/80 hover:bg-blue-900 border border-blue-600/50 text-blue-200 font-bold py-1.5 rounded transition">
+                            UNIT
+                        </button>
+                        <button onclick="openTerminalModal('${dev.id}', '${dev.ip}')" class="bg-cyan-700 hover:bg-cyan-600 text-white font-bold py-1.5 rounded transition">
+                            MỞ CÂN
+                        </button>
+                    </div>
+                </div>
+                `;
+
+                // TABLE ROW HTML
+                tableHtml += `
+                <tr class="hover:bg-slate-850/60 transition">
+                    <td class="py-3 px-4 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full ${statusDot}"></span>
+                        <span class="font-bold ${dev.online ? 'text-emerald-400' : 'text-slate-500'}">${dev.online ? 'ONLINE' : 'OFFLINE'}</span>
+                    </td>
+                    <td class="py-3 px-4 font-bold text-cyan-300 font-mono-num">${dev.id}</td>
+                    <td class="py-3 px-4 font-mono-num text-slate-300">
+                        <a href="http://${dev.ip}" target="_blank" class="hover:underline hover:text-cyan-400">${dev.ip}</a>
+                    </td>
+                    <td class="py-3 px-4 font-extrabold font-mono-num text-base ${dev.stable ? 'text-emerald-400' : 'text-rose-400'}">
+                        ${curWeight.toFixed(2)} <span class="text-xs text-sky-400 font-sans">${dev.unit}</span>
+                    </td>
+                    <td class="py-3 px-4 font-mono-num text-slate-400">${dev.tare.toFixed(2)} ${dev.unit}</td>
+                    <td class="py-3 px-4 text-slate-300">${dev.mode}</td>
+                    <td class="py-3 px-4 font-mono-num text-emerald-400 font-bold">Port 502 (Active)</td>
+                    <td class="py-3 px-4 font-mono-num ${latencyBadge}">${dev.latency} ms</td>
+                    <td class="py-3 px-4 text-center">
+                        <div class="flex justify-center gap-1.5">
+                            <button onclick="sendRemoteCmd('${dev.ip}', '${dev.id}', 'zero')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 px-2 py-1 rounded text-[11px] font-bold">ZERO</button>
+                            <button onclick="sendRemoteCmd('${dev.ip}', '${dev.id}', 'tare')" class="bg-amber-900/60 hover:bg-amber-800 text-amber-200 px-2 py-1 rounded text-[11px] font-bold">TARE</button>
+                            <button onclick="openModbusHelper('${dev.id}', '${dev.ip}')" class="bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2 py-1 rounded text-[11px] font-bold">PLC</button>
+                            <button onclick="openTerminalModal('${dev.id}', '${dev.ip}')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-2.5 py-1 rounded text-[11px] font-bold">MỞ CÂN</button>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            });
+
+            gridContainer.innerHTML = gridHtml;
+            tableBody.innerHTML = tableHtml;
+        }
+
+        function updateDomForDevice(dev) {
+            const key = dev.ip.replace(/\./g, '_');
+            const elem = document.getElementById(`val_${key}`);
+            if (elem) {
+                const curWeight = dev.isNet ? dev.net : dev.gross;
+                elem.className = `text-4xl font-extrabold font-mono-num tracking-wider ${dev.stable ? 'digit-glow-green' : 'digit-glow-red'} transition-all duration-100`;
+                elem.innerHTML = `${curWeight.toFixed(2)} <span class="text-lg text-sky-400 ml-1 font-sans">${dev.unit}</span>`;
+            }
+        }
+
+        // ================= REMOTE CONTROL ACTIONS =================
+        function sendRemoteCmd(ip, scaleId, action) {
+            playChime(784, 'triangle', 0.1);
+
+            // 1. Thử gửi trực tiếp qua HTTP
+            if (ip) {
+                let endpoint = `/${action}`;
+                fetch(`http://${ip}${endpoint}`, { method: 'POST', mode: 'no-cors' })
+                .then(() => {})
+                .catch(() => {});
+            }
+
+            // 2. Gửi đồng thời qua MQTT Mesh
+            if (mqttClient && mqttClient.isConnected()) {
+                const topic = `factory/scale/${scaleId}/command`;
+                const message = new Paho.MQTT.Message(JSON.stringify({ action: action, timestamp: Date.now() }));
+                message.destinationName = topic;
+                mqttClient.send(message);
+            }
+        }
+
+        function broadcastZeroAll() {
+            if (!confirm("BẠN CÓ CHẮC CHẮN MUỐN QUY 0 (ZERO) TẤT CẢ CÁC ĐẦU CÂN TRONG MẠNG?")) return;
+            devices.forEach(dev => {
+                sendRemoteCmd(dev.ip, dev.id, 'zero');
+            });
+            alert("Đã phát lệnh ZERO đến tất cả các trạm cân!");
+        }
+
+        function refreshAll() {
+            startScan();
+        }
+
+        // ================= MODBUS PLC HELPER =================
+        function openModbusHelper(scaleId, ip) {
+            document.getElementById('modbus_modal_subtitle').innerText = `Trạm: ${scaleId} • IP LAN: ${ip} • Port: 502`;
+            document.getElementById('mb_val_ip').innerText = ip;
+            document.getElementById('siemens_ip').innerText = `'${ip}'`;
+            document.querySelectorAll('.delta_ip').forEach(el => el.innerText = ip);
+            document.querySelectorAll('.modscan_ip').forEach(el => el.innerText = ip);
+
+            document.getElementById('modal_modbus').classList.remove('hidden');
+            document.getElementById('modal_modbus').classList.add('flex');
+        }
+
+        function switchPlcTab(tab, btn) {
+            ['siemens', 'mitsubishi', 'delta', 'modscan'].forEach(t => {
+                document.getElementById(`plc_tab_${t}`).classList.add('hidden');
+            });
+            document.querySelectorAll('.plc-tab-btn').forEach(b => {
+                b.className = "plc-tab-btn px-4 py-2.5 text-slate-400 hover:text-white";
+            });
+
+            document.getElementById(`plc_tab_${tab}`).classList.remove('hidden');
+            btn.className = "plc-tab-btn active px-4 py-2.5 bg-blue-600 text-white font-bold";
+        }
+
+        // ================= EMBEDDED TERMINAL MODAL =================
+        function openTerminalModal(scaleId, ip) {
+            document.getElementById('terminal_modal_title').innerText = `Đầu cân: ${scaleId} (${ip})`;
+            document.getElementById('btn_open_external').href = `http://${ip}`;
+            document.getElementById('terminal_iframe').src = `http://${ip}`;
+
+            document.getElementById('modal_terminal').classList.remove('hidden');
+            document.getElementById('modal_terminal').classList.add('flex');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            document.getElementById(id).classList.remove('flex');
+            if (id === 'modal_terminal') {
+                document.getElementById('terminal_iframe').src = '';
+            }
+        }
+
+        // ================= EXPORT CSV =================
+        function exportCSV() {
+            if (devices.size === 0) {
+                alert("Chưa có dữ liệu trạm cân nào để xuất!");
+                return;
+            }
+            let csv = "STT,Mã Trạm,Địa Chỉ IP,Khối Lượng,Đơn Vị,Chế Độ,Ổn Định,Bì,Mẻ,Giao Thức,Thời Gian Quét\n";
+            let idx = 1;
+            devices.forEach(d => {
+                const w = d.isNet ? d.net : d.gross;
+                csv += `${idx++},"${d.id}","${d.ip}",${w.toFixed(2)},"${d.unit}","${d.isNet ? 'NET' : 'GROSS'}","${d.stable ? 'STABLE' : 'MOVING'}",${d.tare.toFixed(2)},${d.records},"${d.mode}","${new Date(d.lastSeen).toLocaleString('vi-VN')}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `danh_sach_dau_can_lan_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+        }
+
+        // Auto initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initMQTT();
+            // Tự động kiểm tra IP hiện tại (ví dụ 192.168.4.1 hoặc mạng local)
+            setTimeout(() => {
+                startScan();
+            }, 600);
+        });
+    </script>
+</body>
+</html>
