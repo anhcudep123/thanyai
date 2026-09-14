@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCADA CÂN 2 ĐẦU - KINCONY KC868-A16</title>
+    <style>
+        :root {
+            --bg-main: #090d16;
+            --panel-bg: #111827;
+            --card-bg: #1f2937;
+            --border-color: #374151;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --cyan: #06b6d4;
+            --green: #10b981;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --lcd-bg: #030712;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* HEADER */
+        .header {
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .logo {
+            width: 42px; height: 42px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #0891b2, #10b981);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 18px; color: #fff;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+        }
+
+        .brand-title h1 { font-size: 18px; font-weight: 800; color: var(--cyan); }
+        .brand-title p { font-size: 11px; color: var(--text-muted); }
+
+        .conn-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ip-input-group {
+            background-color: #030712;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px;
+        }
+
+        .ip-input-group input {
+            background: transparent; border: none;
+            color: var(--cyan); font-family: monospace;
+            font-size: 13px; font-weight: bold; width: 110px; text-align: center;
+            outline: none;
+        }
+
+        .status-badge {
+            padding: 4px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: bold;
+            display: inline-block;
+        }
+        .status-online { background-color: rgba(16, 185, 129, 0.2); color: var(--green); border: 1px solid var(--green); }
+        .status-offline { background-color: rgba(239, 68, 68, 0.2); color: var(--red); border: 1px solid var(--red); }
+
+        /* BUTTONS */
+        .btn {
+            border: none; border-radius: 8px;
+            padding: 8px 16px; font-size: 13px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s ease;
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-green { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+        .btn-red { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; }
+        .btn-amber { background: #f59e0b; color: #000; width: 100%; padding: 12px; font-size: 14px; }
+        .btn-amber:hover { background: #d97706; }
+
+        /* MAIN LAYOUT */
+        .main-container {
+            max-width: 1200px; width: 100%;
+            margin: 0 auto; padding: 20px 15px;
+            display: flex; flex-direction: column; gap: 20px;
+            flex: 1;
+        }
+
+        .control-panel {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 15px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 15px;
+        }
+
+        /* GRID PHỄU CÂN */
+        .hopper-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .hopper-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 20px;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .card-title {
+            font-size: 12px; font-weight: 800;
+            padding: 4px 10px; border-radius: 4px; text-transform: uppercase;
+        }
+        .title-p1 { background-color: rgba(6, 182, 212, 0.2); color: var(--cyan); }
+        .title-p2 { background-color: rgba(245, 158, 11, 0.2); color: var(--amber); }
+
+        .fsm-state {
+            font-size: 11px; font-weight: 800;
+            padding: 4px 10px; border-radius: 6px;
+            background: rgba(59, 130, 246, 0.2); color: #60a5fa;
+        }
+
+        /* MÀN HÌNH MÔ PHỎNG LCD CÂN */
+        .lcd-screen {
+            background-color: var(--lcd-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 10px; padding: 20px 10px;
+            text-align: center; margin-bottom: 15px;
+            box-shadow: inset 0 0 15px rgba(16, 185, 129, 0.15);
+        }
+
+        .lcd-value {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 48px; font-weight: bold; color: var(--green);
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        .lcd-unit { font-size: 20px; color: var(--green); font-family: sans-serif; font-weight: normal; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat-box {
+            background-color: var(--bg-main);
+            border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 10px;
+        }
+        .stat-label { font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+        .stat-value { font-family: monospace; font-size: 18px; font-weight: bold; color: var(--cyan); }
+
+        /* FOOTER */
+        .footer {
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 12px; text-align: center;
+            font-size: 11px; color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="brand">
+            <div class="logo">KC</div>
+            <div class="brand-title">
+                <h1>HỆ THỐNG CÂN ĐÓNG BAO 2 ĐẦU (DUAL HOPPER)</h1>
+                <p>Bo mạch Kincony KC868-A16 REV 1.6 & Module LO-002</p>
+            </div>
+        </div>
+
+        <div class="conn-bar">
+            <div class="ip-input-group">
+                <span style="color:var(--text-muted)">IP:</span>
+                <input type="text" id="targetIp" value="192.168.2.119">
+                <button class="btn btn-green" style="padding:4px 8px; font-size:11px;" onclick="saveIp()">LƯU IP</button>
+            </div>
+            <span id="connStatus" class="status-badge status-offline">OFFLINE</span>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-container">
+
+        <!-- THANH ĐIỀU KHIỂN CHUNG -->
+        <div class="control-panel">
+            <div style="font-weight: bold; font-size: 14px; color: var(--text-muted);">ĐIỀU KHIỂN TỔNG HỆ THỐNG:</div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-green" onclick="sendCmd('start')">▶ CHẠY HỆ THỐNG</button>
+                <button class="btn btn-red" onclick="sendCmd('stop')">⏹ DỪNG KHẨN CẤP</button>
+            </div>
+        </div>
+
+        <!-- KHỐI 2 PHỄU CÂN -->
+        <div class="hopper-grid">
+
+            <!-- PHỄU CÂN 1 -->
+            <div class="hopper-card">
+                <div>
+                    <div class="card-header">
+                        <span class="card-title title-p1">PHỄU CÂN 1 (SCALE 1)</span>
+                        <span class="fsm-state" id="state1">IDLE (CHỜ)</span>
+                    </div>
+
+                    <div class="lcd-screen">
+                        <div class="lcd-value" id="weight1">0.00 <span class="lcd-unit">kg</span></div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">SẢN LƯỢNG:</span>
+                            <div class="stat-value" id="bags1">0 <span style="font-size:11px; color:var(--text-muted)">bao</span></div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">TỔNG KHỐI LƯỢNG:</span>
+                            <div class="stat-value" id="tot1">0.00 <span style="font-size:11px; color:var(--text-muted)">kg</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-amber" onclick="sendHopper(1, 'zero')">🎯 VỀ 0 / TARE PHỄU 1</button>
+            </div>
+
+            <!-- PHỄU CÂN 2 -->
+            <div class="hopper-card">
+                <div>
+                    <div class="card-header">
+                        <span class="card-title title-p2">PHỄU CÂN 2 (SCALE 2)</span>
+                        <span class="fsm-state" id="state2">IDLE (CHỜ)</span>
+                    </div>
+
+                    <div class="lcd-screen">
+                        <div class="lcd-value" id="weight2">0.00 <span class="lcd-unit">kg</span></div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">SẢN LƯỢNG:</span>
+                            <div class="stat-value" id="bags2">0 <span style="font-size:11px; color:var(--text-muted)">bao</span></div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">TỔNG KHỐI LƯỢNG:</span>
+                            <div class="stat-value" id="tot2">0.00 <span style="font-size:11px; color:var(--text-muted)">kg</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-amber" onclick="sendHopper(2, 'zero')">🎯 VỀ 0 / TARE PHỄU 2</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        Kincony KC868-A16 SCADA Panel • Chạy Offline 100% trên PC, iPad & Android
+    </div>
+
+    <!-- SCRIPT GIAO TIẾP VỚI BACKEND ESP32 -->
+    <script>
+        const FSM_STATES = ["IDLE (CHỜ)", "KẸP BAO", "AUTO TARE", "NẠP THÔ", "NẠP TINH", "ỔN ĐỊNH", "XẢ LIỆU", "NHẢ BAO"];
+        
+        // Đọc địa chỉ IP đã lưu từ bộ nhớ trình duyệt (localStorage)
+        function initIp() {
+            const savedIp = localStorage.getItem('kc868_ip');
+            if (savedIp) {
+                document.getElementById('targetIp').value = savedIp;
+            }
+        }
+
+        function saveIp() {
+            const ip = document.getElementById('targetIp').value.trim();
+            localStorage.setItem('kc868_ip', ip);
+            alert("Đã lưu địa chỉ IP: " + ip);
+        }
+
+        function getBaseUrl() {
+            const ip = document.getElementById('targetIp').value.trim();
+            return `http://${ip}`;
+        }
+
+        // Cập nhật số liệu tự động từ ESP32 qua API /api/debug
+        async function fetchScadaData() {
+            const ip = document.getElementById('targetIp').value.trim();
+            if (!ip) return;
+
+            try {
+                const res = await fetch(`${getBaseUrl()}/api/debug`, { signal: AbortSignal.timeout(400) });
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // Cập nhật thẻ trạng thái ONLINE
+                    const statusElem = document.getElementById('connStatus');
+                    statusElem.innerText = "ONLINE";
+                    statusElem.className = "status-badge status-online";
+
+                    // Cập nhật số liệu Phễu 1 (Đã chia 100 quy đổi sang Kg)
+                    let w1 = (data.w1 || 0) / 100.0;
+                    let tot1 = (data.tot1 || 0) / 100.0;
+                    document.getElementById('weight1').innerHTML = `${w1.toFixed(2)} <span class="lcd-unit">kg</span>`;
+                    document.getElementById('bags1').innerHTML = `${data.bags1 || 0} <span style="font-size:11px; color:var(--text-muted)">bao</span>`;
+                    document.getElementById('tot1').innerHTML = `${tot1.toFixed(2)} <span style="font-size:11px; color:var(--text-muted)">kg</span>`;
+                    document.getElementById('state1').innerText = FSM_STATES[data.st1] || `STATE_${data.st1}`;
+
+                    // Cập nhật số liệu Phễu 2
+                    let w2 = (data.w2 || 0) / 100.0;
+                    let tot2 = (data.tot2 || 0) / 100.0;
+                    document.getElementById('weight2').innerHTML = `${w2.toFixed(2)} <span class="lcd-unit">kg</span>`;
+                    document.getElementById('bags2').innerHTML = `${data.bags2 || 0} <span style="font-size:11px; color:var(--text-muted)">bao</span>`;
+                    document.getElementById('tot2').innerHTML = `${tot2.toFixed(2)} <span style="font-size:11px; color:var(--text-muted)">kg</span>`;
+                    document.getElementById('state2').innerText = FSM_STATES[data.st2] || `STATE_${data.st2}`;
+                }
+            } catch (err) {
+                // Đánh dấu OFFLINE khi mất kết nối
+                const statusElem = document.getElementById('connStatus');
+                statusElem.innerText = "OFFLINE";
+                statusElem.className = "status-badge status-offline";
+            }
+        }
+
+        // Gửi lệnh Chạy / Dừng tổng
+        async function sendCmd(action) {
+            try {
+                await fetch(`${getBaseUrl()}/api/cmd?action=${action}`);
+            } catch (e) { console.error("Lỗi gửi lệnh:", e); }
+        }
+
+        // Gửi lệnh Zero / Tare từng phễu
+        async function sendHopper(hopperId, action) {
+            try {
+                await fetch(`${getBaseUrl()}/api/hopper?id=${hopperId}&action=${action}`);
+            } catch (e) { console.error("Lỗi gửi lệnh Phễu:", e); }
+        }
+
+        // Khởi chạy vòng lặp cập nhật
+        initIp();
+        setInterval(fetchScadaData, 200);
+    </script>
+</body>
+</html>

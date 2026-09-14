@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCADA & DEBUG - KINCONY KC868-A16</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700;800&display=swap');
+        body { background-color: #090d16; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+        .font-lcd { font-family: 'Share Tech Mono', monospace; }
+        .lcd-display { background: #030712; border: 2px solid #1e293b; box-shadow: inset 0 0 20px rgba(0, 255, 102, 0.15); color: #00ff66; text-shadow: 0 0 15px rgba(0, 255, 102, 0.6); }
+        .led-dot { width: 12px; height: 12px; border-radius: 50%; background-color: #374151; display: inline-block; transition: 0.2s; }
+        .led-on { background-color: #10b981; box-shadow: 0 0 10px #10b981; }
+        .tab-btn.active { border-bottom: 3px solid #06b6d4; color: #38bdf8; background-color: rgba(30, 41, 59, 0.6); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <!-- HEADER -->
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex flex-wrap justify-between items-center shadow-2xl">
+        <div class="flex items-center space-x-3">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-500 flex items-center justify-center font-extrabold text-white text-xl shadow-lg border border-cyan-400/30">KC</div>
+            <div>
+                <h1 class="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">
+                    HỆ THỐNG CÂN ĐÓNG BAO 2 ĐẦU & DEBUG PANEL
+                </h1>
+                <p class="text-xs text-gray-400 font-medium">Kincony KC868-A16 Diagnostic Tool</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4 mt-3 sm:mt-0">
+            <div class="flex items-center space-x-2 bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800">
+                <span class="text-xs font-semibold text-gray-400">IP BOARD:</span>
+                <input type="text" id="esp32-ip" value="192.168.2.119" class="bg-transparent text-xs text-cyan-400 font-mono w-28 focus:outline-none text-center">
+                <button onclick="autoScanLAN()" id="btn-scan" class="bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold px-3 py-1 rounded shadow">🔍 TÌM IP</button>
+            </div>
+            <div class="flex items-center space-x-2 bg-gray-800/80 px-3.5 py-1.5 rounded-full border border-gray-700">
+                <span id="conn-status" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 animate-pulse">Kết nối...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <div class="bg-gray-900/80 border-b border-gray-800 px-6">
+        <div class="flex space-x-2">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active px-6 py-3 text-sm font-semibold text-gray-300 hover:text-white transition">🖥️ Giám Sát Vận Hành</button>
+            <button onclick="switchTab('debug')" id="tab-debug" class="tab-btn px-6 py-3 text-sm font-semibold text-gray-300 hover:text-white transition">🔧 Chẩn Đoán & Debug Hệ Thống</button>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
+
+        <!-- TAB 1: DASHBOARD GIÁM SÁT -->
+        <div id="content-dashboard" class="tab-content active space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Phễu 1 -->
+                <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-bold uppercase text-cyan-400">PHỄU CÂN 1 (ID 16)</span>
+                        <span id="state-1" class="px-3 py-1 rounded-lg text-xs font-extrabold bg-blue-500/20 text-blue-400">IDLE</span>
+                    </div>
+                    <div class="lcd-display rounded-xl p-6 text-center">
+                        <div id="weight-1" class="text-5xl font-bold font-lcd">0.00 kg</div>
+                    </div>
+                    <div class="mt-4 flex justify-between text-sm font-mono">
+                        <span>Số bao: <b id="bags-1" class="text-cyan-400">0</b></span>
+                        <span>Tổng: <b id="tot-1" class="text-emerald-400">0.00</b> kg</span>
+                    </div>
+                </div>
+                <!-- Phễu 2 -->
+                <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-bold uppercase text-amber-400">PHỄU CÂN 2 (ID 17)</span>
+                        <span id="state-2" class="px-3 py-1 rounded-lg text-xs font-extrabold bg-blue-500/20 text-blue-400">IDLE</span>
+                    </div>
+                    <div class="lcd-display rounded-xl p-6 text-center">
+                        <div id="weight-2" class="text-5xl font-bold font-lcd">0.00 kg</div>
+                    </div>
+                    <div class="mt-4 flex justify-between text-sm font-mono">
+                        <span>Số bao: <b id="bags-2" class="text-cyan-400">0</b></span>
+                        <span>Tổng: <b id="tot-2" class="text-emerald-400">0.00</b> kg</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: CHẨN ĐOÁN & DEBUG -->
+        <div id="content-debug" class="tab-content space-y-6">
+            <div class="bg-gray-900 p-6 rounded-2xl border border-gray-800 shadow-xl space-y-6">
+                <h2 class="text-lg font-bold text-cyan-400 border-b border-gray-800 pb-3">🔧 BẢNG ĐIỀU KHIỂN CHẨN ĐOÁN PHẦN CỨNG (DEBUGGER)</h2>
+
+                <!-- Thông số CPU & RAM -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 text-center">
+                        <div class="text-xs text-gray-400">TẢI CPU FREQ</div>
+                        <div id="dbg-cpu" class="text-xl font-bold text-cyan-400 font-mono mt-1">0 MHz</div>
+                    </div>
+                    <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 text-center">
+                        <div class="text-xs text-gray-400">RAM TRỐNG (HEAP)</div>
+                        <div id="dbg-heap" class="text-xl font-bold text-emerald-400 font-mono mt-1">0 KB</div>
+                    </div>
+                    <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 text-center">
+                        <div class="text-xs text-gray-400">THỜI GIAN CHẠY (UPTIME)</div>
+                        <div id="dbg-uptime" class="text-xl font-bold text-amber-400 font-mono mt-1">0 s</div>
+                    </div>
+                    <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 text-center">
+                        <div class="text-xs text-gray-400">KẾT NỐI LAN (ETH)</div>
+                        <div id="dbg-lan" class="text-xl font-bold text-rose-400 font-mono mt-1">OFFLINE</div>
+                    </div>
+                </div>
+
+                <!-- Trạng thái RS485 Cân số -->
+                <div class="bg-gray-950 p-4 rounded-xl border border-gray-800">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">📡 GIAO TIẾP RS485 (MODULE LO-002)</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="flex items-center justify-between bg-gray-900 p-3 rounded-lg">
+                            <span>Phễu 1 (ID 16):</span>
+                            <span id="dbg-rs1" class="px-2.5 py-1 rounded text-xs font-bold bg-red-950 text-red-400">MẤT KẾT NỐI</span>
+                        </div>
+                        <div class="flex items-center justify-between bg-gray-900 p-3 rounded-lg">
+                            <span>Phễu 2 (ID 17):</span>
+                            <span id="dbg-rs2" class="px-2.5 py-1 rounded text-xs font-bold bg-red-950 text-red-400">MẤT KẾT NỐI</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Giám sát 16 Ngõ Vào (Inputs) -->
+                <div class="bg-gray-950 p-4 rounded-xl border border-gray-800">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">📥 TRẠNG THÁI 16 NGÕ VÀO (INPUTS X01 - X16)</h3>
+                    <div class="grid grid-cols-4 sm:grid-cols-8 gap-2" id="inputs-grid">
+                        <!-- Tạo động bằng JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- SCRIPT CHẨN ĐOÁN -->
+    <script>
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('content-' + tabId).classList.add('active');
+        }
+
+        function getBaseUrl() {
+            let ip = document.getElementById('esp32-ip').value.trim();
+            return ip ? (ip.startsWith('http') ? ip : `http://${ip}`) : '';
+        }
+
+        // Khởi tạo giao diện ô Inputs
+        const inputGrid = document.getElementById('inputs-grid');
+        for (let i = 1; i <= 16; i++) {
+            inputGrid.innerHTML += `
+                <div class="bg-gray-900 p-2.5 rounded-lg text-center border border-gray-800">
+                    <div class="mb-1"><span id="in-dot-${i}" class="led-dot"></span></div>
+                    <div class="text-[10px] text-gray-400 font-mono">X${String(i).padStart(2, '0')}</div>
+                </div>`;
+        }
+
+        async function fetchDebugData() {
+            try {
+                // 1. Lấy dữ liệu vận hành chính
+                let resData = await fetch(`${getBaseUrl()}/api/data`);
+                if (resData.ok) {
+                    let d = await resData.json();
+                    document.getElementById('weight-1').innerText = ((d.w1 || 0) / 100).toFixed(2) + " kg";
+                    document.getElementById('weight-2').innerText = ((d.w2 || 0) / 100).toFixed(2) + " kg";
+                    document.getElementById('bags-1').innerText = d.bags1 || 0;
+                    document.getElementById('bags-2').innerText = d.bags2 || 0;
+                    document.getElementById('tot-1').innerText = ((d.tot1 || 0) / 100).toFixed(2);
+                    document.getElementById('tot-2').innerText = ((d.tot2 || 0) / 100).toFixed(2);
+                    document.getElementById('conn-status').innerText = "ONLINE";
+                    document.getElementById('conn-status').className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400";
+                }
+
+                // 2. Lấy dữ liệu chuyên sâu cho Tab Debug
+                let resDbg = await fetch(`${getBaseUrl()}/api/debug`);
+                if (resDbg.ok) {
+                    let dbg = await resDbg.json();
+                    document.getElementById('dbg-cpu').innerText = dbg.cpu_freq + " MHz";
+                    document.getElementById('dbg-heap').innerText = Math.round(dbg.free_heap / 1024) + " KB";
+                    document.getElementById('dbg-uptime').innerText = dbg.uptime + " s";
+                    document.getElementById('dbg-lan').innerText = dbg.lan_connected ? "ONLINE" : "OFFLINE";
+                    document.getElementById('dbg-lan').className = dbg.lan_connected ? "text-xl font-bold text-emerald-400 font-mono mt-1" : "text-xl font-bold text-rose-400 font-mono mt-1";
+
+                    // Trạng thái RS485
+                    let rs1 = document.getElementById('dbg-rs1');
+                    rs1.innerText = dbg.scale1_online ? "ĐANG KẾT NỐI" : "MẤT KẾT NỐI";
+                    rs1.className = dbg.scale1_online ? "px-2.5 py-1 rounded text-xs font-bold bg-emerald-950 text-emerald-400" : "px-2.5 py-1 rounded text-xs font-bold bg-red-950 text-red-400";
+
+                    let rs2 = document.getElementById('dbg-rs2');
+                    rs2.innerText = dbg.scale2_online ? "ĐANG KẾT NỐI" : "MẤT KẾT NỐI";
+                    rs2.className = dbg.scale2_online ? "px-2.5 py-1 rounded text-xs font-bold bg-emerald-950 text-emerald-400" : "px-2.5 py-1 rounded text-xs font-bold bg-red-950 text-red-400";
+
+                    // Trạng thái Inputs X01-X16
+                    if (Array.isArray(dbg.inputs)) {
+                        for (let i = 0; i < 16; i++) {
+                            let dot = document.getElementById(`in-dot-${i+1}`);
+                            if (dot) {
+                                if (dbg.inputs[i]) dot.className = "led-dot led-on";
+                                else dot.className = "led-dot";
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                document.getElementById('conn-status').innerText = "OFFLINE";
+                document.getElementById('conn-status').className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400";
+            }
+        }
+
+        setInterval(fetchDebugData, 300);
+    </script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KC868-A16 Hardware Debugger & SCADA</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: #161b22;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --cyan: #58a6ff;
+            --green: #238636;
+            --red: #da3633;
+            --amber: #d29922;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--panel-bg);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 15px;
+        }
+
+        .ip-bar input {
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn:hover { background: #30363d; }
+        .btn-green { background: var(--green); border: none; }
+        .btn-red { background: var(--red); border: none; }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 15px;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: var(--cyan);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .metric-box {
+            background: #0d1117;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .metric-val { font-size: 18px; font-weight: bold; color: var(--amber); }
+
+        .io-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .io-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #0d1117;
+            padding: 8px 4px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .led {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #333;
+            margin-bottom: 4px;
+            box-shadow: inset 0 0 3px #000;
+        }
+        .led.active-in { background: #2f81f7; box-shadow: 0 0 8px #2f81f7; }
+        .led.active-out { background: #3fb950; box-shadow: 0 0 8px #3fb950; }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .online { background: rgba(46, 160, 67, 0.2); color: #3fb950; }
+        .offline { background: rgba(248, 81, 73, 0.2); color: #f85149; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>KC868-A16 HARDWARE DEBUGGER</h2>
+        <div class="ip-bar">
+            IP Bo Mạch: <input type="text" id="targetIp" value="192.168.2.119">
+            <button class="btn btn-green" onclick="toggleConnect()" id="btnConnect">KẾT NỐI</button>
+            <span id="connStatus" class="status-badge offline">OFFLINE</span>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <!-- KHỐI 1: THÔNG SỐ HỆ THỐNG -->
+        <div class="card">
+            <h3>THÔNG SỐ VI ĐIỀU KHIỂN (ESP32)</h3>
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div>Tần số CPU</div>
+                    <div class="metric-val" id="cpuFreq">0 MHz</div>
+                </div>
+                <div class="metric-box">
+                    <div>Heap RAM Còn Trống</div>
+                    <div class="metric-val" id="freeHeap">0 KB</div>
+                </div>
+                <div class="metric-box">
+                    <div>Thời gian chạy (Uptime)</div>
+                    <div class="metric-val" id="uptime">0 s</div>
+                </div>
+                <div class="metric-box">
+                    <div>Chế độ Thử nghiệm</div>
+                    <div class="metric-val" style="color:#3fb950">OFFICE TEST</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KHỐI 2: CHẨN ĐOÁN RS485 -->
+        <div class="card">
+            <h3>TRUYỀN THÔNG RS485 (MODBUS)</h3>
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div>Kênh RS485 - Phễu 1</div>
+                    <div class="metric-val" id="rs1Status">OFFLINE</div>
+                </div>
+                <div class="metric-box">
+                    <div>Kênh RS485 - Phễu 2</div>
+                    <div class="metric-val" id="rs2Status">OFFLINE</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="btn" style="width:50%" onclick="simWeight(1)">Gửi Trọng Lượng Giả Lập P1</button>
+                <button class="btn" style="width:50%" onclick="simWeight(2)">Gửi Trọng Lượng Giả Lập P2</button>
+            </div>
+        </div>
+
+        <!-- KHỐI 3: KÍCH HOẠT 16 RELAYS -->
+        <div class="card" style="grid-column: span 2;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>16 NGÕ RA RELAYS (R01 - R16)</h3>
+                <div>
+                    <button class="btn btn-green" onclick="controlAllRelays(true)">BẬT TẤT CẢ</button>
+                    <button class="btn btn-red" onclick="controlAllRelays(false)">TẮT TẤT CẢ</button>
+                </div>
+            </div>
+            <div class="io-grid" id="relayGrid"></div>
+        </div>
+
+        <!-- KHỐI 4: GIẢ LẬP 16 INPUTS -->
+        <div class="card" style="grid-column: span 2;">
+            <h3>16 NGÕ VÀO (INPUTS X01 - X16) - BẤM ĐỂ GIẢ LẬP KÍCH HOẠT</h3>
+            <div class="io-grid" id="inputGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        let isConnected = false;
+        let timer = null;
+        let inputsState = new Array(16).fill(false);
+        let relaysState = new Array(16).fill(false);
+
+        // Khởi tạo giao diện LED 16 Inputs & 16 Relays
+        function initUI() {
+            const rGrid = document.getElementById('relayGrid');
+            const iGrid = document.getElementById('inputGrid');
+            rGrid.innerHTML = '';
+            iGrid.innerHTML = '';
+
+            for (let i = 0; i < 16; i++) {
+                // Relays UI
+                let rItem = document.createElement('div');
+                rItem.className = 'io-item';
+                rItem.onclick = () => toggleRelay(i);
+                rItem.innerHTML = `<div class="led" id="rled_${i}"></div><span>R${String(i+1).padStart(2,'0')}</span>`;
+                rGrid.appendChild(rItem);
+
+                // Inputs UI
+                let iItem = document.createElement('div');
+                iItem.className = 'io-item';
+                iItem.onclick = () => toggleInputSim(i);
+                iItem.innerHTML = `<div class="led" id="iled_${i}"></div><span>X${String(i+1).padStart(2,'0')}</span>`;
+                iGrid.appendChild(iItem);
+            }
+        }
+
+        function toggleConnect() {
+            isConnected = !isConnected;
+            const btn = document.getElementById('btnConnect');
+            const status = document.getElementById('connStatus');
+
+            if (isConnected) {
+                btn.innerText = "NGẮT KẾT NỐI";
+                btn.className = "btn btn-red";
+                status.innerText = "ONLINE";
+                status.className = "status-badge online";
+                timer = setInterval(fetchDebugData, 300);
+            } else {
+                btn.innerText = "KẾT NỐI";
+                btn.className = "btn btn-green";
+                status.innerText = "OFFLINE";
+                status.className = "status-badge offline";
+                clearInterval(timer);
+            }
+        }
+
+        async function fetchDebugData() {
+            const ip = document.getElementById('targetIp').value;
+            try {
+                const res = await fetch(`http://${ip}/api/debug`, { signal: AbortSignal.timeout(200) });
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('cpuFreq').innerText = (data.cpu_freq || 240) + " MHz";
+                    document.getElementById('freeHeap').innerText = Math.round((data.free_heap || 0) / 1024) + " KB";
+                    document.getElementById('uptime').innerText = (data.uptime || 0) + " s";
+
+                    document.getElementById('rs1Status').innerText = data.scale1_online ? "ONLINE" : "OFFLINE";
+                    document.getElementById('rs1Status').style.color = data.scale1_online ? "#3fb950" : "#f85149";
+                    document.getElementById('rs2Status').innerText = data.scale2_online ? "ONLINE" : "OFFLINE";
+                    document.getElementById('rs2Status').style.color = data.scale2_online ? "#3fb950" : "#f85149";
+
+                    if (data.relays) {
+                        data.relays.forEach((st, idx) => {
+                            relaysState[idx] = st;
+                            document.getElementById(`rled_${idx}`).className = st ? 'led active-out' : 'led';
+                        });
+                    }
+                    if (data.inputs) {
+                        data.inputs.forEach((st, idx) => {
+                            inputsState[idx] = st;
+                            document.getElementById(`iled_${idx}`).className = st ? 'led active-in' : 'led';
+                        });
+                    }
+                }
+            } catch (e) {
+                // Khi test offline không có phần cứng kết nối thật
+            }
+        }
+
+        async function toggleRelay(idx) {
+            relaysState[idx] = !relaysState[idx];
+            document.getElementById(`rled_${idx}`).className = relaysState[idx] ? 'led active-out' : 'led';
+            const ip = document.getElementById('targetIp').value;
+            fetch(`http://${ip}/api/relay?id=${idx+1}&state=${relaysState[idx] ? 1 : 0}`);
+        }
+
+        function toggleInputSim(idx) {
+            inputsState[idx] = !inputsState[idx];
+            document.getElementById(`iled_${idx}`).className = inputsState[idx] ? 'led active-in' : 'led';
+            const ip = document.getElementById('targetIp').value;
+            fetch(`http://${ip}/api/sim_input?id=${idx+1}&state=${inputsState[idx] ? 1 : 0}`);
+        }
+
+        function controlAllRelays(state) {
+            for (let i = 0; i < 16; i++) {
+                relaysState[i] = state;
+                document.getElementById(`rled_${i}`).className = state ? 'led active-out' : 'led';
+            }
+            const ip = document.getElementById('targetIp').value;
+            fetch(`http://${ip}/api/relay_all?state=${state ? 1 : 0}`);
+        }
+
+        function simWeight(hopperId) {
+            const ip = document.getElementById('targetIp').value;
+            const randomVal = (Math.random() * 25 + 25).toFixed(2);
+            fetch(`http://${ip}/api/sim_weight?id=${hopperId}&val=${randomVal}`);
+        }
+
+        initUI();
+    </script>
+</body>
+</html>

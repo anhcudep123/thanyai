@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCADA CÂN 2 ĐẦU - KINCONY KC868-A16</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700;800&display=swap');
+        body { background-color: #090d16; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+        .font-lcd { font-family: 'Share Tech Mono', monospace; }
+        .lcd-display { background: #030712; border: 2px solid #1e293b; box-shadow: inset 0 0 20px rgba(0, 255, 102, 0.15); color: #00ff66; text-shadow: 0 0 15px rgba(0, 255, 102, 0.6); }
+        .led-indicator { width: 16px; height: 16px; border-radius: 50%; background-color: #374151; transition: all 0.2s ease; }
+        .active-green { background-color: #10b981; box-shadow: 0 0 14px #10b981; }
+        .active-red   { background-color: #ef4444; box-shadow: 0 0 14px #ef4444; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <!-- HEADER -->
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex flex-wrap justify-between items-center shadow-2xl">
+        <div class="flex items-center space-x-3">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-500 flex items-center justify-center font-extrabold text-white text-xl shadow-lg border border-cyan-400/30">KC</div>
+            <div>
+                <h1 class="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">
+                    HỆ THỐNG CÂN ĐÓNG BAO 2 ĐẦU (DUAL HOPPER)
+                </h1>
+                <p class="text-xs text-gray-400 font-medium">Bo mạch điều khiển: Kincony KC868-A16 & Module LO-002</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4 mt-3 sm:mt-0">
+            <div class="flex items-center space-x-2 bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800">
+                <span class="text-xs font-semibold text-gray-400">IP BOARD:</span>
+                <input type="text" id="esp32-ip" value="192.168.2.119" class="bg-transparent text-xs text-cyan-400 font-mono w-28 focus:outline-none text-center">
+                <button onclick="autoScanLAN()" id="btn-scan" class="bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold px-3 py-1 rounded shadow transition active:scale-95">🔍 TÌM IP</button>
+            </div>
+            <div class="flex items-center space-x-2 bg-gray-800/80 px-3.5 py-1.5 rounded-full border border-gray-700">
+                <span id="conn-status" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 animate-pulse">Đang kết nối...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
+
+        <!-- NÚT ĐIỀU KHIỂN CHUNG HỆ THỐNG -->
+        <div class="bg-gray-900 p-4 rounded-2xl border border-gray-800 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div class="text-sm font-bold text-gray-300 uppercase">ĐIỀU KHIỂN TỔNG HỆ THỐNG:</div>
+            <div class="flex items-center gap-3">
+                <button onclick="sendCmd('start')" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-extrabold py-2.5 px-6 rounded-xl shadow-lg active:scale-95 transition flex items-center space-x-2">
+                    <span>▶️</span> <span>CHẠY HỆ THỐNG</span>
+                </button>
+                <button onclick="sendCmd('stop')" class="bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 text-white font-extrabold py-2.5 px-6 rounded-xl shadow-lg active:scale-95 transition flex items-center space-x-2">
+                    <span>⛔</span> <span>DỪNG KHẨN CẤP</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 2 PHỄU CÂN SONG SONG -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- PHỄU CÂN 1 -->
+            <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-2xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-bold uppercase text-cyan-400 bg-cyan-950/80 px-3 py-1 rounded-md">PHỄU CÂN 1 (SCALE 1)</span>
+                        <span id="state-1" class="px-3 py-1 rounded-lg text-xs font-extrabold bg-blue-500/20 text-blue-400">IDLE (CHỜ)</span>
+                    </div>
+
+                    <div class="lcd-display rounded-2xl p-6 my-2 text-center relative overflow-hidden">
+                        <div id="weight-1" class="text-5xl sm:text-6xl font-bold font-lcd tracking-wider my-2">
+                            0.00 <span class="text-2xl text-emerald-500 font-sans font-semibold">kg</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mt-4 text-sm font-mono">
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <span class="text-gray-400 text-xs block">SẢN LƯỢNG:</span>
+                            <strong id="bags-1" class="text-cyan-400 text-xl">0</strong> <span class="text-xs text-gray-400">bao</span>
+                        </div>
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <span class="text-gray-400 text-xs block">TỔNG KHỐI LƯỢNG:</span>
+                            <strong id="tot-1" class="text-emerald-400 text-xl">0.00</strong> <span class="text-xs text-gray-400">kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-gray-800">
+                    <button onclick="sendHopperCmd(1, 'zero')" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-extrabold py-3 px-4 rounded-xl shadow-lg active:scale-95 transition">
+                        🎯 VỀ 0 / TARE PHỄU 1
+                    </button>
+                </div>
+            </div>
+
+            <!-- PHỄU CÂN 2 -->
+            <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-2xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-bold uppercase text-amber-400 bg-amber-950/80 px-3 py-1 rounded-md">PHỄU CÂN 2 (SCALE 2)</span>
+                        <span id="state-2" class="px-3 py-1 rounded-lg text-xs font-extrabold bg-blue-500/20 text-blue-400">IDLE (CHỜ)</span>
+                    </div>
+
+                    <div class="lcd-display rounded-2xl p-6 my-2 text-center relative overflow-hidden">
+                        <div id="weight-2" class="text-5xl sm:text-6xl font-bold font-lcd tracking-wider my-2">
+                            0.00 <span class="text-2xl text-emerald-500 font-sans font-semibold">kg</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mt-4 text-sm font-mono">
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <span class="text-gray-400 text-xs block">SẢN LƯỢNG:</span>
+                            <strong id="bags-2" class="text-cyan-400 text-xl">0</strong> <span class="text-xs text-gray-400">bao</span>
+                        </div>
+                        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+                            <span class="text-gray-400 text-xs block">TỔNG KHỐI LƯỢNG:</span>
+                            <strong id="tot-2" class="text-emerald-400 text-xl">0.00</strong> <span class="text-xs text-gray-400">kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-gray-800">
+                    <button onclick="sendHopperCmd(2, 'zero')" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-extrabold py-3 px-4 rounded-xl shadow-lg active:scale-95 transition">
+                        🎯 VỀ 0 / TARE PHỄU 2
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-gray-900 border-t border-gray-800 py-3 px-6 text-center text-xs text-gray-500">
+        Hệ Thống Cân Đóng Bao 2 Đầu • Kincony KC868-A16 SCADA Panel
+    </footer>
+
+    <!-- SCRIPT ENGINE -->
+    <script>
+        const FSM_STATES = ["IDLE (CHỜ)", "KẸP BAO", "AUTO TARE", "NẠP THÔ", "NẠP TINH", "ỔN ĐỊNH", "XẢ LIỆU", "NHẢ BAO"];
+        let isScanning = false;
+
+        function getBaseUrl() {
+            const rawIp = document.getElementById('esp32-ip').value.trim();
+            return rawIp ? (rawIp.startsWith('http') ? rawIp : `http://${rawIp}`) : '';
+        }
+
+        // Tự động quét IP trong mạng LAN
+        async function autoScanLAN() {
+            if (isScanning) return;
+            isScanning = true;
+            const btn = document.getElementById('btn-scan');
+            const ipInput = document.getElementById('esp32-ip');
+            
+            let currentIp = ipInput.value.trim() || "192.168.2.1";
+            let parts = currentIp.split('.');
+            if (parts.length !== 4) parts = ["192", "168", "2", "1"];
+            let subnet = `${parts[0]}.${parts[1]}.${parts[2]}.`;
+            
+            btn.innerText = "ĐANG TÌM...";
+            btn.classList.add("animate-pulse", "bg-amber-600");
+            
+            let foundIp = null;
+            let currentHost = 1;
+            
+            async function scanWorker() {
+                while (currentHost <= 254 && !foundIp) {
+                    let host = currentHost++;
+                    let targetIp = subnet + host;
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 600);
+                    try {
+                        let res = await fetch(`http://${targetIp}/api/data`, { signal: controller.signal, mode: 'cors' });
+                        clearTimeout(timeoutId);
+                        if (res.ok) {
+                            let data = await res.json();
+                            if (data.w1 !== undefined && data.w2 !== undefined) {
+                                foundIp = targetIp;
+                            }
+                        }
+                    } catch(e) { clearTimeout(timeoutId); }
+                }
+            }
+            
+            let workers = [];
+            for (let i = 0; i < 30; i++) workers.push(scanWorker());
+            await Promise.all(workers);
+            
+            isScanning = false;
+            btn.classList.remove("animate-pulse", "bg-amber-600");
+            btn.innerText = "🔍 TÌM IP";
+            
+            if (foundIp) {
+                ipInput.value = foundIp;
+                alert(`Đã tìm thấy hệ thống cân tại: ${foundIp}`);
+            } else {
+                alert(`Không tìm thấy hệ thống cân ở dải mạng ${subnet}x!`);
+            }
+        }
+
+        // Cập nhật dữ liệu thời gian thực cho cả 2 phễu
+        async function fetchScadaData() {
+            if (isScanning) return;
+            try {
+                const response = await fetch(`${getBaseUrl()}/api/data`, { method: 'GET', mode: 'cors' });
+                if (!response.ok) throw new Error("HTTP connection failed");
+                const data = await response.json();
+
+                const connElem = document.getElementById('conn-status');
+                connElem.innerText = "ONLINE";
+                connElem.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400";
+
+                // Phễu 1
+                let w1Kg = (data.w1 || 0) / 100.0;
+                let tot1Kg = (data.tot1 || 0) / 100.0;
+                document.getElementById('weight-1').innerHTML = `${w1Kg.toFixed(2)} <span class="text-2xl text-emerald-500 font-sans font-semibold">kg</span>`;
+                document.getElementById('bags-1').innerText = data.bags1 || 0;
+                document.getElementById('tot-1').innerText = tot1Kg.toFixed(2);
+                document.getElementById('state-1').innerText = FSM_STATES[data.st1] || `STATE_${data.st1}`;
+
+                // Phễu 2
+                let w2Kg = (data.w2 || 0) / 100.0;
+                let tot2Kg = (data.tot2 || 0) / 100.0;
+                document.getElementById('weight-2').innerHTML = `${w2Kg.toFixed(2)} <span class="text-2xl text-emerald-500 font-sans font-semibold">kg</span>`;
+                document.getElementById('bags-2').innerText = data.bags2 || 0;
+                document.getElementById('tot-2').innerText = tot2Kg.toFixed(2);
+                document.getElementById('state-2').innerText = FSM_STATES[data.st2] || `STATE_${data.st2}`;
+
+            } catch (err) {
+                const connElem = document.getElementById('conn-status');
+                connElem.innerText = "OFFLINE";
+                connElem.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400";
+            }
+        }
+
+        // Gửi lệnh tổng hệ thống (Start / Stop)
+        async function sendCmd(action) {
+            try {
+                await fetch(`${getBaseUrl()}/api/cmd?action=${action}`, { method: 'GET', mode: 'cors' });
+            } catch (e) { console.error("Lỗi:", e); }
+        }
+
+        // Gửi lệnh riêng cho từng phễu (Zero / Tare)
+        async function sendHopperCmd(hopperId, action) {
+            try {
+                await fetch(`${getBaseUrl()}/api/hopper?id=${hopperId}&action=${action}`, { method: 'GET', mode: 'cors' });
+            } catch (e) { console.error("Lỗi:", e); }
+        }
+
+        setInterval(fetchScadaData, 200);
+    </script>
+</body>
+</html>
