@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusBrain Pro - Hệ Quản Trị Tri Thức Đa Chế Độ Lưu Trữ</title>
+    
+    <!-- Vis.js Network -->
+    <link rel="stylesheet" href="lib/vis-9.1.2/vis-network.css">
+    <script src="lib/vis-9.1.2/vis-network.min.js"></script>
+    <script>
+        if (typeof vis === 'undefined') {
+            document.write('<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"><\/script>');
+        }
+    </script>
+
+    <!-- PDF.js -->
+    <script src="lib/pdf.min.js"></script>
+    <script>
+        if (typeof pdfjsLib === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>');
+        }
+    </script>
+    
+    <!-- JSZip (DOCX) -->
+    <script src="lib/jszip.min.js"></script>
+    <script>
+        if (typeof JSZip === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"><\/script>');
+        }
+    </script>
+
+    <!-- MathJax 3 -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            },
+            startup: { typeset: false }
+        };
+    </script>
+    <script src="lib/tex-mml-chtml.js"></script>
+    <script>
+        if (!window.MathJax || !window.MathJax.typesetPromise) {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"><\/script>');
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-main: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-subtle: #f1f5f9;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent-primary: #2563eb;
+            --accent-hover: #1d4ed8;
+            --accent-subtle: #eff6ff;
+            --canvas-bg: #fafafa;
+            --canvas-dot: #cbd5e1;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.1);
+        }
+
+        body.dark-mode {
+            --bg-main: #030712;
+            --bg-secondary: #090d16;
+            --bg-card: #0f172a;
+            --bg-subtle: #1e293b;
+            --border-color: #1e293b;
+            --border-hover: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-subtle: rgba(99, 102, 241, 0.15);
+            --canvas-bg: #030712;
+            --canvas-dot: #1e293b;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+            --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.7);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        /* 1. MÀN HÌNH KHÓA & TRÌNH HƯỚNG DẪN CÀI ĐẶT */
+        .lockscreen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .lockscreen-card {
+            width: 92%;
+            max-width: 520px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .mode-option-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            text-align: left;
+            background: var(--bg-secondary);
+            border: 1.5px solid var(--border-color);
+            padding: 12px 14px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mode-option-card:hover {
+            border-color: var(--accent-primary);
+            background: var(--accent-subtle);
+        }
+        .mode-option-card.selected {
+            border-color: var(--accent-primary);
+            background: var(--accent-subtle);
+        }
+        .mode-option-card input[type="radio"] {
+            margin-top: 3px;
+        }
+        .lock-input {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            outline: none;
+            margin: 12px 0;
+        }
+        .lock-input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-subtle);
+        }
+
+        /* 2. TOP NAVBAR */
+        .top-navbar {
+            height: 44px;
+            background: var(--bg-main);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 50;
+        }
+        .nav-history { display: flex; align-items: center; gap: 4px; }
+        .btn-icon-nav {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-icon-nav:hover { background: var(--bg-subtle); color: var(--text-primary); }
+
+        /* 3. WORKSPACE HEADER */
+        .workspace-header {
+            height: 56px;
+            background: var(--bg-main);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 40;
+        }
+        .brain-main-title { font-size: 18px; font-weight: 700; }
+        .brain-meta-sub { font-size: 12px; color: var(--text-muted); }
+        .view-switcher-pill {
+            display: flex;
+            background: var(--bg-subtle);
+            padding: 3px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            gap: 2px;
+        }
+        .switcher-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+        .switcher-btn.active {
+            background: var(--bg-card);
+            color: var(--accent-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* 4. WORKSPACE VIEWPORT */
+        .workspace-viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+        }
+        .view-pane {
+            width: 100%;
+            height: 100%;
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .view-pane.active { display: flex; }
+
+        /* TAB FILES */
+        #pane-files { display: none; width: 100%; height: 100%; }
+        #pane-files.active { display: flex; }
+        .files-sidebar {
+            width: 260px;
+            border-right: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            padding: 16px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .folder-tree-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .folder-tree-item.active {
+            background: var(--accent-subtle);
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+        .files-main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-main);
+            padding: 24px;
+            overflow-y: auto;
+        }
+        .files-grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .file-doc-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .file-doc-card:hover {
+            border-color: var(--accent-primary);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        /* TAB GRAPH & BASE */
+        #pane-graph {
+            background-color: var(--canvas-bg);
+            background-image: radial-gradient(var(--canvas-dot) 1.2px, transparent 1.2px);
+            background-size: 24px 24px;
+            position: relative;
+        }
+        #vis-canvas { width: 100%; height: 100%; }
+        #pane-base {
+            flex-direction: column;
+            background: var(--bg-main);
+            padding: 24px;
+            overflow-y: auto;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            text-align: left;
+        }
+        .data-table th, .data-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* 5. SLIDE-OVER NOTE DRAWER */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.35);
+            z-index: 100;
+            display: none;
+        }
+        .drawer-overlay.open { display: block; }
+        .note-drawer {
+            position: fixed;
+            top: 0;
+            right: -650px;
+            width: 100%;
+            max-width: 620px;
+            height: 100vh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            z-index: 101;
+            display: flex;
+            flex-direction: column;
+            transition: right 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .note-drawer.open { right: 0; }
+        .drawer-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .drawer-body {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Nút và thành phần tương tác */
+        .input-base {
+            width: 100%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text-primary);
+            outline: none;
+        }
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary {
+            background: var(--bg-subtle);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-secondary:hover { background: var(--border-color); }
+        .badge-folder {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .btn-action-pill {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-act-native { background: #2563eb; color: white; }
+        .btn-act-reveal { background: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary); }
+        .btn-act-copy { background: transparent; border-color: var(--border-color); color: var(--text-muted); }
+        #toast {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: var(--shadow-md);
+            display: none;
+            z-index: 2000000;
+        }
+        .batch-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            background: var(--bg-subtle);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- GIAO DIỆN MÀN HÌNH KHÓA & TRÌNH CÀI ĐẶT PHIÊN BẢN (SETUP WIZARD) -->
+    <div id="lockscreen-overlay" class="lockscreen-overlay">
+        <div class="lockscreen-card">
+            <div style="font-size: 36px; margin-bottom: 8px;">🔐</div>
+            <h2 id="lockscreen-title" style="font-size: 20px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">
+                Mở Khóa NexusBrain
+            </h2>
+            <p id="lockscreen-sub" style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                Nhập mật mã để giải mã cơ sở dữ liệu IndexedDB an toàn.
+            </p>
+
+            <!-- KHU VỰC TÙY CHỌN 3 PHIÊN BẢN (CHỈ XUẤT HIỆN LẦN ĐẦU CÀI ĐẶT) -->
+            <div id="setup-mode-selector" style="display: none; margin-bottom: 16px;">
+                <div class="card-heading-sm" style="text-align: left; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: var(--accent-primary);">
+                    CHỌN PHIÊN BẢN LƯU TRỮ HỆ THỐNG:
+                </div>
+
+                <!-- Tùy chọn 1: Full Database Encrypted -->
+                <label class="mode-option-card" id="card-mode-full" onclick="selectSetupMode('full')">
+                    <input type="radio" name="storage_mode" value="full" id="radio-mode-full">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">📦 Phiên bản Toàn vẹn (Full Encrypted DB)</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+                            Lưu toàn bộ dữ liệu & video vào IndexedDB mã hóa AES-256. Xem offline hoàn toàn, chiếm dung lượng ổ đĩa theo tệp.
+                        </div>
+                    </div>
+                </label>
+
+                <!-- Tùy chọn 2: Encrypted Pointer -->
+                <label class="mode-option-card" id="card-mode-pointer" onclick="selectSetupMode('pointer')">
+                    <input type="radio" name="storage_mode" value="pointer" id="radio-mode-pointer">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">⚡ Phiên bản Con trỏ tệp (Encrypted Pointer)</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+                            Chỉ lưu đường dẫn & thuộc tính mã hóa AES-256. Tiết kiệm 100% ổ cứng (0 Byte), mở tệp bằng phần mềm máy tính (VLC/Word).
+                        </div>
+                    </div>
+                </label>
+
+                <!-- Tùy chọn 3: FileSystemFileHandle -->
+                <label class="mode-option-card selected" id="card-mode-handle" onclick="selectSetupMode('handle')">
+                    <input type="radio" name="storage_mode" value="handle" id="radio-mode-handle" checked>
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">🚀 Phiên bản Phát trực tiếp (Zero-Disk Handle)</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+                            Lưu FileHandle vào IndexedDB. Vừa phát trực tiếp video/audio trên web, vừa không tốn thêm bất kỳ dung lượng ổ cứng nào!
+                        </div>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Ô NHẬP MẬT MÃ -->
+            <div style="position: relative;">
+                <input type="password" id="lock-pass-input" class="lock-input" placeholder="Nhập mật khẩu..." onkeydown="if(event.key==='Enter') handleLockscreenAction()">
+            </div>
+
+            <div id="lock-error" style="color: #ef4444; font-size: 12px; font-weight: 600; margin-bottom: 12px; display: none;"></div>
+
+            <button id="btn-lock-submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 13px;" onclick="handleLockscreenAction()">
+                🔓 MỞ KHÓA
+            </button>
+        </div>
+    </div>
+
+    <!-- 1. TOP NAVBAR -->
+    <div class="top-navbar">
+        <div class="nav-history">
+            <button class="btn-icon-nav" onclick="navigateHistory(-1)" title="Quay lại">&lt;</button>
+            <button class="btn-icon-nav" onclick="navigateHistory(1)" title="Tiến tới">&gt;</button>
+            <div class="breadcrumb-text">
+                <span style="color: var(--text-muted);">🧠</span>
+                <span id="breadcrumb-current">Brain</span>
+            </div>
+        </div>
+
+        <div class="top-right-actions">
+            <!-- Nút Khóa ngay lập tức -->
+            <button class="btn-icon-nav" onclick="lockScreenNow()" title="Khóa màn hình ngay (Xóa RAM)" style="color: #ef4444;">🔒</button>
+            <button class="btn-icon-nav" onclick="toggleTheme()" title="Chuyển đổi Sáng / Tối" id="btn-theme-toggle">🌓</button>
+            <button class="btn-secondary" onclick="exportBrainJSON()" title="Xuất dữ liệu sao lưu JSON">📥 Xuất JSON</button>
+            <button class="btn-secondary" onclick="document.getElementById('import-brain-input').click()" title="Nạp dữ liệu JSON">📤 Nhập JSON</button>
+            <input type="file" id="import-brain-input" accept=".json" style="display:none;" onchange="importBrainJSON(event)">
+            <button class="btn-primary" onclick="openCreateNoteModal()">➕ Ghi chú mới</button>
+        </div>
+    </div>
+
+    <!-- 2. WORKSPACE HEADER -->
+    <div class="workspace-header">
+        <div class="title-meta-group">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <h1 class="brain-main-title">Brain</h1>
+                <span id="badge-current-mode" style="font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 700; background: rgba(37,99,235,0.1); color: var(--accent-primary);">
+                    Đang đồng bộ...
+                </span>
+            </div>
+            <div id="brain-stats-text" class="brain-meta-sub">Đang bảo vệ với chuẩn AES-256...</div>
+        </div>
+
+        <div class="view-switcher-pill">
+            <button id="btn-view-files" class="switcher-btn active" onclick="switchViewMode('files')">
+                <span>📁</span> Files
+            </button>
+            <button id="btn-view-graph" class="switcher-btn" onclick="switchViewMode('graph')">
+                <span>🕸️</span> Graph
+            </button>
+            <button id="btn-view-base" class="switcher-btn" onclick="switchViewMode('base')">
+                <span>📊</span> Base
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. MAIN WORKSPACE VIEWPORT -->
+    <div class="workspace-viewport">
+
+        <!-- TAB FILES -->
+        <div id="pane-files" class="view-pane active">
+            <div class="files-sidebar">
+                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">QUẢN LÝ THƯ MỤC</div>
+                <div id="folders-tree-container" style="display: flex; flex-direction: column; gap: 4px;"></div>
+                <div style="margin-top: auto;">
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="addNewFolderPrompt()">➕ Thư mục mới</button>
+                </div>
+            </div>
+
+            <div class="files-main-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
+                    <div>
+                        <h2 id="files-current-folder-title" style="font-size: 16px; font-weight: 700;">Tất Cả Tệp</h2>
+                        <span id="files-current-count" style="font-size: 12px; color: var(--text-muted);">0 tệp</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn-secondary" onclick="openBatchUploadModal()">⚙️ Nạp tài liệu & Media hàng loạt</button>
+                        <button class="btn-secondary" onclick="triggerSingleMediaAdd()" style="border-color: #6366f1; color: var(--accent-primary);">🔗 Thêm Video/Audio lẻ</button>
+                        <button class="btn-primary" onclick="openCreateNoteModal()">➕ Ghi chú mới</button>
+                    </div>
+                </div>
+
+                <div id="files-cards-grid" class="files-grid-cards"></div>
+            </div>
+        </div>
+
+        <!-- TAB GRAPH -->
+        <div id="pane-graph" class="view-pane">
+            <div id="vis-canvas"></div>
+        </div>
+
+        <!-- TAB BASE -->
+        <div id="pane-base" class="view-pane">
+            <div class="table-container" style="margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Tên Ghi Chú</th>
+                            <th>Thư Mục</th>
+                            <th>Cập Nhật</th>
+                            <th style="text-align: center;">Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="base-table-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 4. SLIDE-OVER NOTE DRAWER (CHI TIẾT VÀ PHÁT MEDIA) -->
+    <div id="drawer-overlay" class="drawer-overlay" onclick="closeNoteDrawer()"></div>
+    <div id="note-drawer" class="note-drawer">
+        <div class="drawer-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="drawer-folder-badge" class="badge-folder" style="background: #dbeafe; color: #1e40af;">Notes</span>
+                <span style="font-size: 12px; color: var(--text-muted);" id="drawer-modified-date">2026-09-16</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-secondary" id="btn-drawer-edit-toggle" onclick="toggleDrawerEditMode()">✏️ Sửa</button>
+                <button class="btn-icon-nav" onclick="closeNoteDrawer()">✕</button>
+            </div>
+        </div>
+
+        <div class="drawer-body">
+            <div id="drawer-view-mode">
+                <h2 id="drawer-title" style="font-size: 18px; font-weight: 700; margin-bottom: 6px; line-height: 1.3;">Tiêu đề</h2>
+                <div id="drawer-tags" style="font-size: 12px; color: var(--accent-primary); margin-bottom: 12px; font-family: monospace;">#tags</div>
+                
+                <!-- KHUNG MEDIA (VIDEO / AUDIO / DESKTOP HUB TÙY THEO PHIÊN BẢN) -->
+                <div id="drawer-media-box" style="margin-bottom: 16px;"></div>
+
+                <!-- NỘI DUNG MARKDOWN / THUỘC TÍNH TỆP -->
+                <div id="drawer-content" style="font-size: 13px; line-height: 1.6; color: var(--text-secondary); background: var(--bg-secondary); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);"></div>
+
+                <!-- BACKLINKS -->
+                <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">MỐI LIÊN HỆ TRI THỨC (BACKLINKS)</div>
+                    <div id="drawer-backlinks-list" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- CHẾ ĐỘ SỬA -->
+            <div id="drawer-edit-mode" style="display: none; flex-direction: column; gap: 14px;">
+                <div>
+                    <label style="font-size: 11px; font-weight: 700; color: var(--text-muted);">TIÊU ĐỀ GHI CHÚ</label>
+                    <input type="text" id="edit-note-title" class="input-base" style="font-weight: 600;">
+                </div>
+                <div>
+                    <label style="font-size: 11px; font-weight: 700; color: var(--text-muted);">THƯ MỤC</label>
+                    <select id="edit-note-folder" class="input-base"></select>
+                </div>
+                <div>
+                    <label style="font-size: 11px; font-weight: 700; color: var(--text-muted);">NỘI DUNG GHI CHÚ (MARKDOWN)</label>
+                    <textarea id="edit-note-content" class="input-base" style="height: 200px; font-family: monospace;"></textarea>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <button class="btn-secondary" style="color: #ef4444;" onclick="deleteCurrentNote()">🗑️ Xóa</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-secondary" onclick="toggleDrawerEditMode()">Hủy</button>
+                        <button class="btn-primary" onclick="saveDrawerNote()">💾 Lưu thay đổi</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. MODAL NẠP HÀNG LOẠT -->
+    <div id="batch-upload-modal" class="batch-modal-overlay">
+        <div style="max-width: 580px; width: 95%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 24px; box-shadow: var(--shadow-lg);">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
+                <h3 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span>⚡</span> Nạp Tệp Hàng Loạt Theo Phiên Bản Đã Chọn
+                </h3>
+                <button onclick="closeBatchUploadModal()" class="btn-icon-nav">✕</button>
+            </div>
+
+            <div id="batch-modal-desc" style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;"></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                <button class="btn-secondary" style="padding: 10px; justify-content: center;" onclick="triggerBatchFilesPick()">
+                    📄 Chọn nhiều tệp...
+                </button>
+                <input type="file" id="batch-native-input" style="display:none;" multiple accept="*/*" onchange="onBatchNativeFilesPicked(this.files, false)">
+
+                <button class="btn-secondary" style="padding: 10px; justify-content: center;" onclick="triggerBatchFolderPick()">
+                    📁 Chọn cả thư mục...
+                </button>
+                <input type="file" id="batch-folder-input" style="display:none;" webkitdirectory directory multiple onchange="onBatchNativeFilesPicked(this.files, true)">
+            </div>
+
+            <!-- Thanh tiến trình nạp -->
+            <div id="batch-progress-container" style="display: none; flex-direction: column; gap: 6px; margin-bottom: 14px;">
+                <div style="height: 6px; background: var(--bg-subtle); border-radius: 3px; overflow: hidden;">
+                    <div id="batch-progress-fill" style="height: 100%; width: 0%; background: #10b981; transition: width 0.2s;"></div>
+                </div>
+                <div id="batch-progress-text" style="font-size: 11px; color: var(--text-muted); font-family: monospace;">Đang chuẩn bị xử lý...</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="btn-secondary" onclick="closeBatchUploadModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast">Thông báo</div>
+
+    <script>
+        // ==========================================================================
+        // 1. MODULE BẢO MẬT: MÃ HÓA AES-GCM 256-BIT CHO INDEXEDDB
+        // ==========================================================================
+        const SecureStorage = {
+            dbName: 'NexusBrain_SecureMasterDB',
+            storeName: 'vault_store',
+            mediaStoreName: 'media_blobs',
+            handlesStoreName: 'media_handles',
+
+            async deriveKey(password, salt) {
+                const enc = new TextEncoder();
+                const keyMaterial = await crypto.subtle.importKey(
+                    'raw',
+                    enc.encode(password),
+                    { name: 'PBKDF2' },
+                    false,
+                    ['deriveKey']
+                );
+                return crypto.subtle.deriveKey(
+                    { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
+                    keyMaterial,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt', 'decrypt']
+                );
+            },
+
+            async encrypt(dataObj, password) {
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const key = await this.deriveKey(password, salt);
+                const encodedData = new TextEncoder().encode(JSON.stringify(dataObj));
+
+                const ciphertext = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    encodedData
+                );
+
+                return {
+                    salt: Array.from(salt),
+                    iv: Array.from(iv),
+                    ciphertext: Array.from(new Uint8Array(ciphertext))
+                };
+            },
+
+            async decrypt(pkg, password) {
+                const salt = new Uint8Array(pkg.salt);
+                const iv = new Uint8Array(pkg.iv);
+                const ciphertext = new Uint8Array(pkg.ciphertext);
+                const key = await this.deriveKey(password, salt);
+
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    ciphertext
+                );
+                return JSON.parse(new TextDecoder().decode(decrypted));
+            },
+
+            openDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(this.dbName, 1);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            db.createObjectStore(this.storeName, { keyPath: 'id' });
+                        }
+                        if (!db.objectStoreNames.contains(this.mediaStoreName)) {
+                            db.createObjectStore(this.mediaStoreName, { keyPath: 'noteId' });
+                        }
+                        if (!db.objectStoreNames.contains(this.handlesStoreName)) {
+                            db.createObjectStore(this.handlesStoreName, { keyPath: 'noteId' });
+                        }
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+
+            async saveVault(dataObj, password) {
+                const encryptedPayload = await this.encrypt(dataObj, password);
+                const db = await this.openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(this.storeName, 'readwrite');
+                    tx.objectStore(this.storeName).put({ id: 'active_vault', payload: encryptedPayload });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => reject(tx.error);
+                });
+            },
+
+            async loadVault(password) {
+                const db = await this.openDB();
+                const record = await new Promise((resolve, reject) => {
+                    const tx = db.transaction(this.storeName, 'readonly');
+                    const req = tx.objectStore(this.storeName).get('active_vault');
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                });
+                if (!record || !record.payload) return null;
+                return await this.decrypt(record.payload, password);
+            },
+
+            async hasVault() {
+                const db = await this.openDB();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(this.storeName, 'readonly');
+                    const req = tx.objectStore(this.storeName).get('active_vault');
+                    req.onsuccess = () => resolve(!!req.result);
+                    req.onerror = () => resolve(false);
+                });
+            },
+
+            // Quản lý Blob cho Chế độ 1 (Full)
+            async saveBlob(noteId, blob) {
+                const db = await this.openDB();
+                const tx = db.transaction(this.mediaStoreName, 'readwrite');
+                tx.objectStore(this.mediaStoreName).put({ noteId: noteId, blob: blob });
+            },
+            async getBlob(noteId) {
+                const db = await this.openDB();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(this.mediaStoreName, 'readonly');
+                    const req = tx.objectStore(this.mediaStoreName).get(noteId);
+                    req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+                    req.onerror = () => resolve(null);
+                });
+            },
+
+            // Quản lý Handle cho Chế độ 3 (Zero-Disk Handle)
+            async saveHandle(noteId, handle) {
+                const db = await this.openDB();
+                const tx = db.transaction(this.handlesStoreName, 'readwrite');
+                tx.objectStore(this.handlesStoreName).put({ noteId: noteId, handle: handle });
+            },
+            async getHandle(noteId) {
+                const db = await this.openDB();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(this.handlesStoreName, 'readonly');
+                    const req = tx.objectStore(this.handlesStoreName).get(noteId);
+                    req.onsuccess = () => resolve(req.result ? req.result.handle : null);
+                    req.onerror = () => resolve(null);
+                });
+            }
+        };
+
+        // ==========================================================================
+        // 2. BIẾN TOÀN CỤC & DỮ LIỆU
+        // ==========================================================================
+        const DEFAULT_BRAIN = {
+            config: {
+                storageMode: 'handle' // 'full', 'pointer', hoặc 'handle'
+            },
+            folders: [
+                { name: "Notes", color: "#3b82f6" },
+                { name: "Topics", color: "#ec4899" },
+                { name: "Projects", color: "#8b5cf6" },
+                { name: "Media", color: "#10b981" }
+            ],
+            notes: {}
+        };
+
+        let brainState = null;
+        let sessionPassword = null;
+        let isFirstTimeSetup = false;
+        let selectedMode = 'handle';
+
+        let currentView = "files";
+        let currentFilesFolder = "all";
+        let visNetwork = null;
+        let activeDrawerNoteId = null;
+        let isDrawerEditing = false;
+        let currentActiveBlobUrl = null;
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 3500);
+        }
+
+        function getTodayISO() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function classifyFile(filename) {
+            const ext = (filename.split('.').pop() || '').toLowerCase();
+            const textExts = ['txt', 'md', 'docx', 'pdf', 'html', 'htm', 'json', 'log', 'xml', 'csv'];
+            const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv', 'flv'];
+            const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'wma'];
+            const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'];
+
+            if (textExts.includes(ext)) return 'text';
+            if (videoExts.includes(ext)) return 'video';
+            if (audioExts.includes(ext)) return 'audio';
+            if (imageExts.includes(ext)) return 'image';
+            return 'other';
+        }
+
+        async function saveBrainState() {
+            if (!sessionPassword || !brainState) return;
+            await SecureStorage.saveVault(brainState, sessionPassword);
+            updateHeaderStats();
+        }
+
+        // ==========================================================================
+        // 3. ĐIỀU KHIỂN MÀN HÌNH KHÓA & SETUP WIZARD
+        // ==========================================================================
+        async function checkLockscreenStatus() {
+            const hasData = await SecureStorage.hasVault();
+            isFirstTimeSetup = !hasData;
+
+            const titleEl = document.getElementById('lockscreen-title');
+            const subEl = document.getElementById('lockscreen-sub');
+            const btnEl = document.getElementById('btn-lock-submit');
+            const setupBox = document.getElementById('setup-mode-selector');
+            const passInput = document.getElementById('lock-pass-input');
+
+            if (isFirstTimeSetup) {
+                titleEl.innerText = "Khởi Tạo Hệ Thống NexusBrain Pro";
+                subEl.innerText = "Chọn phiên bản lưu trữ và thiết lập mật khẩu bảo vệ mã hóa AES-256.";
+                btnEl.innerText = "🚀 THIẾT LẬP & KHỞI ĐỘNG HỆ THỐNG";
+                setupBox.style.display = 'block';
+                passInput.placeholder = "Tạo mật mã bảo vệ kho dữ liệu...";
+            } else {
+                titleEl.innerText = "Mở Khóa Kho Tri Thức";
+                subEl.innerText = "Nhập mật khẩu để giải mã cơ sở dữ liệu IndexedDB.";
+                btnEl.innerText = "🔓 MỞ KHÓA";
+                setupBox.style.display = 'none';
+                passInput.placeholder = "Nhập mật khẩu của bạn...";
+            }
+
+            document.getElementById('lockscreen-overlay').style.display = 'flex';
+            passInput.value = '';
+            passInput.focus();
+        }
+
+        function selectSetupMode(mode) {
+            selectedMode = mode;
+            document.querySelectorAll('.mode-option-card').forEach(el => el.classList.remove('selected'));
+            document.getElementById(`card-mode-${mode}`).classList.add('selected');
+            document.getElementById(`radio-mode-${mode}`).checked = true;
+        }
+
+        async function handleLockscreenAction() {
+            const passInput = document.getElementById('lock-pass-input');
+            const enteredPass = passInput.value.trim();
+            const errEl = document.getElementById('lock-error');
+
+            if (!enteredPass) {
+                errEl.innerText = "Vui lòng nhập mật mã bảo vệ!";
+                errEl.style.display = 'block';
+                return;
+            }
+
+            if (isFirstTimeSetup) {
+                sessionPassword = enteredPass;
+                brainState = JSON.parse(JSON.stringify(DEFAULT_BRAIN));
+                brainState.config.storageMode = selectedMode;
+
+                await saveBrainState();
+                unlockAppSuccess();
+                showToast(`🎉 Đã kích hoạt hệ thống với phiên bản: ${getModeName(selectedMode)}!`);
+            } else {
+                try {
+                    errEl.style.display = 'none';
+                    document.getElementById('btn-lock-submit').innerText = "⏳ Đang giải mã AES-256...";
+
+                    const decryptedData = await SecureStorage.loadVault(enteredPass);
+                    if (decryptedData) {
+                        sessionPassword = enteredPass;
+                        brainState = decryptedData;
+                        unlockAppSuccess();
+                        showToast("🔓 Mở khóa thành công!");
+                    } else {
+                        throw new Error();
+                    }
+                } catch (e) {
+                    document.getElementById('btn-lock-submit').innerText = "🔓 MỞ KHÓA";
+                    errEl.innerText = "Mật khẩu không chính xác! Không thể giải mã dữ liệu.";
+                    errEl.style.display = 'block';
+                    passInput.select();
+                }
+            }
+        }
+
+        function getModeName(mode) {
+            if (mode === 'full') return "Toàn vẹn (Full DB)";
+            if (mode === 'pointer') return "Con trỏ (Pointer 0-Byte)";
+            return "Phát trực tiếp (Zero-Disk Handle)";
+        }
+
+        function unlockAppSuccess() {
+            document.getElementById('lockscreen-overlay').style.display = 'none';
+            document.getElementById('lock-error').style.display = 'none';
+            updateHeaderStats();
+            switchViewMode('files');
+        }
+
+        function lockScreenNow() {
+            sessionPassword = null;
+            brainState = null;
+            closeNoteDrawer();
+            checkLockscreenStatus();
+            showToast("🔒 Đã khóa màn hình & xóa RAM an toàn!");
+        }
+
+        function updateHeaderStats() {
+            if (!brainState) return;
+            const mode = brainState.config ? brainState.config.storageMode : 'pointer';
+            document.getElementById('badge-current-mode').innerText = `Chế độ: ${getModeName(mode)}`;
+            const notesCount = Object.keys(brainState.notes).length;
+            const foldersCount = brainState.folders.length;
+            document.getElementById('brain-stats-text').innerText = `${notesCount} tệp trong ${foldersCount} thư mục (Mã hóa AES-256)`;
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('nexusbrain_theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+        }
+
+        function switchViewMode(mode) {
+            currentView = mode;
+            document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.switcher-btn').forEach(el => el.classList.remove('active'));
+
+            const p = document.getElementById(`pane-${mode}`);
+            const b = document.getElementById(`btn-view-${mode}`);
+            if (p) p.classList.add('active');
+            if (b) b.classList.add('active');
+
+            if (mode === 'files') renderFilesExplorer();
+            if (mode === 'base') renderBaseTable();
+            if (mode === 'graph') {
+                setTimeout(() => {
+                    if (visNetwork) { visNetwork.redraw(); visNetwork.fit(); }
+                    else initVisGraph();
+                }, 60);
+            }
+        }
+
+        // ==========================================================================
+        // 4. BATCH UPLOAD: NẠP THEO ĐÚNG CHẾ ĐỘ ĐÃ CHỌN
+        // ==========================================================================
+        function openBatchUploadModal() {
+            const mode = brainState.config ? brainState.config.storageMode : 'handle';
+            const desc = document.getElementById('batch-modal-desc');
+            if (mode === 'full') {
+                desc.innerHTML = "Hệ thống đang chạy <b>Phiên bản Toàn vẹn (Full DB)</b>: Tệp Media sẽ được lưu nhị phân vào IndexedDB mã hóa để phát offline 100%.";
+            } else if (mode === 'pointer') {
+                desc.innerHTML = "Hệ thống đang chạy <b>Phiên bản Con trỏ (Pointer)</b>: Tệp Media chỉ lưu thuộc tính (0 Byte ổ đĩa), mở tệp qua phần mềm máy tính (VLC/Word).";
+            } else {
+                desc.innerHTML = "Hệ thống đang chạy <b>Phiên bản Phát trực tiếp (Zero-Disk Handle)</b>: Dùng File System Access API để phát video ngay trên web mà không tốn dung lượng ổ cứng.";
+            }
+            document.getElementById('batch-upload-modal').style.display = 'flex';
+        }
+
+        function closeBatchUploadModal() {
+            document.getElementById('batch-upload-modal').style.display = 'none';
+        }
+
+        async function triggerBatchFilesPick() {
+            const mode = brainState.config ? brainState.config.storageMode : 'handle';
+            if (mode === 'handle' && 'showOpenFilePicker' in window) {
+                try {
+                    const handles = await window.showOpenFilePicker({ multiple: true });
+                    if (handles && handles.length > 0) {
+                        await processHandleBatch(handles);
+                    }
+                } catch (e) {}
+            } else {
+                document.getElementById('batch-native-input').click();
+            }
+        }
+
+        async function triggerBatchFolderPick() {
+            const mode = brainState.config ? brainState.config.storageMode : 'handle';
+            if (mode === 'handle' && 'showDirectoryPicker' in window) {
+                try {
+                    const dirHandle = await window.showDirectoryPicker();
+                    if (dirHandle) {
+                        const items = [];
+                        async function scan(handle, path) {
+                            for await (const entry of handle.values()) {
+                                if (entry.kind === 'file') items.push({ handle: entry, path: `${path}/${entry.name}` });
+                                else if (entry.kind === 'directory') await scan(entry, `${path}/${entry.name}`);
+                            }
+                        }
+                        await scan(dirHandle, dirHandle.name);
+                        await processHandleBatch(items.map(it => it.handle));
+                    }
+                } catch (e) {}
+            } else {
+                document.getElementById('batch-folder-input').click();
+            }
+        }
+
+        // Xử lý nạp mảng Native Files (Cho Chế độ 'full' và 'pointer')
+        async function onBatchNativeFilesPicked(fileList, isFolder) {
+            if (!fileList || fileList.length === 0) return;
+            const files = Array.from(fileList);
+            const mode = brainState.config.storageMode;
+
+            const progressContainer = document.getElementById('batch-progress-container');
+            const progressFill = document.getElementById('batch-progress-fill');
+            const progressText = document.getElementById('batch-progress-text');
+            progressContainer.style.display = 'flex';
+
+            const todayStr = getTodayISO();
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                progressFill.style.width = Math.round(((i + 1) / files.length) * 80) + '%';
+                progressText.innerText = `Đang xử lý (${i + 1}/${files.length}): ${file.name}...`;
+
+                const category = classifyFile(file.name);
+                const rawName = file.name.replace(/\.[^/.]+$/, "").replace(/[\s-]+/g, '_');
+                const noteId = 'note_' + Date.now() + '_' + i;
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+
+                let targetFolder = category === 'text' ? "Notes" : "Media";
+                if (file.webkitRelativePath) {
+                    const parts = file.webkitRelativePath.split('/');
+                    if (parts.length > 1) targetFolder = parts[parts.length - 2];
+                }
+
+                if (category === 'text') {
+                    const rawText = await extractTextFromFile(file);
+                    brainState.notes[noteId] = {
+                        id: noteId, title: rawName, folder: targetFolder, isMedia: false,
+                        content: `## ${rawName.toUpperCase()}\n\n${rawText.slice(0, 8000)}`,
+                        desc: rawText.slice(0, 150), tags: [`#${ext}`], created: todayStr, modified: todayStr
+                    };
+                } else {
+                    if (mode === 'full') {
+                        // Lưu Blob vào IndexedDB
+                        await SecureStorage.saveBlob(noteId, file);
+                    }
+
+                    const suggestedPath = file.webkitRelativePath ? file.webkitRelativePath.replace(/\//g, '\\') : `D:\\Media\\${file.name}`;
+                    const sizeStr = formatBytes(file.size);
+
+                    brainState.notes[noteId] = {
+                        id: noteId, title: rawName, folder: targetFolder, isMedia: true,
+                        mediaType: category, localPath: suggestedPath, fileSize: sizeStr,
+                        desc: `${category.toUpperCase()} | ${sizeStr} | ${file.name}`,
+                        content: `### 📊 THUỘC TÍNH TỆP:\n* **Tên:** \`${file.name}\`\n* **Kích thước:** \`${sizeStr}\`\n* **Vị trí:** \`${suggestedPath}\``,
+                        tags: ["#media", `#${category}`], created: todayStr, modified: todayStr
+                    };
+                }
+            }
+
+            await saveBrainState();
+            closeBatchUploadModal();
+            renderFilesExplorer();
+            showToast(`🎉 Nạp thành công ${files.length} tệp!`);
+        }
+
+        // Xử lý nạp mảng Handles (Cho Chế độ 'handle' Zero-Disk)
+        async function processHandleBatch(handles) {
+            const progressContainer = document.getElementById('batch-progress-container');
+            const progressFill = document.getElementById('batch-progress-fill');
+            const progressText = document.getElementById('batch-progress-text');
+            progressContainer.style.display = 'flex';
+
+            const todayStr = getTodayISO();
+
+            for (let i = 0; i < handles.length; i++) {
+                const handle = handles[i];
+                const file = await handle.getFile();
+                progressFill.style.width = Math.round(((i + 1) / handles.length) * 80) + '%';
+                progressText.innerText = `Đang xử lý Handle (${i + 1}/${handles.length}): ${file.name}...`;
+
+                const category = classifyFile(file.name);
+                const rawName = file.name.replace(/\.[^/.]+$/, "").replace(/[\s-]+/g, '_');
+                const noteId = 'note_' + Date.now() + '_' + i;
+
+                if (category === 'text') {
+                    const rawText = await extractTextFromFile(file);
+                    brainState.notes[noteId] = {
+                        id: noteId, title: rawName, folder: "Notes", isMedia: false,
+                        content: `## ${rawName.toUpperCase()}\n\n${rawText.slice(0, 8000)}`,
+                        desc: rawText.slice(0, 150), tags: ["#notes"], created: todayStr, modified: todayStr
+                    };
+                } else {
+                    // Lưu FileHandle vào IndexedDB
+                    await SecureStorage.saveHandle(noteId, handle);
+                    const sizeStr = formatBytes(file.size);
+
+                    brainState.notes[noteId] = {
+                        id: noteId, title: rawName, folder: "Media", isMedia: true,
+                        mediaType: category, localPath: file.name, fileSize: sizeStr,
+                        desc: `${category.toUpperCase()} | ${sizeStr} | Zero-Disk`,
+                        content: `### 📊 THUỘC TÍNH MEDIA (ZERO-DISK HANDLE):\n* **Tên:** \`${file.name}\`\n* **Kích thước:** \`${sizeStr}\``,
+                        tags: ["#media", `#${category}`], created: todayStr, modified: todayStr
+                    };
+                }
+            }
+
+            await saveBrainState();
+            closeBatchUploadModal();
+            renderFilesExplorer();
+            showToast(`🎉 Nạp thành công ${handles.length} tệp Handle (0 Byte ổ đĩa)!`);
+        }
+
+        async function extractTextFromFile(file) {
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            try {
+                if (ext === 'pdf' && typeof pdfjsLib !== 'undefined') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let pages = [];
+                    for (let p = 1; p <= Math.min(pdf.numPages, 30); p++) {
+                        const page = await pdf.getPage(p);
+                        const tc = await page.getTextContent();
+                        pages.push(tc.items.map(it => it.str).join(' '));
+                    }
+                    return pages.join('\n\n');
+                } else if (ext === 'docx' && typeof JSZip !== 'undefined') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const zip = await JSZip.loadAsync(arrayBuffer);
+                    const docXml = await zip.file("word/document.xml").async("string");
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(docXml, "text/xml");
+                    const paragraphs = xmlDoc.getElementsByTagName("w:p");
+                    let lines = [];
+                    for (let p of paragraphs) {
+                        const texts = p.getElementsByTagName("w:t");
+                        let line = "";
+                        for (let t of texts) line += t.textContent;
+                        if (line.trim()) lines.push(line.trim());
+                    }
+                    return lines.join('\n\n');
+                } else {
+                    return await file.text();
+                }
+            } catch (err) {
+                return `[Nội dung tệp ${file.name}]`;
+            }
+        }
+
+        // ==========================================================================
+        // 5. SLIDE-OVER DRAWER (XỬ LÝ HIỂN THỊ MEDIA THEO CHẾ ĐỘ)
+        // ==========================================================================
+        function openNoteDrawer(noteId) {
+            const note = brainState.notes[noteId];
+            if (!note) return;
+            activeDrawerNoteId = noteId;
+            isDrawerEditing = false;
+
+            document.getElementById('drawer-overlay').classList.add('open');
+            document.getElementById('note-drawer').classList.add('open');
+
+            renderDrawerViewMode(note);
+        }
+
+        function closeNoteDrawer() {
+            document.getElementById('drawer-overlay').classList.remove('open');
+            document.getElementById('note-drawer').classList.remove('open');
+            activeDrawerNoteId = null;
+            if (currentActiveBlobUrl) {
+                URL.revokeObjectURL(currentActiveBlobUrl);
+                currentActiveBlobUrl = null;
+            }
+        }
+
+        async function renderDrawerViewMode(note) {
+            document.getElementById('drawer-view-mode').style.display = 'block';
+            document.getElementById('drawer-edit-mode').style.display = 'none';
+            document.getElementById('drawer-title').innerText = note.title.replace(/_/g, ' ');
+            document.getElementById('drawer-tags').innerText = (note.tags || []).join(' ');
+            document.getElementById('drawer-modified-date').innerText = note.modified || getTodayISO();
+            document.getElementById('drawer-folder-badge').innerText = note.folder;
+
+            const mediaBox = document.getElementById('drawer-media-box');
+            mediaBox.innerHTML = '';
+
+            const mode = brainState.config ? brainState.config.storageMode : 'handle';
+
+            if (note.isMedia) {
+                if (mode === 'full') {
+                    // CHẾ ĐỘ 1: PHÁT TỪ BLOB LƯU TRONG DB
+                    const blob = await SecureStorage.getBlob(note.id);
+                    if (blob) {
+                        currentActiveBlobUrl = URL.createObjectURL(blob);
+                        renderHtml5Player(currentActiveBlobUrl, note.mediaType, mediaBox);
+                    } else {
+                        mediaBox.innerHTML = `<div style="color:#ef4444; font-size:12px;">⚠️ Không tìm thấy dữ liệu tệp trong cơ sở dữ liệu.</div>`;
+                    }
+                } else if (mode === 'handle') {
+                    // CHẾ ĐỘ 3: PHÁT TỪ FILESYSTEMHANDLE ZERO-DISK
+                    const handle = await SecureStorage.getHandle(note.id);
+                    if (handle) {
+                        try {
+                            const file = await handle.getFile();
+                            currentActiveBlobUrl = URL.createObjectURL(file);
+                            renderHtml5Player(currentActiveBlobUrl, note.mediaType, mediaBox);
+                        } catch (e) {
+                            mediaBox.innerHTML = `
+                                <div style="background:var(--accent-subtle); border:1px solid var(--accent-primary); padding:12px; border-radius:8px; text-align:center;">
+                                    <div style="font-size:12px; font-weight:700; color:var(--accent-primary); margin-bottom:6px;">⚡ XÁC NHẬN ĐỌC TỆP ZERO-DISK</div>
+                                    <button class="btn-primary" onclick="requestHandleAccess('${note.id}')">▶️ Nhấn để phát video</button>
+                                </div>
+                            `;
+                        }
+                    } else {
+                        mediaBox.innerHTML = `<div style="color:var(--text-muted); font-size:12px;">⚠️ Tệp chưa được gán quyền truy cập Handle.</div>`;
+                    }
+                } else {
+                    // CHẾ ĐỘ 2: BẢNG ĐIỀU KHIỂN TỆP PC (POINTER)
+                    const targetPath = note.localPath || '';
+                    mediaBox.innerHTML = `
+                        <div style="background:var(--bg-subtle); border:1px solid var(--accent-primary); border-left:5px solid var(--accent-primary); border-radius:8px; padding:14px;">
+                            <div style="font-size:12px; font-weight:700; color:var(--accent-primary); margin-bottom:6px;">💻 BẢNG ĐIỀU KHIỂN TỆP PC (TIẾT KIỆM 100% Ổ ĐĨA)</div>
+                            <div style="font-family:monospace; font-size:11px; background:var(--bg-card); padding:6px 10px; border-radius:4px; margin-bottom:8px; word-break:break-all;">📍 ${escapeHtml(targetPath)}</div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn-action-pill btn-act-native" onclick="launchPCApp('${escapeHtml(targetPath)}')">💻 Mở tệp trên PC</button>
+                                <button class="btn-action-pill btn-act-reveal" onclick="revealPCFolder('${escapeHtml(targetPath)}')">📂 Mở thư mục</button>
+                                <button class="btn-action-pill btn-act-copy" onclick="copyPathToClip('${escapeHtml(targetPath)}')">📋 Sao chép</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            document.getElementById('drawer-content').innerHTML = formatMarkdown(note.content || note.desc || '');
+            renderBacklinks(note);
+        }
+
+        function renderHtml5Player(src, type, container) {
+            if (type === 'video') {
+                container.innerHTML = `
+                    <div style="background:#000; border-radius:8px; overflow:hidden;">
+                        <video controls autoplay style="width:100%; max-height:400px; display:block;"><source src="${src}"></video>
+                    </div>
+                `;
+            } else if (type === 'audio') {
+                container.innerHTML = `
+                    <div style="background:var(--bg-secondary); border:1px solid var(--border-color); padding:14px; border-radius:8px;">
+                        <audio controls autoplay style="width:100%;"><source src="${src}"></audio>
+                    </div>
+                `;
+            } else if (type === 'image') {
+                container.innerHTML = `<img src="${src}" style="max-width:100%; border-radius:6px;">`;
+            }
+        }
+
+        async function requestHandleAccess(noteId) {
+            const handle = await SecureStorage.getHandle(noteId);
+            if (!handle) return;
+            try {
+                const status = await handle.requestPermission({ mode: 'read' });
+                if (status === 'granted') {
+                    renderDrawerViewMode(brainState.notes[noteId]);
+                }
+            } catch (e) {}
+        }
+
+        function launchPCApp(path) {
+            navigator.clipboard.writeText(`"${path}"`).then(() => {
+                showToast("📋 Đã chép đường dẫn!");
+                alert(`🚀 ĐÃ SAO CHÉP ĐƯỜNG DẪN:\n"${path}"\n\nBấm [Windows + R] -> Bấm [Ctrl + V] -> Nhấn [Enter] để mở tệp ngay lập tức!`);
+            });
+        }
+
+        function revealPCFolder(path) {
+            const folder = path.substring(0, Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')));
+            navigator.clipboard.writeText(`"${folder}"`).then(() => {
+                alert(`📂 ĐÃ SAO CHÉP ĐƯỜNG DẪN THƯ MỤC:\n"${folder}"\n\nBấm [Windows + R] -> Bấm [Ctrl + V] -> Nhấn [Enter] để mở thư mục!`);
+            });
+        }
+
+        function copyPathToClip(path) {
+            navigator.clipboard.writeText(path).then(() => showToast("📋 Đã chép đường dẫn!"));
+        }
+
+        // ==========================================================================
+        // 6. RENDER FILES, GRAPH & BASE
+        // ==========================================================================
+        function renderFilesExplorer() {
+            renderFoldersTree();
+            renderFilesGridCards();
+        }
+
+        function renderFoldersTree() {
+            const container = document.getElementById('folders-tree-container');
+            if (!container || !brainState) return;
+            container.innerHTML = '';
+
+            const allItem = document.createElement('div');
+            allItem.className = `folder-tree-item ${currentFilesFolder === 'all' ? 'active' : ''}`;
+            allItem.innerHTML = `<span>📂 Tất cả tệp</span><span style="font-size:11px; opacity:0.6;">${Object.keys(brainState.notes).length}</span>`;
+            allItem.onclick = () => { currentFilesFolder = 'all'; renderFilesExplorer(); };
+            container.appendChild(allItem);
+
+            brainState.folders.forEach(f => {
+                const count = Object.values(brainState.notes).filter(n => n.folder === f.name).length;
+                const item = document.createElement('div');
+                item.className = `folder-tree-item ${currentFilesFolder === f.name ? 'active' : ''}`;
+                item.innerHTML = `<span>📁 ${f.name}</span><span style="font-size:11px; opacity:0.6;">${count}</span>`;
+                item.onclick = () => { currentFilesFolder = f.name; renderFilesExplorer(); };
+                container.appendChild(item);
+            });
+        }
+
+        function renderFilesGridCards() {
+            const grid = document.getElementById('files-cards-grid');
+            if (!grid || !brainState) return;
+            grid.innerHTML = '';
+
+            const filteredNotes = Object.values(brainState.notes).filter(n => {
+                return currentFilesFolder === 'all' || n.folder === currentFilesFolder;
+            });
+            document.getElementById('files-current-count').innerText = `${filteredNotes.length} tệp`;
+
+            filteredNotes.forEach(note => {
+                const card = document.createElement('div');
+                card.className = 'file-doc-card';
+                card.onclick = () => openNoteDrawer(note.id);
+
+                let icon = note.mediaType === 'video' ? '🎬' : (note.mediaType === 'audio' ? '🎵' : '📄');
+
+                card.innerHTML = `
+                    <div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:20px;">${icon}</span>
+                            <span class="badge-folder" style="background:#dbeafe; color:#1e40af;">${escapeHtml(note.folder)}</span>
+                        </div>
+                        <h4 style="font-size:14px; font-weight:600; margin-bottom:6px; word-break:break-word;">
+                            ${escapeHtml(note.title.replace(/_/g, ' '))}
+                        </h4>
+                        <p style="font-size:12px; color:var(--text-secondary); line-height:1.4; max-height:42px; overflow:hidden;">
+                            ${escapeHtml(note.desc || note.content || '').slice(0, 80)}...
+                        </p>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-color); padding-top:8px; font-size:11px;">
+                        <span style="color:var(--text-muted);">${note.fileSize || 'Văn bản'}</span>
+                        <span style="color:var(--accent-primary); font-weight:600;">Xem chi tiết &gt;</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function addNewFolderPrompt() {
+            const name = prompt("Nhập tên thư mục mới:");
+            if (!name || !name.trim()) return;
+            brainState.folders.push({ name: name.trim(), color: "#3b82f6" });
+            saveBrainState();
+            renderFilesExplorer();
+            showToast(`Đã thêm thư mục: ${name.trim()}`);
+        }
+
+        function renderBaseTable() {
+            const tbody = document.getElementById('base-table-tbody');
+            if (!tbody || !brainState) return;
+            tbody.innerHTML = '';
+            for (const id in brainState.notes) {
+                const note = brainState.notes[id];
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:600; cursor:pointer;" onclick="openNoteDrawer('${id}')">${escapeHtml(note.title)}</td>
+                    <td><span class="badge-folder" style="background:#dbeafe; color:#1e40af;">${escapeHtml(note.folder)}</span></td>
+                    <td style="color:var(--text-muted);">${note.modified || getTodayISO()}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-icon-nav" onclick="openNoteDrawer('${id}')">✏️</button>
+                        <button class="btn-icon-nav" onclick="deleteNoteById('${id}')" style="color:#ef4444;">🗑️</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function initVisGraph() {
+            const container = document.getElementById('vis-canvas');
+            if (!container || !brainState) return;
+            let nodes = [], edges = [];
+            for (const id in brainState.notes) {
+                const n = brainState.notes[id];
+                nodes.push({ id: id, label: n.title, shape: 'dot', size: 16, color: '#3b82f6' });
+            }
+            if (visNetwork) visNetwork.destroy();
+            visNetwork = new vis.Network(container, { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, { physics: { barnesHut: { springLength: 140 } } });
+        }
+
+        // ==========================================================================
+        // 7. CÁC HÀM TIỆN ÍCH & XUẤT NHẬP DỮ LIỆU
+        // ==========================================================================
+        function escapeHtml(t) { return String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function formatMarkdown(t) {
+            return escapeHtml(t).replace(/\[\[(.*?)\]\]/g, '<span class="internal-link" onclick="jumpNote(\'$1\')">[[$1]]</span>').replace(/\n/g, '<br>');
+        }
+        function renderBacklinks(curr) {
+            const box = document.getElementById('drawer-backlinks-list');
+            box.innerHTML = '<span style="color:var(--text-muted); font-style:italic;">Chưa có liên kết nơ-ron đến ghi chú này.</span>';
+        }
+        function jumpNote(title) {
+            for (const id in brainState.notes) {
+                if (brainState.notes[id].title.toLowerCase() === title.toLowerCase()) {
+                    openNoteDrawer(id); return;
+                }
+            }
+        }
+
+        function openCreateNoteModal() {
+            const id = 'note_' + Date.now();
+            brainState.notes[id] = {
+                id: id, title: "Ghi_Chú_Mới", folder: "Notes", isMedia: false,
+                content: "Nội dung ghi chú...", tags: ["#notes"], created: getTodayISO(), modified: getTodayISO()
+            };
+            saveBrainState();
+            openNoteDrawer(id);
+            toggleDrawerEditMode();
+        }
+
+        function toggleDrawerEditMode() {
+            if (!activeDrawerNoteId) return;
+            const note = brainState.notes[activeDrawerNoteId];
+            isDrawerEditing = !isDrawerEditing;
+            if (isDrawerEditing) {
+                document.getElementById('drawer-view-mode').style.display = 'none';
+                document.getElementById('drawer-edit-mode').style.display = 'flex';
+                document.getElementById('edit-note-title').value = note.title;
+                document.getElementById('edit-note-content').value = note.content || '';
+                const sel = document.getElementById('edit-note-folder');
+                sel.innerHTML = '';
+                brainState.folders.forEach(f => sel.innerHTML += `<option value="${f.name}">${f.name}</option>`);
+                sel.value = note.folder;
+            } else {
+                renderDrawerViewMode(note);
+            }
+        }
+
+        async function saveDrawerNote() {
+            if (!activeDrawerNoteId) return;
+            const note = brainState.notes[activeDrawerNoteId];
+            note.title = document.getElementById('edit-note-title').value.trim();
+            note.content = document.getElementById('edit-note-content').value;
+            note.folder = document.getElementById('edit-note-folder').value;
+            note.modified = getTodayISO();
+
+            await saveBrainState();
+            isDrawerEditing = false;
+            renderDrawerViewMode(note);
+            renderFilesExplorer();
+            showToast("Đã lưu thay đổi!");
+        }
+
+        async function deleteCurrentNote() {
+            if (!activeDrawerNoteId) return;
+            if (confirm("Xóa ghi chú này?")) {
+                delete brainState.notes[activeDrawerNoteId];
+                await saveBrainState();
+                closeNoteDrawer();
+                renderFilesExplorer();
+                showToast("Đã xóa ghi chú!");
+            }
+        }
+
+        function deleteNoteById(id) {
+            if (confirm("Xóa ghi chú này?")) {
+                delete brainState.notes[id];
+                saveBrainState();
+                renderBaseTable();
+                showToast("Đã xóa ghi chú!");
+            }
+        }
+
+        function exportBrainJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(brainState, null, 2));
+            const a = document.createElement('a');
+            a.href = dataStr;
+            a.download = `nexusbrain_vault_${getTodayISO()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast("📥 Đã xuất tệp sao lưu JSON thành công!");
+        }
+
+        function importBrainJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed && parsed.notes) {
+                        brainState = parsed;
+                        await saveBrainState();
+                        renderFilesExplorer();
+                        showToast("🎉 Nạp dữ liệu thành công!");
+                    }
+                } catch(err) { alert("Tệp JSON không hợp lệ!"); }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function navigateHistory() {}
+
+        // KHỞI ĐỘNG VÀ KÍCH HOẠT MÀN HÌNH KHÓA
+        window.onload = async function() {
+            const savedTheme = localStorage.getItem('nexusbrain_theme');
+            if (savedTheme === 'dark') document.body.classList.add('dark-mode');
+            await checkLockscreenStatus();
+        };
+    </script>
+</body>
+</html>
