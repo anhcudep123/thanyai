@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinCmd Encryptor // DMPES Co.,Ltd - Bản Quyền Mã Hóa AES-256</title>
+    <style>
+        :root {
+            --primary: #000080;
+            --primary-light: #4338ca;
+            --accent-green: #059669;
+            --bg-dark: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); line-height: 1.6; }
+        a { text-decoration: none; color: inherit; }
+
+        /* Navigation Bar */
+        .navbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 8%; background: rgba(15, 23, 42, 0.95); position: sticky; top: 0; border-bottom: 1px solid var(--border-color); z-index: 100; backdrop-filter: blur(8px); }
+        .logo { font-size: 19px; font-weight: 800; color: #818cf8; display: flex; align-items: center; gap: 8px; }
+        .nav-links { display: flex; gap: 20px; font-size: 14px; }
+        .nav-links a:hover { color: #818cf8; }
+
+        /* Hero Section */
+        .hero { text-align: center; padding: 80px 8% 50px; max-width: 1000px; margin: 0 auto; }
+        .badge { display: inline-block; background: #312e81; color: #a5b4fc; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 20px; border: 1px solid var(--primary-light); }
+        .hero h1 { font-size: 40px; line-height: 1.25; margin-bottom: 20px; font-weight: 800; }
+        .hero h1 span { color: #38bdf8; }
+        .hero p { font-size: 17px; color: var(--text-muted); margin-bottom: 30px; }
+        .hero-cta { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+
+        /* Buttons */
+        .btn { padding: 12px 26px; border-radius: 6px; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; border: none; }
+        .btn-primary { background: #4f46e5; color: #fff; }
+        .btn-primary:hover { background: var(--primary-light); transform: translateY(-2px); }
+        .btn-green { background: var(--accent-green); color: #fff; }
+        .btn-green:hover { background: #047857; transform: translateY(-2px); }
+
+        /* Section Layouts */
+        .section { padding: 60px 8%; max-width: 1100px; margin: 0 auto; }
+        .section-title { text-align: center; margin-bottom: 40px; }
+        .section-title h2 { font-size: 28px; margin-bottom: 8px; color: #f1f5f9; }
+        .section-title p { color: var(--text-muted); font-size: 14px; }
+
+        /* Comparison Table */
+        .table-wrap { overflow-x: auto; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 14px 18px; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+        th { background: #1e293b; color: #cbd5e1; font-weight: 700; }
+        tr:hover { background: #243248; }
+        .highlight-col { background: rgba(79, 70, 229, 0.12); color: #38bdf8; font-weight: 700; }
+        .icon-check { color: #10b981; font-weight: bold; }
+        .icon-cross { color: #f43f5e; font-weight: bold; }
+
+        /* Feature Cards */
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; }
+        .card h3 { font-size: 18px; margin-bottom: 10px; color: #e2e8f0; }
+        .card p { font-size: 14px; color: var(--text-muted); }
+
+        /* Registration Form Box */
+        .form-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 32px; max-width: 620px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #cbd5e1; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 12px; border-radius: 4px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; outline: none; }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #818cf8; ring: 1px solid #818cf8; }
+
+        /* Alert Toast */
+        #alert-box { display: none; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; font-weight: 600; text-align: center; }
+        .alert-success { background: #064e3b; color: #6ee7b7; border: 1px solid #059669; }
+        .alert-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }
+
+        /* Footer */
+        footer { background: #0b1120; border-top: 1px solid var(--border-color); padding: 40px 8%; text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 60px; }
+        footer strong { color: #cbd5e1; }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="logo">🔐 WinCmd Encryptor</div>
+        <div class="nav-links">
+            <a href="#comparison">So Sánh</a>
+            <a href="#features">Tính Năng</a>
+            <a href="#license">Đăng Ký Bản Quyền</a>
+            <a href="#contact">Liên Hệ</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="badge">DMPES Co.,Ltd // Công Nghệ Bảo Mật 2026</div>
+        <h1>Mã Hóa Đám Mây Chuẩn <span>Zero-Knowledge</span> Với Phong Cách WinCmd 4.0</h1>
+        <p>Bảo vệ dữ liệu tuyệt đối trước khi đồng bộ lên Google Drive. Ngăn chặn nguy cơ rò rỉ dữ liệu hoặc bị quét nội dung trái phép.</p>
+        <div class="hero-cta">
+            <a href="#license" class="btn btn-green">Đăng Ký Kích Hoạt Miễn Phí</a>
+            <a href="#comparison" class="btn btn-primary">Xem Bảng So Sánh Kỹ Thuật</a>
+        </div>
+    </header>
+
+    <!-- Comparison Table -->
+    <section class="section" id="comparison">
+        <div class="section-title">
+            <h2>So Sánh Giải Pháp Kỹ Thuật</h2>
+            <p>Sự khác biệt giữa lưu trữ thô và cơ chế mã hóa AES-256-GCM của WinCmd Encryptor</p>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tiêu Chí Kỹ Thuật</th>
+                        <th class="highlight-col">WinCmd Encryptor</th>
+                        <th>Google Drive Mặc Định</th>
+                        <th>File Nén ZIP / RAR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Thuật toán mã hóa</strong></td>
+                        <td class="highlight-col">AES-256-GCM (Chống can thiệp)</td>
+                        <td>AES-128 / AES-256 máy chủ</td>
+                        <td>ZipCrypto / AES cũ</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Khóa bí mật (Zero-Knowledge)</strong></td>
+                        <td class="highlight-col"><span class="icon-check">✔</span> Chỉ người dùng nắm giữ</td>
+                        <td><span class="icon-cross">✖</span> Máy chủ đám mây giữ khóa</td>
+                        <td><span class="icon-check">✔</span> Người dùng nắm giữ</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Bảo vệ chống Brute-Force</strong></td>
+                        <td class="highlight-col">PBKDF2 (200.000 vòng lặp)</td>
+                        <td>Không áp dụng cho từng tệp</td>
+                        <td>Số vòng băm thấp, dễ dò pass</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Giao diện điều khiển</strong></td>
+                        <td class="highlight-col">Hai cửa sổ kéo thả (WinCmd 4.0)</td>
+                        <td>Giao diện Web / Explorer</td>
+                        <td>Hộp thoại nén tệp đơn lẻ</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Định dạng tệp xuất xưởng</strong></td>
+                        <td class="highlight-col">Đuôi mã hóa độc quyền (.enc)</td>
+                        <td>Tệp thô không che giấu</td>
+                        <td>.zip / .rar (Lộ danh mục file)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features">
+        <div class="section-title">
+            <h2>Ưu Điểm Vận Hành Vượt Trội</h2>
+            <p>Kết hợp giữa trải nghiệm quản lý tệp cổ điển và chuẩn mã hóa mật mã học hiện đại</p>
+        </div>
+        <div class="grid-3">
+            <div class="card">
+                <h3>🪟 Giao Diện Kép 4.0 (Dual-Pane)</h3>
+                <p>Khung Trái duyệt dữ liệu máy tính, Khung Phải kết nối thư mục đám mây. Kéo thả chuột qua lại để tự động mã hóa hoặc giải mã.</p>
+            </div>
+            <div class="card">
+                <h3>🛡️ Bảo Vệ Toàn Vẹn Tệp (AEAD)</h3>
+                <p>Khởi tạo Salt 16-byte và Nonce 12-byte ngẫu nhiên cho từng tệp riêng biệt. Tệp bị chỉnh sửa dù 1 byte cũng sẽ bị từ chối giải mã.</p>
+            </div>
+            <div class="card">
+                <h3>⚡ Xử Lý Đệ Quy Cả Ổ Đĩa (F9)</h3>
+                <p>Tự động duyệt hàng ngàn tệp trong các thư mục con và tái tạo chính xác cây thư mục tại đích đến một cách thần tốc.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Registration Form Section (Formspree + Telegram Sync) -->
+    <section class="section" id="license">
+        <div class="section-title">
+            <h2>Đăng Ký Bản Quyền / Đặt Hàng Phần Mềm</h2>
+            <p>Hệ thống tự động kích hoạt và gửi mã phê duyệt qua email khi có xác nhận từ DMPES Co.,Ltd</p>
+        </div>
+        <div class="form-box">
+            <div id="alert-box"></div>
+            <form id="licenseForm" onsubmit="handleRegistrationSubmit(event)">
+                <div class="form-group">
+                    <label for="fullName">Họ và Tên / Tên Đơn Vị *</label>
+                    <input type="text" id="fullName" required placeholder="Ví dụ: Nguyễn Văn A">
+                </div>
+                <div class="form-group">
+                    <label for="phoneNumber">Số Điện Thoại Liên Hệ *</label>
+                    <input type="tel" id="phoneNumber" required placeholder="Ví dụ: 0909391461">
+                </div>
+                <div class="form-group">
+                    <label for="emailAddr">Địa Chỉ E-mail Nhận Bản Quyền *</label>
+                    <input type="email" id="emailAddr" required placeholder="Ví dụ: email_cua_ban@gmail.com">
+                </div>
+                <div class="form-group">
+                    <label for="licenseType">Gói Bản Quyền Yêu Cầu *</label>
+                    <select id="licenseType">
+                        <option value="Cá nhân (Miễn phí có xác nhận)">Bản Cá Nhân (Miễn phí có xác nhận qua email)</option>
+                        <option value="Doanh nghiệp (Đa máy trạm)">Bản Doanh Nghiệp (Sao lưu đồng bộ dữ liệu lớn)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="purpose">Mục Đích Sử Dụng & Ghi Chú *</label>
+                    <textarea id="purpose" rows="3" required placeholder="Nêu rõ nhu cầu: sao lưu Google Drive cá nhân, kế toán, văn phòng..."></textarea>
+                </div>
+                <button type="submit" id="btnSubmit" class="btn btn-green" style="width: 100%;">
+                    Gửi Đơn Đăng Ký Xác Nhận
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="contact">
+        <p><strong>CÔNG TY TNHH DMPES (DMPES Co.,Ltd)</strong></p>
+        <p>Người đại diện kỹ thuật: <strong>Mr Sạch</strong> | Hotline: <strong>0909391461 - 0582388070</strong></p>
+        <p>Kênh TikTok: <a href="https://www.tiktok.com/@sachitd" target="_blank" style="color: #38bdf8;">@sachitd</a> | Hòm thư: <strong>sachitd@gmail.com</strong></p>
+        <p style="margin-top: 15px; font-size: 11px; color: #64748b;">
+            Bản quyền xác nhận khi có xin phép và được sự chấp nhận bằng e-mail: sachitd@gmail.com
+        </p>
+    </footer>
+
+    <!-- Dual Sync Script (Formspree + Telegram) -->
+    <script>
+        // ==========================================================
+        // CẤU HÌNH ĐỒNG BỘ TELEGRAM BOT & FORMSPREE
+        // ==========================================================
+        const FORMSPREE_ENDPOINT = "https://formspree.io/f/mykqapbg";
+        const TELEGRAM_BOT_TOKEN = "7737222853:AAG6cR5H-x59W8rM7m_V0m1fLwPqR9sTuVo";
+        const TELEGRAM_CHAT_ID = "6123456789";
+
+        async function handleRegistrationSubmit(e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('btnSubmit');
+            const alertBox = document.getElementById('alert-box');
+            btn.disabled = true;
+            btn.innerText = "ĐANG TRUYỀN DỮ LIỆU ĐỒNG BỘ...";
+
+            const fullName = document.getElementById('fullName').value.trim();
+            const phone = document.getElementById('phoneNumber').value.trim();
+            const email = document.getElementById('emailAddr').value.trim();
+            const licenseType = document.getElementById('licenseType').value;
+            const purpose = document.getElementById('purpose').value.trim();
+
+            const reqId = "WCE-" + Date.now().toString().slice(-6);
+            const timeStr = new Date().toLocaleString('vi-VN');
+
+            // 1. Lưu bản ghi LocalStorage
+            const record = { reqId, timeStr, fullName, phone, email, licenseType, purpose };
+            let localRecords = JSON.parse(localStorage.getItem('wincmd_licenses')) || [];
+            localRecords.unshift(record);
+            localStorage.setItem('wincmd_licenses', JSON.stringify(localRecords));
+
+            // 2. Nội dung gửi Formspree (JSON)
+            const formspreePayload = {
+                "Mã_Đơn": reqId,
+                "Họ_Tên": fullName,
+                "Số_Điện_Thoại": phone,
+                "Email": email,
+                "Gói_Đăng_Ký": licenseType,
+                "Mục_Đích": purpose,
+                "Thời_Gian": timeStr
+            };
+
+            // 3. Nội dung gửi Telegram Bot (HTML format)
+            const teleMessage = 
+`🔐 <b>ĐƠN ĐĂNG KÝ BẢN QUYỀN WINCMD ENCRYPTOR</b>
+━━━━━━━━━━━━━━━━━━━━
+🆔 <b>Mã yêu cầu:</b> <code>${reqId}</code>
+👤 <b>Họ và tên:</b> <b>${fullName}</b>
+📞 <b>Số điện thoại:</b> <code>${phone}</code>
+📧 <b>Email nhận key:</b> <code>${email}</code>
+📦 <b>Gói yêu cầu:</b> ${licenseType}
+📝 <b>Mục đích:</b> <i>${purpose}</i>
+⏰ <b>Thời gian:</b> ${timeStr}`;
+
+            try {
+                // Gửi song song không chờ nhau làm nghẽn
+                await Promise.allSettled([
+                    // Kênh Formspree
+                    fetch(FORMSPREE_ENDPOINT, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                        body: JSON.stringify(formspreePayload)
+                    }),
+                    // Kênh Telegram Bot
+                    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chat_id: TELEGRAM_CHAT_ID,
+                            text: teleMessage,
+                            parse_mode: "HTML"
+                        })
+                    })
+                ]);
+
+                // Thông báo thành công
+                alertBox.className = "alert-success";
+                alertBox.innerHTML = `🎉 Gửi yêu cầu thành công! Mã đơn: <strong>${reqId}</strong>.<br>Hệ thống đã đồng bộ đến Telegram & Formspree của DMPES Co.,Ltd.`;
+                alertBox.style.display = "block";
+                document.getElementById('licenseForm').reset();
+            } catch (err) {
+                console.error(err);
+                alertBox.className = "alert-error";
+                alertBox.innerText = "Có lỗi kết nối mạng xảy ra. Vui lòng thử lại sau!";
+                alertBox.style.display = "block";
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Gửi Đơn Đăng Ký Xác Nhận";
+            }
+        }
+    </script>
+</body>
+</html>
