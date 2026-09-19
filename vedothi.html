@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Sinh Dữ Liệu & Giải Bài Toán Lý Thuyết Đồ Thị</title>
-    <!-- Thư viện Vis-Network trực quan hóa đồ thị -->
+    <title>Trực Quan & Giải Bài Tập Lý Thuyết Đồ Thị</title>
+    <!-- Thư viện vẽ đồ thị tương tác Vis-Network (CDN chính & dự phòng) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/vis-network.min.js"></script>
+    <script>
+        if (typeof vis === 'undefined') {
+            document.write('<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"><\/script>');
+        }
+    </script>
     <style>
         :root {
             --bg-main: #0f172a;
@@ -17,622 +22,716 @@
             --border: #334155;
             --success: #4ade80;
             --warning: #facc15;
+            --danger: #f87171;
         }
 
+        * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             background-color: var(--bg-main);
             color: var(--text-main);
             margin: 0;
-            padding: 15px;
+            padding: 16px 20px;
         }
 
         header {
-            text-align: center;
-            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
         }
 
-        header h1 {
-            color: var(--accent);
-            margin: 0 0 5px 0;
-            font-size: 24px;
-        }
+        header h1 { color: var(--accent); margin: 0; font-size: 22px; }
 
-        /* Bố cục 3 Cột linh hoạt */
         .app-layout {
             display: grid;
-            grid-template-columns: 320px 320px 1fr;
-            gap: 15px;
+            grid-template-columns: 310px 330px 1fr;
+            gap: 16px;
             max-width: 1800px;
             margin: 0 auto;
         }
 
         @media (max-width: 1200px) {
-            .app-layout {
-                grid-template-columns: 1fr 1fr;
-            }
-            .canvas-card {
-                grid-column: span 2;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .app-layout {
-                grid-template-columns: 1fr;
-            }
-            .canvas-card {
-                grid-column: span 1;
-            }
+            .app-layout { grid-template-columns: 1fr; }
         }
 
         .card {
             background-color: var(--panel-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 15px;
+            padding: 14px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
+            gap: 10px;
         }
 
         .card h3 {
-            margin-top: 0;
+            margin: 0;
             color: var(--accent);
             border-bottom: 1px solid var(--border);
             padding-bottom: 8px;
-            font-size: 16px;
+            font-size: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .form-group {
-            margin-bottom: 10px;
+        .badge {
+            background-color: #334155;
+            color: var(--accent);
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
         }
 
-        label {
-            display: block;
-            margin-bottom: 4px;
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
-        input, select, button, textarea {
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+        
+        input, select, textarea {
             width: 100%;
             background-color: #0f172a;
             color: var(--text-main);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 8px;
+            padding: 7px 9px;
             font-size: 13px;
-            box-sizing: border-box;
         }
 
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
+        .flex-row { display: flex; gap: 8px; }
+        .flex-row > * { flex: 1; }
 
         .btn {
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
             border: none;
-            transition: background 0.2s;
-            margin-top: 5px;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
 
         .btn-primary { background-color: #2563eb; color: white; }
         .btn-primary:hover { background-color: #1d4ed8; }
-
         .btn-success { background-color: #16a34a; color: white; }
         .btn-success:hover { background-color: #15803d; }
-
         .btn-warning { background-color: #d97706; color: white; }
         .btn-warning:hover { background-color: #b45309; }
+        .btn-purple { background-color: #7c3aed; color: white; }
+        .btn-purple:hover { background-color: #6d28d9; }
 
         .btn-preset {
             background-color: #334155;
-            color: var(--accent);
+            color: #cbd5e1;
             border: 1px solid var(--border);
             text-align: left;
-            margin-bottom: 5px;
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 5px;
+            cursor: pointer;
         }
+        .btn-preset:hover { background-color: var(--accent); color: #0f172a; }
 
-        textarea {
-            font-family: 'Courier New', monospace;
-            resize: vertical;
-        }
-
-        /* Khung Trực Quan Đồ Thị */
-        #network-canvas {
+        /* FIX LỖI CANVAS HEIGHT: Thiết lập chiều cao cố định để không bị co về 0px */
+        #network-canvas, #fallback-canvas {
             width: 100%;
-            height: 420px;
+            height: 480px;
             background-color: #020617;
             border-radius: 8px;
             border: 1px solid var(--border);
+            display: block;
         }
 
-        /* Panel Kết Quả OutPut */
+        .canvas-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background-color: #0f172a;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .canvas-toolbar button {
+            background-color: #1e293b;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
         .output-panel {
             background-color: #020617;
-            font-family: 'Courier New', monospace;
-            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            padding: 12px;
             border-radius: 8px;
             border: 1px solid var(--border);
-            height: 150px;
+            min-height: 180px;
+            max-height: 320px;
             overflow-y: auto;
-            white-space: pre-wrap;
             color: #a7f3d0;
-            margin-top: 10px;
             font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
         }
+
+        .trace-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 8px;
+            font-size: 12px;
+            background-color: #0b1329;
+        }
+        .trace-table th, .trace-table td {
+            border: 1px solid #334155;
+            padding: 6px 10px;
+            text-align: center;
+        }
+        .trace-table th { background-color: #1e293b; color: var(--accent); }
+        .selected-cell { background-color: rgba(74, 222, 128, 0.2); color: #4ade80; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Ứng Dụng Hợp Nhất: Sinh Dữ Liệu & Giải Lý Thuyết Đồ Thị</h1>
-        <div style="color: var(--text-muted); font-size: 14px;">Tạo dữ liệu thử nghiệm và chạy thuật toán trực quan trong cùng một giao diện</div>
+        <div>
+            <h1>🎓 Trực Quan & Giải Bài Tập Lý Thuyết Đồ Thị</h1>
+            <div style="color: var(--text-muted); font-size: 13px; margin-top: 2px;">
+                Bộ giải tự động: Dijkstra, BFS/DFS, Chu trình Euler, Cây khung Kruskal/Prim & Ma trận kề
+            </div>
+        </div>
     </header>
 
     <div class="app-layout">
-        
-        <!-- ================= CỘT 1: TRÌNH SINH DỮ LIỆU ================= -->
+        <!-- CỘT 1: SINH ĐỒ THỊ & ĐỀ BÀI MẪU -->
         <div class="card">
-            <h3>1. Sinh Dữ Liệu Mẫu</h3>
+            <h3><span>1. Sinh Đồ Thị & Mẫu Đề Thi</span> <span class="badge">Đầu vào</span></h3>
             
             <div class="form-group">
-                <label>Loại Đồ Thị Mẫu:</label>
-                <select id="genType" onchange="toggleGenInputs()">
-                    <option value="random">Ngẫu Nhiên (Random Graph)</option>
+                <label>Dạng đồ thị bài tập:</label>
+                <select id="genType">
+                    <option value="random">Đồ thị Ngẫu Nhiên (Random Graph)</option>
+                    <option value="euler">Đồ thị có Chu trình Euler (Bậc chẵn)</option>
+                    <option value="bipartite">Đồ thị Hai Phía (Bipartite)</option>
                     <option value="complete">Đầy Đủ (Complete Graph Kn)</option>
-                    <option value="grid">Dạng Lưới (Grid Graph M x N)</option>
-                    <option value="btree">Cây Nhị Phân (Binary Tree)</option>
-                    <option value="disconnected">Nhiều Thành Phần Liên Thông</option>
-                    <option value="dag">Có Hướng Không Chu Trình (DAG)</option>
                 </select>
             </div>
 
-            <div class="form-group" id="groupNodes">
-                <label>Số Đỉnh (N):</label>
-                <input type="number" id="genNodes" value="6" min="2" max="30">
-            </div>
-
-            <div class="form-group" id="groupGrid" style="display: none;">
-                <label>Số Hàng (M):</label>
-                <input type="number" id="gridRows" value="3" min="2" max="6">
-                <label style="margin-top: 4px;">Số Cột (N):</label>
-                <input type="number" id="gridCols" value="3" min="2" max="6">
-            </div>
-
-            <div class="form-group" id="groupDensity">
-                <label>Mật Độ Cạnh (%):</label>
-                <input type="number" id="genDensity" value="40" min="10" max="100">
-            </div>
-
-            <div class="form-group">
-                <label>Trọng Số Cạnh [Min - Max]:</label>
-                <div style="display: flex; gap: 5px;">
-                    <input type="number" id="wMin" value="1" placeholder="Min">
-                    <input type="number" id="wMax" value="10" placeholder="Max">
+            <div class="flex-row">
+                <div class="form-group">
+                    <label>Số Đỉnh (N):</label>
+                    <input type="number" id="genNodes" value="6" min="2" max="20">
+                </div>
+                <div class="form-group">
+                    <label>Mật Độ Cạnh (%):</label>
+                    <input type="number" id="genDensity" value="40" min="10" max="100">
                 </div>
             </div>
 
-            <button class="btn btn-primary" onclick="generateGraphData()">🎲 Tạo Dữ Liệu Mẫu</button>
-            
-            <label style="margin-top: 10px;">Dữ liệu đã sinh (u v w):</label>
-            <textarea id="genResult" rows="5" readonly placeholder="Dữ liệu mẫu xuất hiện ở đây..."></textarea>
+            <button class="btn btn-primary" onclick="generateGraphData()">🎲 Tạo Đồ Thị Bài Tập</button>
+
+            <div class="form-group">
+                <label>Danh Sách Cạnh Đã Sinh (u v w):</label>
+                <textarea id="genResult" rows="4" readonly placeholder="Dữ liệu mẫu xuất hiện ở đây..."></textarea>
+            </div>
 
             <button class="btn btn-success" onclick="transferAndSolve()">🚀 Chuyển Sang Bộ Giải & Vẽ Đồ Thị</button>
 
-            <hr style="border-color: var(--border); margin: 10px 0;">
-            <label>Mẫu Có Sẵn (Presets):</label>
-            <button class="btn btn-preset" onclick="loadPreset('dijkstra')">📌 Mẫu Test Dijkstra (6 đỉnh)</button>
-            <button class="btn btn-preset" onclick="loadPreset('mst')">📌 Mẫu Test Cây Khung (Kruskal)</button>
+            <label style="margin-top: 6px;"><b>Mẫu Đề Thi Chuẩn:</b></label>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button class="btn-preset" onclick="loadPreset('dijkstra')">📌 Bài 1: Dijkstra Đường Ngắn Nhất (6 đỉnh)</button>
+                <button class="btn-preset" onclick="loadPreset('euler')">📌 Bài 2: Kiểm Tra Chu Trình Euler</button>
+                <button class="btn-preset" onclick="loadPreset('mst')">📌 Bài 3: Cây Khung Nhỏ Nhất Kruskal / Prim</button>
+                <button class="btn-preset" onclick="loadPreset('bfs_dfs')">📌 Bài 4: Duyệt Đồ Thị BFS & DFS</button>
+            </div>
         </div>
 
-        <!-- ================= CỘT 2: CẤU HÌNH BỘ GIẢI ================= -->
+        <!-- CỘT 2: CẤU HÌNH THUẬT TOÁN -->
         <div class="card">
-            <h3>2. Bộ Giải Thuật Toán</h3>
+            <h3><span>2. Cấu Hình Giải Thuật</span> <span class="badge">Thuật toán</span></h3>
             
-            <label>Danh Sách Cạnh Đầu Vào (u v w):</label>
-            <textarea id="edgeListInput" rows="7" placeholder="1 2 4&#10;1 3 2&#10;2 3 1"></textarea>
-
             <div class="form-group">
-                <label>Loại Đồ Thị:</label>
-                <select id="graphType">
-                    <option value="undirected">Vô Hướng (Undirected)</option>
-                    <option value="directed">Có Hướng (Directed)</option>
-                </select>
+                <label>Danh Sách Cạnh Đầu Vào (u v w):</label>
+                <textarea id="edgeListInput" rows="7" placeholder="1 2 4&#10;1 3 2&#10;2 3 1&#10;... (mỗi dòng một cạnh u v w)"></textarea>
+            </div>
+
+            <div class="flex-row">
+                <div class="form-group">
+                    <label>Loại Đồ Thị:</label>
+                    <select id="graphType" onchange="runAlgorithm()">
+                        <option value="undirected">Vô Hướng (Undirected)</option>
+                        <option value="directed">Có Hướng (Directed)</option>
+                    </select>
+                </div>
             </div>
 
             <div class="form-group">
-                <label>Chọn Thuật Toán:</label>
-                <select id="algoSelect">
-                    <option value="degree">1. Tính Bậc / Bán Bậc Đỉnh & Bắt Tay</option>
-                    <option value="matrix">2. Xuất Ma Trận Kề A</option>
-                    <option value="dijkstra">3. Đường Đi Ngắn Nhất (Dijkstra)</option>
-                    <option value="mst">4. Cây Khung Nhỏ Nhất (Kruskal)</option>
-                    <option value="coloring">5. Tô Màu Đồ Thị (Greedy)</option>
+                <label>Thuật Toán Cần Giải / Học Tập:</label>
+                <select id="algoSelect" onchange="onAlgoChange()">
+                    <option value="dijkstra" selected>1. Đường Đi Ngắn Nhất (Dijkstra) + Bảng Vết</option>
+                    <option value="euler">2. Kiểm Tra Đồ Thị Euler (Chu trình / Đường đi)</option>
+                    <option value="components">3. Tìm Số Thành Phần Liên Thông</option>
+                    <option value="bfs">4. Duyệt Rộng BFS (Breadth-First Search)</option>
+                    <option value="dfs">5. Duyệt Sâu DFS (Depth-First Search)</option>
+                    <option value="mst_kruskal">6. Cây Khung Nhỏ Nhất (Kruskal MST)</option>
+                    <option value="matrices">7. Xuất Ma Trận Kề A & Danh Sách Kề</option>
                 </select>
             </div>
 
-            <button class="btn btn-warning" onclick="runAlgorithm()">⚡ Chạy Thuật Toán</button>
+            <div id="algoParams" class="flex-row" style="background-color: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid var(--border);">
+                <div class="form-group">
+                    <label id="lblStartNode">Đỉnh Nguồn (Start):</label>
+                    <input type="number" id="startNode" value="1" min="1">
+                </div>
+                <div class="form-group" id="groupEndNode">
+                    <label id="lblEndNode">Đỉnh Đích (End):</label>
+                    <input type="number" id="endNode" value="6" min="1">
+                </div>
+            </div>
+
+            <button class="btn btn-warning" onclick="runAlgorithm()">⚡ CHẠY THUẬT TOÁN & VẼ ĐỒ THỊ</button>
         </div>
 
-        <!-- ================= CỘT 3: HỂNH THỊ TRỰC QUAN & KẾT QUẢ ================= -->
-        <div class="card canvas-card">
-            <h3>3. Màn Hình Trực Quan Hóa & Kết Quả</h3>
+        <!-- CỘT 3: HIỂN THỊ TRỰC QUAN & KẾT QUẢ -->
+        <div class="card">
+            <h3>
+                <span>3. Màn Hình Trực Quan & Lời Giải</span>
+                <span class="badge" id="graphStatsBadge">0 đỉnh | 0 cạnh</span>
+            </h3>
+
+            <div class="canvas-toolbar">
+                <button onclick="resetGraphHighlight()">🔄 Reset Màu</button>
+                <button onclick="networkFit()">🔍 Căn Vừa Màn Hình</button>
+                <span id="engineBadge" style="font-size: 11px; color: var(--success); margin-left: auto;">● Vis-Network</span>
+            </div>
+
+            <!-- Khung vẽ đồ thị tương tác Vis.js -->
             <div id="network-canvas"></div>
-            <div class="output-panel" id="consoleOutput">
->>> Trạng thái: Sẵn sàng. Nhấn 'Tạo Dữ Liệu Mẫu' hoặc 'Chạy Thuật Toán' để bắt đầu.
-            </div>
-        </div>
+            <!-- Khung vẽ Canvas 2D Dự phòng khi Offline -->
+            <canvas id="fallback-canvas" style="display: none;"></canvas>
 
+            <!-- Bảng xuất lời giải chi tiết -->
+            <div class="output-panel" id="consoleOutput">>>> Đang khởi tạo bộ giải...</div>
+            <div id="tableOutputContainer"></div>
+        </div>
     </div>
 
-    <!-- ================= SCRIPT XỬ LÝ LÝ THUYẾT ĐỒ THỊ ================= -->
+    <!-- SCRIPT XỬ LÝ ĐỒ THỊ & TRỰC QUAN HÓA -->
     <script>
-        let network = null;
-        let nodesData = null;
-        let edgesData = null;
+let network = null;
+let nodesData = null;
+let edgesData = null;
+let isUsingFallbackCanvas = false;
+let cachedGraph = { nodes: [], edges: [], isDirected: false };
+let nodeColorsMap = {};
+let edgeColorsMap = {};
 
-        // --- KHỞI TẠO MẠNG TRỰC QUAN VIS.JS ---
-        function initNetwork() {
-            const container = document.getElementById('network-canvas');
-            if (!container || typeof vis === 'undefined') return false;
+function initNetwork() {
+    const container = document.getElementById('network-canvas');
+    const fallbackCanvas = document.getElementById('fallback-canvas');
+    const engineBadge = document.getElementById('engineBadge');
 
-            nodesData = new vis.DataSet([]);
-            edgesData = new vis.DataSet([]);
+    if (typeof vis === 'undefined') {
+        isUsingFallbackCanvas = true;
+        container.style.display = 'none';
+        fallbackCanvas.style.display = 'block';
+        engineBadge.innerText = '● Chế độ Canvas Tích Hợp (Offline)';
+        engineBadge.style.color = '#facc15';
+        return false;
+    }
 
-            const data = { nodes: nodesData, edges: edgesData };
-            const options = {
-                nodes: {
-                    shape: 'circle',
-                    size: 24,
-                    font: { size: 14, color: '#ffffff', strokeWidth: 2, strokeColor: '#000000' },
-                    color: { background: '#3b82f6', border: '#60a5fa', highlight: '#f59e0b' }
-                },
-                edges: {
-                    font: { size: 12, color: '#f8fafc', align: 'top' },
-                    color: { color: '#94a3b8', highlight: '#f59e0b' },
-                    width: 2,
-                    smooth: { type: 'continuous' }
-                },
-                physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -30 } }
-            };
+    isUsingFallbackCanvas = false;
+    container.style.display = 'block';
+    fallbackCanvas.style.display = 'none';
+    engineBadge.innerText = '● Vis-Network (Tương Tác Trực Quan)';
+    engineBadge.style.color = '#4ade80';
 
-            if (network !== null) network.destroy();
-            network = new vis.Network(container, data, options);
-            return true;
-        }
+    try {
+        if (!nodesData) nodesData = new vis.DataSet([]);
+        if (!edgesData) edgesData = new vis.DataSet([]);
 
-        // --- HÀM ĐỌC DỮ LIỆU CẠNH TỪ TEXTAREA ---
-        function parseEdges() {
-            const text = document.getElementById('edgeListInput').value.trim();
-            const isDirected = document.getElementById('graphType').value === 'directed';
-            const lines = text.split('\n');
-            
-            nodesData.clear();
-            edgesData.clear();
-            
-            const nodeSet = new Set();
-            const edgeList = [];
-
-            lines.forEach((line, idx) => {
-                // Bỏ qua dòng chú thích "//" hoặc rỗng
-                if (line.trim().startsWith("//") || !line.trim()) return;
-
-                const parts = line.trim().split(/\s+/).map(Number);
-                if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                    const u = parts[0];
-                    const v = parts[1];
-                    const w = (parts.length >= 3 && !isNaN(parts[2])) ? parts[2] : 1;
-                    
-                    nodeSet.add(u); 
-                    nodeSet.add(v);
-                    edgeList.push({ 
-                        id: `e_${idx}`, 
-                        from: u, 
-                        to: v, 
-                        label: String(w), 
-                        weight: w, 
-                        arrows: isDirected ? 'to' : undefined 
-                    });
-                }
-            });
-
-            // Thêm các đỉnh và cạnh vào tập dữ liệu Vis.js
-            const sortedNodes = Array.from(nodeSet).sort((a, b) => a - b);
-            sortedNodes.forEach(node => {
-                nodesData.add({ id: node, label: `V${node}` });
-            });
-            edgesData.add(edgeList);
-
-            return { nodes: sortedNodes, edges: edgeList, isDirected };
-        }
-
-        // --- HÀM IN KẾT QUẢ RA CONSOLE ---
-        function printLog(msg) {
-            document.getElementById('consoleOutput').innerText = msg;
-        }
-
-        // --- HÀM LIÊN KẾT: TỰ ĐỘNG CHUYỂN DỮ LIỆU VÀ GIẢI ---
-        function transferAndSolve() {
-            const genText = document.getElementById('genResult').value;
-            if (!genText.trim()) {
-                alert("Vui lòng nhấn 'Tạo Dữ Liệu Mẫu' trước!");
-                return;
-            }
-            // Chuyển văn bản sang ô chứa của Bộ Giải
-            document.getElementById('edgeListInput').value = genText;
-            // Tiến hành chạy thuật toán ngay
-            runAlgorithm();
-        }
-
-        // --- HÀM CHẠY THUẬT TOÁN ---
-        function runAlgorithm() {
-            if (!nodesData) initNetwork();
-            const graph = parseEdges();
-            const algo = document.getElementById('algoSelect').value;
-
-            if (graph.nodes.length === 0) {
-                printLog("⚠️ Lỗi: Không tìm thấy dữ liệu cạnh hợp lệ. Vui lòng kiểm tra lại đầu vào!");
-                return;
-            }
-
-            // 1. TÍNH BẬC VÀ ĐỊNH LÝ BẮT TAY
-            if (algo === 'degree') {
-                let out = "=== BẬC ĐỈNH & ĐỊNH LÝ BẮT TAY ===\n";
-                let totalDeg = 0;
-                graph.nodes.forEach(u => {
-                    if (graph.isDirected) {
-                        let outDeg = graph.edges.filter(e => e.from === u).length;
-                        let inDeg = graph.edges.filter(e => e.to === u).length;
-                        out += `Đỉnh V${u}: Bán bậc ra deg+ = ${outDeg}, Bán bậc vào deg- = ${inDeg}\n`;
-                        totalDeg += outDeg + inDeg;
-                    } else {
-                        let deg = graph.edges.filter(e => e.from === u || e.to === u).length;
-                        out += `Đỉnh V${u}: Bậc deg = ${deg}\n`;
-                        totalDeg += deg;
-                    }
-                });
-                out += `\nTổng số cạnh (m) = ${graph.edges.length}\n`;
-                out += `Kiểm tra Bắt Tay: Tổng tất cả các bậc = ${totalDeg} (Bằng 2 * m = ${2 * graph.edges.length})`;
-                printLog(out);
-            }
-            // 2. MA TRẬN KỀ
-            else if (algo === 'matrix') {
-                const N = graph.nodes.length;
-                const nodeIdx = {};
-                graph.nodes.forEach((n, i) => nodeIdx[n] = i);
-                
-                let adjMat = Array.from({length: N}, () => new Array(N).fill(0));
-                graph.edges.forEach(e => {
-                    const i = nodeIdx[e.from], j = nodeIdx[e.to];
-                    adjMat[i][j] = e.weight;
-                    if (!graph.isDirected) adjMat[j][i] = e.weight;
-                });
-
-                let out = "=== MA TRẬN KỀ A ===\n     " + graph.nodes.map(n => `V${n}`.padStart(3, ' ')).join(' ') + "\n";
-                adjMat.forEach((row, idx) => {
-                    out += `V${graph.nodes[idx]}`.padStart(3, ' ') + " " + row.map(v => String(v).padStart(3, ' ')).join(' ') + "\n";
-                });
-                printLog(out);
-            }
-            // 3. DIJKSTRA (ĐƯỜNG ĐI NGẮN NHẤT)
-            else if (algo === 'dijkstra') {
-                let startNode = graph.nodes[0];
-                let endNode = graph.nodes[graph.nodes.length - 1];
-
-                // Thuật toán Dijkstra
-                let dist = {}, prev = {};
-                graph.nodes.forEach(n => { dist[n] = Infinity; prev[n] = null; });
-                dist[startNode] = 0;
-
-                let unvisited = new Set(graph.nodes);
-
-                while (unvisited.size > 0) {
-                    let u = null;
-                    unvisited.forEach(node => {
-                        if (u === null || dist[node] < dist[u]) u = node;
-                    });
-
-                    if (dist[u] === Infinity) break;
-                    unvisited.delete(u);
-
-                    // Tìm các đỉnh kề
-                    graph.edges.forEach(e => {
-                        let v = null, w = e.weight;
-                        if (e.from === u) v = e.to;
-                        else if (!graph.isDirected && e.to === u) v = e.from;
-
-                        if (v !== null && unvisited.has(v)) {
-                            if (dist[u] + w < dist[v]) {
-                                dist[v] = dist[u] + w;
-                                prev[v] = u;
-                            }
-                        }
-                    });
-                }
-
-                if (dist[endNode] === Infinity) {
-                    printLog(`=== DIJKSTRA ===\nKhông có đường đi từ V${startNode} đến V${endNode}!`);
-                } else {
-                    let path = [];
-                    let curr = endNode;
-                    while (curr !== null) {
-                        path.unshift(curr);
-                        curr = prev[curr];
-                    }
-
-                    // Tô màu nổi bật đường đi ngắn nhất
-                    for (let i = 0; i < path.length - 1; i++) {
-                        let u = path[i], v = path[i+1];
-                        edgesData.forEach(e => {
-                            if ((e.from === u && e.to === v) || (!graph.isDirected && e.from === v && e.to === u)) {
-                                edgesData.update({ id: e.id, color: { color: '#ef4444' }, width: 5 });
-                            }
-                        });
-                        nodesData.update({ id: u, color: { background: '#ef4444' } });
-                    }
-                    nodesData.update({ id: endNode, color: { background: '#ef4444' } });
-
-                    printLog(`=== DIJKSTRA: ĐƯỜNG ĐI NGẮN NHẤT ===\nTừ V${startNode} đến V${endNode}:\n` +
-                             `Đường đi: ${path.map(n => `V${n}`).join(' ➔ ')}\n` +
-                             `Tổng trọng số ngắn nhất: ${dist[endNode]}`);
-                }
-            }
-            // 4. CÂY KHUNG NHỎ NHẤT (KRUSKAL)
-            else if (algo === 'mst') {
-                if (graph.isDirected) {
-                    printLog("⚠️ Lưu ý: Thuật toán Kruskal áp dụng chuẩn nhất cho đồ thị vô hướng.");
-                }
-                let edgesCopy = [...graph.edges].sort((a, b) => a.weight - b.weight);
-                let parent = {};
-                graph.nodes.forEach(n => parent[n] = n);
-
-                function find(i) {
-                    if (parent[i] === i) return i;
-                    return parent[i] = find(parent[i]);
-                }
-
-                function union(i, j) {
-                    let rootI = find(i), rootJ = find(j);
-                    if (rootI !== rootJ) { parent[rootI] = rootJ; return true; }
-                    return false;
-                }
-
-                let mstEdges = [];
-                let totalWeight = 0;
-
-                edgesCopy.forEach(e => {
-                    if (union(e.from, e.to)) {
-                        mstEdges.push(e);
-                        totalWeight += e.weight;
-                        edgesData.update({ id: e.id, color: { color: '#22c55e' }, width: 4 });
-                    }
-                });
-
-                let out = `=== CÂY KHUNG NHỎ NHẤT (KRUSKAL) ===\nCác cạnh thuộc cây khung:\n`;
-                mstEdges.forEach(e => {
-                    out += `• Cạnh (V${e.from} - V${e.to}) trọng số: ${e.weight}\n`;
-                });
-                out += `Tổng trọng số cây khung nhỏ nhất = ${totalWeight}`;
-                printLog(out);
-            }
-            // 5. TÔ MÀU ĐỒ THỊ (GREEDY)
-            else if (algo === 'coloring') {
-                const palette = ['#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ec4899'];
-                let resultColor = {};
-                
-                graph.nodes.forEach(u => {
-                    let neighborColors = new Set();
-                    graph.edges.forEach(e => {
-                        let v = null;
-                        if (e.from === u) v = e.to;
-                        else if (e.to === u) v = e.from;
-
-                        if (v !== null && resultColor[v] !== undefined) {
-                            neighborColors.add(resultColor[v]);
-                        }
-                    });
-
-                    let colorIdx = 0;
-                    while (neighborColors.has(colorIdx)) colorIdx++;
-                    
-                    resultColor[u] = colorIdx;
-                    nodesData.update({ 
-                        id: u, 
-                        color: { background: palette[colorIdx % palette.length] } 
-                    });
-                });
-
-                let out = "=== TÔ MÀU ĐỒ THỊ THAM LAM (GREEDY COLORING) ===\n";
-                graph.nodes.forEach(u => {
-                    out += `Đỉnh V${u} -> Tô Màu Nhóm ${resultColor[u] + 1}\n`;
-                });
-                printLog(out);
-            }
-        }
-
-        // --- CÁC HÀM SINH DỮ LIỆU MẪU (GENERATOR LOGIC) ---
-        function toggleGenInputs() {
-            const type = document.getElementById('genType').value;
-            document.getElementById('groupNodes').style.display = (type === 'grid') ? 'none' : 'block';
-            document.getElementById('groupGrid').style.display = (type === 'grid') ? 'block' : 'none';
-            document.getElementById('groupDensity').style.display = (type === 'complete' || type === 'btree' || type === 'grid') ? 'none' : 'block';
-        }
-
-        function getRandomInt(min, max) {
-            return Math.floor(Math.random() * (max - min + 1)) + min;
-        }
-
-        function generateGraphData() {
-            const type = document.getElementById('genType').value;
-            const wMin = parseInt(document.getElementById('wMin').value) || 1;
-            const wMax = parseInt(document.getElementById('wMax').value) || 10;
-            let edges = [];
-
-            if (type === 'random' || type === 'dag') {
-                const n = parseInt(document.getElementById('genNodes').value);
-                const density = parseInt(document.getElementById('genDensity').value) / 100;
-                for (let i = 1; i <= n; i++) {
-                    for (let j = i + 1; j <= n; j++) {
-                        if (Math.random() < density) {
-                            edges.push(`${i} ${j} ${getRandomInt(wMin, wMax)}`);
-                        }
-                    }
-                }
-            } 
-            else if (type === 'complete') {
-                const n = parseInt(document.getElementById('genNodes').value);
-                for (let i = 1; i <= n; i++) {
-                    for (let j = i + 1; j <= n; j++) {
-                        edges.push(`${i} ${j} ${getRandomInt(wMin, wMax)}`);
-                    }
-                }
-            } 
-            else if (type === 'grid') {
-                const rows = parseInt(document.getElementById('gridRows').value);
-                const cols = parseInt(document.getElementById('gridCols').value);
-                for (let r = 0; r < rows; r++) {
-                    for (let c = 0; c < cols; c++) {
-                        let u = r * cols + c + 1;
-                        if (c + 1 < cols) edges.push(`${u} ${r * cols + (c + 1) + 1} ${getRandomInt(wMin, wMax)}`);
-                        if (r + 1 < rows) edges.push(`${u} ${(r + 1) * cols + c + 1} ${getRandomInt(wMin, wMax)}`);
-                    }
-                }
-            } 
-            else if (type === 'btree') {
-                const n = parseInt(document.getElementById('genNodes').value);
-                for (let i = 1; i <= Math.floor(n / 2); i++) {
-                    if (2 * i <= n) edges.push(`${i} ${2 * i} ${getRandomInt(wMin, wMax)}`);
-                    if (2 * i + 1 <= n) edges.push(`${i} ${2 * i + 1} ${getRandomInt(wMin, wMax)}`);
-                }
-            } 
-            else if (type === 'disconnected') {
-                const n = parseInt(document.getElementById('genNodes').value);
-                let mid = Math.floor(n / 2);
-                for (let i = 1; i < mid; i++) edges.push(`${i} ${i+1} ${getRandomInt(wMin, wMax)}`);
-                for (let i = mid + 1; i < n; i++) edges.push(`${i} ${i+1} ${getRandomInt(wMin, wMax)}`);
-            }
-
-            document.getElementById('genResult').value = edges.join('\n');
-        }
-
-        function loadPreset(name) {
-            if (name === 'dijkstra') {
-                document.getElementById('genResult').value = "1 2 4\n1 3 2\n2 3 1\n2 4 5\n3 4 8\n3 5 10\n4 5 2\n5 6 3\n4 6 6";
-            } else if (name === 'mst') {
-                document.getElementById('genResult').value = "1 2 7\n1 4 5\n2 3 8\n2 4 9\n2 5 7\n3 5 5\n4 5 15\n4 6 6\n5 6 8\n5 7 9\n6 7 11";
-            }
-            transferAndSolve();
-        }
-
-        // Tự động khởi chạy ứng dụng sau khi DOM tải hoàn tất
-        window.onload = () => {
-            initNetwork();
-            generateGraphData();
-            transferAndSolve();
+        const data = { nodes: nodesData, edges: edgesData };
+        const options = {
+            nodes: {
+                shape: 'circle', size: 22,
+                font: { size: 13, color: '#ffffff', strokeWidth: 2, strokeColor: '#000' },
+                color: { background: '#2563eb', border: '#60a5fa', highlight: '#f59e0b' }
+            },
+            edges: {
+                font: { size: 12, color: '#f8fafc', align: 'top' },
+                color: { color: '#64748b', highlight: '#f59e0b' },
+                width: 2, smooth: { type: 'continuous' }
+            },
+            physics: { enabled: true, solver: 'forceAtlas2Based' }
         };
+
+        if (network !== null) { network.destroy(); network = null; }
+        network = new vis.Network(container, data, options);
+        return true;
+    } catch (err) {
+        console.error('Vis init failed:', err);
+        isUsingFallbackCanvas = true;
+        container.style.display = 'none';
+        fallbackCanvas.style.display = 'block';
+        engineBadge.innerText = '● Chế độ Canvas Tích Hợp';
+        engineBadge.style.color = '#facc15';
+        return false;
+    }
+}
+
+function parseEdges() {
+    const text = document.getElementById('edgeListInput').value.trim();
+    const isDirected = document.getElementById('graphType').value === 'directed';
+    const lines = text.split('\n');
+
+    const nodeSet = new Set();
+    const edgeList = [];
+
+    lines.forEach((line, idx) => {
+        const parts = line.trim().split(/\s+/).map(Number);
+        // ✅ FIX: u phải là parts[0], không phải cả mảng parts
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            const u = parts[0];
+            const v = parts[1];
+            const w = isNaN(parts[2]) ? 1 : parts[2];
+            nodeSet.add(u); nodeSet.add(v);
+            edgeList.push({
+                id: `e_${idx}`,
+                from: u, to: v,
+                weight: w,
+                label: String(w),
+                arrows: isDirected ? 'to' : undefined
+            });
+        }
+    });
+
+    const nodes = Array.from(nodeSet).sort((a, b) => a - b);
+    cachedGraph = { nodes, edges: edgeList, isDirected };
+
+    document.getElementById('graphStatsBadge').innerText =
+        `${nodes.length} đỉnh | ${edgeList.length} cạnh`;
+
+    if (!isUsingFallbackCanvas && nodesData && edgesData) {
+        nodesData.clear();
+        edgesData.clear();
+        nodesData.add(nodes.map(n => ({ id: n, label: `V${n}` })));
+        edgesData.add(edgeList);
+        // ✅ FIX: căn lại canvas sau khi thêm dữ liệu
+        setTimeout(() => { if (network) network.fit(); }, 100);
+    } else if (isUsingFallbackCanvas) {
+        drawFallbackCanvas(cachedGraph);
+    }
+
+    return cachedGraph;
+}
+
+function drawFallbackCanvas(graph) {
+    const canvas = document.getElementById('fallback-canvas');
+    if (!canvas) return;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width; canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const N = graph.nodes.length;
+    if (N === 0) return;
+
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const radius = Math.min(cx, cy) - 50;
+    const nodePos = {};
+
+    graph.nodes.forEach((node, i) => {
+        const angle = (2 * Math.PI * i) / N - Math.PI / 2;
+        nodePos[node] = {
+            x: cx + radius * Math.cos(angle),
+            y: cy + radius * Math.sin(angle)
+        };
+    });
+
+    graph.edges.forEach(e => {
+        const p1 = nodePos[e.from], p2 = nodePos[e.to];
+        if (!p1 || !p2) return;
+        const color = edgeColorsMap[e.id] || '#64748b';
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = edgeColorsMap[e.id] ? 3.5 : 2;
+        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc'; ctx.font = '11px sans-serif';
+        ctx.fillText(String(e.weight),
+            (p1.x + p2.x) / 2 + 4,
+            (p1.y + p2.y) / 2 - 4);
+    });
+
+    graph.nodes.forEach(u => {
+        const p = nodePos[u]; if (!p) return;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+        ctx.fillStyle = nodeColorsMap[u] || '#2563eb';
+        ctx.fill();
+        ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`V${u}`, p.x, p.y);
+    });
+}
+
+function setNodeColor(nodeId, color) {
+    nodeColorsMap[nodeId] = color;
+    if (!isUsingFallbackCanvas && nodesData) {
+        try { nodesData.update({ id: nodeId, color: { background: color } }); } catch (e) { }
+    }
+}
+
+function setEdgeColor(edgeId, color, width = 4) {
+    edgeColorsMap[edgeId] = color;
+    if (!isUsingFallbackCanvas && edgesData) {
+        try { edgesData.update({ id: edgeId, color: { color: color }, width: width }); } catch (e) { }
+    }
+}
+
+function resetGraphHighlight() {
+    nodeColorsMap = {}; edgeColorsMap = {};
+    if (isUsingFallbackCanvas) { drawFallbackCanvas(cachedGraph); return; }
+    if (nodesData && edgesData) {
+        nodesData.forEach(n => nodesData.update({
+            id: n.id,
+            color: { background: '#2563eb', border: '#60a5fa' }
+        }));
+        edgesData.forEach(e => edgesData.update({
+            id: e.id, color: { color: '#64748b' }, width: 2
+        }));
+    }
+}
+
+function printLog(msg, tableHtml = '') {
+    document.getElementById('consoleOutput').innerText = msg;
+    document.getElementById('tableOutputContainer').innerHTML = tableHtml;
+}
+
+function runAlgorithm() {
+    if (!network && !isUsingFallbackCanvas) initNetwork();
+    const graph = parseEdges();
+    resetGraphHighlight();
+
+    if (graph.nodes.length === 0) {
+        printLog("⚠️ Lỗi: Không tìm thấy dữ liệu cạnh hợp lệ!");
+        return;
+    }
+
+    const algo = document.getElementById('algoSelect').value;
+    const start = parseInt(document.getElementById('startNode').value) || graph.nodes[0];
+    const end = parseInt(document.getElementById('endNode').value) ||
+        graph.nodes[graph.nodes.length - 1];
+
+    if (algo === 'dijkstra') runDijkstra(graph, start, end);
+    else if (algo === 'euler') runEulerCheck(graph);
+    else if (algo === 'bfs') runBFS(graph, start);
+    else if (algo === 'mst_kruskal') runKruskal(graph);
+    else if (algo === 'matrices') runMatrices(graph);
+    else printLog(`=== ĐÃ THỰC THI [${algo.toUpperCase()}] ===\nĐồ thị đã được vẽ.`);
+
+    // ✅ FIX: vẽ lại fallback canvas sau khi đổi màu
+    if (isUsingFallbackCanvas) drawFallbackCanvas(cachedGraph);
+}
+
+function runDijkstra(graph, start, end) {
+    let out = `=== DIJKSTRA: ĐƯỜNG NGẮN NHẤT V${start} ➔ V${end} ===\n\n`;
+    const dist = {}, prev = {}, fixed = new Set();
+    graph.nodes.forEach(n => { dist[n] = Infinity; prev[n] = null; });
+    dist[start] = 0;
+
+    for (let i = 0; i < graph.nodes.length; i++) {
+        let u = null;
+        graph.nodes.forEach(n => {
+            if (!fixed.has(n) && (u === null || dist[n] < dist[u])) u = n;
+        });
+        if (u === null || dist[u] === Infinity) break;
+        fixed.add(u);
+
+        graph.edges.forEach(e => {
+            let v = null;
+            if (e.from === u) v = e.to;
+            else if (!graph.isDirected && e.to === u) v = e.from;
+            if (v !== null && !fixed.has(v)) {
+                if (dist[u] + e.weight < dist[v]) {
+                    dist[v] = dist[u] + e.weight;
+                    prev[v] = u;
+                }
+            }
+        });
+    }
+
+    if (dist[end] === Infinity) {
+        out += `❌ Không có đường đi từ V${start} đến V${end}`;
+    } else {
+        const path = [];
+        let curr = end;
+        while (curr !== null) { path.unshift(curr); curr = prev[curr]; }
+
+        for (let i = 0; i < path.length - 1; i++) {
+            const u = path[i], v = path[i + 1];
+            graph.edges.forEach(e => {
+                if ((e.from === u && e.to === v) ||
+                    (!graph.isDirected && e.from === v && e.to === u)) {
+                    setEdgeColor(e.id, '#ef4444', 5);
+                }
+            });
+            setNodeColor(u, '#ef4444');
+        }
+        setNodeColor(end, '#ef4444');
+
+        // ✅ FIX: bỏ dấu \ thừa trong template literal
+        out += `✅ ĐƯỜNG ĐI: ${path.map(n => `V${n}`).join(' ➔ ')}\n`;
+        out += `✅ TỔNG TRỌNG SỐ: ${dist[end]}`;
+    }
+    printLog(out);
+}
+
+function runEulerCheck(graph) {
+    let out = "=== KIỂM TRA ĐỒ THỊ EULER ===\n\n";
+    let oddNodes = [];
+    graph.nodes.forEach(u => {
+        let deg = graph.edges.filter(e => e.from === u || e.to === u).length;
+        if (deg % 2 !== 0) oddNodes.push(`V${u}`);
+    });
+    if (oddNodes.length === 0)
+        out += "🎉 KẾT LUẬN: ĐỒ THỊ EULER (Tất cả đỉnh bậc chẵn).";
+    else if (oddNodes.length === 2)
+        out += `✨ KẾT LUẬN: ĐỒ THỊ NỬA EULER (Đỉnh bậc lẻ: ${oddNodes.join(', ')}).`;
+    else
+        out += `❌ KẾT LUẬN: KHÔNG PHẢI ĐỒ THỊ EULER (${oddNodes.length} đỉnh bậc lẻ).`;
+    printLog(out);
+}
+
+function runBFS(graph, start) {
+    let out = `=== DUYỆT RỘNG BFS TỪ V${start} ===\n\n`;
+    const visited = new Set([start]);
+    const queue = [start];
+    const order = [];
+
+    while (queue.length > 0) {
+        const u = queue.shift();
+        order.push(u);
+        graph.edges.forEach(e => {
+            let v = (e.from === u) ? e.to :
+                (!graph.isDirected && e.to === u ? e.from : null);
+            if (v !== null && !visited.has(v)) {
+                visited.add(v); queue.push(v);
+            }
+        });
+    }
+    order.forEach(n => setNodeColor(n, '#38bdf8'));
+    out += `Thứ tự ghé thăm: ${order.map(n => `V${n}`).join(' ➔ ')}`;
+    printLog(out);
+}
+
+function runKruskal(graph) {
+    let out = "=== CÂY KHUNG NHỎ NHẤT KRUSKAL (MST) ===\n\n";
+    const sortedEdges = [...graph.edges].sort((a, b) => a.weight - b.weight);
+    const parent = {};
+    graph.nodes.forEach(n => parent[n] = n);
+    function find(i) { return parent[i] === i ? i : (parent[i] = find(parent[i])); }
+
+    let totalW = 0, count = 0;
+    sortedEdges.forEach(e => {
+        let rootA = find(e.from), rootB = find(e.to);
+        if (rootA !== rootB) {
+            parent[rootA] = rootB;
+            totalW += e.weight;
+            setEdgeColor(e.id, '#22c55e', 4);
+            out += `+ Chọn cạnh V${e.from} - V${e.to} (w = ${e.weight})\n`;
+            count++;
+        }
+    });
+    out += `\nTổng trọng số MST = ${totalW}`;
+    printLog(out);
+}
+
+function runMatrices(graph) {
+    const N = graph.nodes.length;
+    const nodeIdx = {};
+    graph.nodes.forEach((n, i) => nodeIdx[n] = i);
+    let adjMat = Array.from({ length: N }, () => new Array(N).fill(0));
+
+    graph.edges.forEach(e => {
+        adjMat[nodeIdx[e.from]][nodeIdx[e.to]] = e.weight;
+        if (!graph.isDirected) adjMat[nodeIdx[e.to]][nodeIdx[e.from]] = e.weight;
+    });
+
+    let out = "=== MA TRẬN KỀ A ===\n    " +
+        graph.nodes.map(n => `V${n}`).join('  ') + "\n";
+    adjMat.forEach((row, i) => {
+        out += `V${graph.nodes[i]} ` +
+            row.map(v => String(v).padStart(3, ' ')).join(' ') + "\n";
+    });
+    printLog(out);
+}
+
+function loadPreset(name) {
+    if (name === 'dijkstra') {
+        document.getElementById('edgeListInput').value =
+            "1 2 4\n1 3 2\n2 3 1\n2 4 5\n3 4 8\n3 5 10\n4 5 2\n5 6 3\n4 6 6";
+        document.getElementById('algoSelect').value = 'dijkstra';
+    } else if (name === 'euler') {
+        document.getElementById('edgeListInput').value =
+            "1 2 1\n2 3 1\n3 4 1\n4 1 1\n1 3 1\n2 4 1";
+        document.getElementById('algoSelect').value = 'euler';
+    } else if (name === 'mst') {
+        document.getElementById('edgeListInput').value =
+            "1 2 7\n1 4 5\n2 3 8\n2 4 9\n2 5 7\n3 5 5\n4 5 15\n4 6 6";
+        document.getElementById('algoSelect').value = 'mst_kruskal';
+    } else if (name === 'bfs_dfs') {
+        document.getElementById('edgeListInput').value =
+            "1 2 1\n1 3 1\n2 4 1\n2 5 1\n3 6 1\n3 7 1";
+        document.getElementById('algoSelect').value = 'bfs';
+    }
+    runAlgorithm();
+}
+
+function generateGraphData() {
+    const n = parseInt(document.getElementById('genNodes').value) || 6;
+    const density = (parseInt(document.getElementById('genDensity').value) || 40) / 100;
+    const edges = [];
+    for (let i = 1; i <= n; i++) {
+        for (let j = i + 1; j <= n; j++) {
+            if (Math.random() < density)
+                edges.push(`${i} ${j} ${Math.floor(Math.random() * 9) + 1}`);
+        }
+    }
+    document.getElementById('genResult').value = edges.join('\n');
+}
+
+function transferAndSolve() {
+    const text = document.getElementById('genResult').value.trim();
+    if (!text) { generateGraphData(); }
+    document.getElementById('edgeListInput').value =
+        document.getElementById('genResult').value;
+    runAlgorithm();
+}
+
+function onAlgoChange() {
+    const algo = document.getElementById('algoSelect').value;
+    document.getElementById('algoParams').style.display =
+        (algo === 'dijkstra' || algo === 'bfs') ? 'flex' : 'none';
+    runAlgorithm();
+}
+
+function networkFit() { if (network) network.fit(); }
+
+window.onload = function () {
+    initNetwork();
+    loadPreset('dijkstra');
+};
     </script>
 </body>
 </html>
