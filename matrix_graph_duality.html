@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sự Đối Sẫu Giữa Ma Trận Và Đồ Thị (Matrix-Graph Duality)</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #2b2b3b;
+            --accent-color: #89b4fa;
+            --text-color: #cdd6f4;
+            --border-color: #45475a;
+            --scc1-color: #f9e2af;
+            --scc2-color: #89b4fa;
+            --zero-block-bg: rgba(243, 139, 168, 0.2);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-style: italic;
+            color: #a6adc8;
+            margin-bottom: 25px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: var(--panel-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        textarea {
+            width: 100%;
+            height: 140px;
+            background-color: #181825;
+            color: #a6e3a1;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: #313244;
+            color: var(--text-color);
+            border: 1px solid var(--accent-color);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background-color: var(--accent-color);
+            color: #11111b;
+        }
+
+        canvas {
+            background-color: #181825;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            width: 100%;
+            height: 400px;
+            display: block;
+        }
+
+        .matrix-table {
+            border-collapse: collapse;
+            margin: 15px auto;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .matrix-table td, .matrix-table th {
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            text-align: center;
+            min-width: 40px;
+        }
+
+        .matrix-table th {
+            background-color: #313244;
+            color: var(--accent-color);
+        }
+
+        .zero-block {
+            background-color: var(--zero-block-bg);
+            border: 2px dashed #f38ba8 !important;
+            color: #f38ba8;
+            font-weight: bold;
+        }
+
+        .diag-block-1 {
+            background-color: rgba(249, 226, 175, 0.15);
+            border: 2px solid #f9e2af !important;
+        }
+
+        .diag-block-2 {
+            background-color: rgba(137, 180, 250, 0.15);
+            border: 2px solid #89b4fa !important;
+        }
+
+        .explanation {
+            background-color: #181825;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .rule-badge {
+            display: inline-block;
+            background-color: #45475a;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Sự Đối Sẫu Giữa Ma Trận Và Đồ Thị</h1>
+    <div class="subtitle">Biến đổi hai chiều & Tự động đưa Ma trận về Dạng chuẩn Frobenius (Khối Tam Giác Trên)</div>
+
+    <div class="container">
+        <!-- Bảng điều khiển Ma trận kề -->
+        <div class="card">
+            <h3>1. Ma Trận Kề A (Nhập liệu / Chỉnh sửa)</h3>
+            <p><span class="rule-badge">Quy tắc 1</span> Hàng \\(i\\) = Các cạnh đi <b>RA</b> từ \\(V_i\\)</p>
+            <p><span class="rule-badge">Quy tắc 2</span> Cột \\(j\\) = Các cạnh đi <b>VÀO</b> nút \\(V_j\\)</p>
+            <textarea id="matrixInput" placeholder="Nhập ma trận dạng hàng, ví dụ:&#10;0.5, 1.0, 0.0, 0.8, 0.0, 0.5&#10;0.2, 0.0, 1.5, 0.0, 1.2, 0.0&#10;..."></textarea>
+            <div class="btn-group">
+                <button onclick="updateFromMatrixText()">Cập Nhật Đồ Thị</button>
+                <button onclick="loadSampleSourceMatrix()">Tải Ma Trận Mẫu (Từ Video)</button>
+                <button onclick="clearMatrix()">Xóa Tất Cả</button>
+            </div>
+        </div>
+
+        <!-- Trực quan đồ thị -->
+        <div class="card">
+            <h3>2. Đồ Thị Có Hướng Biểu Diễn</h3>
+            <canvas id="graphCanvas"></canvas>
+        </div>
+
+        <!-- Phân rã SCC & Sắp xếp Topo -->
+        <div class="card full-width">
+            <h3>3. Phân Rã Thành Phần Liên Thông Mạnh (SCC) & Ma Trận Hoán Vị P</h3>
+            <div id="sccInfo" class="explanation">
+                Đang tính toán các Thành phần liên thông mạnh...
+            </div>
+        </div>
+
+        <!-- Ma trận kết quả Frobenius -->
+        <div class="card full-width">
+            <h3>4. Ma Trận Dạng Chuẩn Frobenius (\\(P A P^T\\)) - Khối Tam Giác Trên</h3>
+            <p class="subtitle" style="margin-bottom:10px;">Toàn bộ các liên kết giữa các SCC được đưa về góc trên bên phải, xuất hiện khối 0 lớn ở góc dưới bên trái.</p>
+            <div id="frobeniusMatrixContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Mẫu Ma trận 6x6 lấy trực tiếp từ nội dung ví dụ trong video
+        const sampleMatrix = [
+            [0.5, 1.0, 0.0, 0.8, 0.0, 0.5],
+            [0.2, 0.0, 1.5, 0.0, 1.2, 0.0],
+            [1.8, 0.4, 0.5, 0.0, 0.0, 0.7],
+            [0.0, 0.0, 0.0, 0.3, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.6, 2.0],
+            [0.0, 0.0, 0.0, 1.1, 0.5, 0.0]
+        ];
+
+        let currentMatrix = [];
+
+        function loadSampleSourceMatrix() {
+            currentMatrix = JSON.parse(JSON.stringify(sampleMatrix));
+            renderMatrixText();
+            processDuality();
+        }
+
+        function renderMatrixText() {
+            const lines = currentMatrix.map(row => row.map(v => v.toFixed(1)).join(', '));
+            document.getElementById('matrixInput').value = lines.join('\n');
+        }
+
+        function updateFromMatrixText() {
+            const text = document.getElementById('matrixInput').value.trim();
+            if (!text) return;
+            const lines = text.split('\n');
+            const newMat = [];
+            for (let line of lines) {
+                const row = line.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+                if (row.length > 0) newMat.push(row);
+            }
+            if (newMat.length > 0) {
+                currentMatrix = newMat;
+                processDuality();
+            }
+        }
+
+        function clearMatrix() {
+            currentMatrix = [];
+            renderMatrixText();
+            processDuality();
+        }
+
+        // Thuật toán Tarjan tìm Thành phần Liên thông Mạnh (SCC)
+        function findSCCs(adj) {
+            const N = adj.length;
+            let index = 0;
+            const stack = [];
+            const indices = new Array(N).fill(-1);
+            const lowlink = new Array(N).fill(-1);
+            const onStack = new Array(N).fill(false);
+            const sccs = [];
+
+            function strongconnect(v) {
+                indices[v] = index;
+                lowlink[v] = index;
+                index++;
+                stack.push(v);
+                onStack[v] = true;
+
+                for (let w = 0; w < N; w++) {
+                    if (adj[v][w] > 0) {
+                        if (indices[w] === -1) {
+                            strongconnect(w);
+                            lowlink[v] = Math.min(lowlink[v], lowlink[w]);
+                        } else if (onStack[w]) {
+                            lowlink[v] = Math.min(lowlink[v], indices[w]);
+                        }
+                    }
+                }
+
+                if (lowlink[v] === indices[v]) {
+                    const scc = [];
+                    let w;
+                    do {
+                        w = stack.pop();
+                        onStack[w] = false;
+                        scc.push(w);
+                    } while (w !== v);
+                    sccs.push(scc);
+                }
+            }
+
+            for (let i = 0; i < N; i++) {
+                if (indices[i] === -1) strongconnect(i);
+            }
+            return sccs;
+        }
+
+        // Sắp xếp Topo các SCC
+        function topologicalSortSCCs(adj, sccs) {
+            const numSCC = sccs.length;
+            const sccMap = {};
+            sccs.forEach((scc, idx) => {
+                scc.forEach(node => sccMap[node] = idx);
+            });
+
+            const dagAdj = Array.from({length: numSCC}, () => new Set());
+            const inDegree = new Array(numSCC).fill(0);
+
+            for (let u = 0; u < adj.length; u++) {
+                for (let v = 0; v < adj.length; v++) {
+                    if (adj[u][v] > 0) {
+                        const sccU = sccMap[u];
+                        const sccV = sccMap[v];
+                        if (sccU !== sccV && !dagAdj[sccU].has(sccV)) {
+                            dagAdj[sccU].add(sccV);
+                            inDegree[sccV]++;
+                        }
+                    }
+                }
+            }
+
+            const queue = [];
+            for (let i = 0; i < numSCC; i++) {
+                if (inDegree[i] === 0) queue.push(i);
+            }
+
+            const sortedSCCIndices = [];
+            while (queue.length > 0) {
+                const u = queue.shift();
+                sortedSCCIndices.push(u);
+                for (let v of dagAdj[u]) {
+                    inDegree[v]--;
+                    if (inDegree[v] === 0) queue.push(v);
+                }
+            }
+
+            // Nếu đồ thị DAG có chu trình ngoài ý muốn, bổ sung phần còn lại
+            for (let i = 0; i < numSCC; i++) {
+                if (!sortedSCCIndices.includes(i)) sortedSCCIndices.push(i);
+            }
+
+            return sortedSCCIndices.map(sccIdx => sccs[sccIdx]);
+        }
+
+        function processDuality() {
+            const N = currentMatrix.length;
+            const sccs = findSCCs(currentMatrix);
+            const orderedSCCs = topologicalSortSCCs(currentMatrix, sccs);
+
+            // Thứ tự nút mới sau khi sắp xếp Topo
+            const newOrder = [];
+            orderedSCCs.forEach(scc => newOrder.push(...scc));
+
+            // Hiển thị thông tin SCC
+            let htmlSCC = `<b>Tìm thấy ${sccs.length} Thành phần Liên thông Mạnh (SCC):</b><br><ul>`;
+            orderedSCCs.forEach((scc, idx) => {
+                htmlSCC += `<li><b>SCC ${idx + 1}:</b> Nhóm các nút { ${scc.map(n => 'V' + (n + 1)).join(', ')} }</li>`;
+            });
+            htmlSCC += `</ul><b>Thứ tự đánh số lại nút (Ma trận hoán vị P):</b> [ ${newOrder.map(n => 'V' + (n + 1)).join(' &rarr; ')} ]`;
+            document.getElementById('sccInfo').innerHTML = htmlSCC;
+
+            drawGraph(currentMatrix, sccs);
+            renderFrobeniusMatrix(currentMatrix, newOrder, orderedSCCs);
+        }
+
+        function drawGraph(adj, sccs) {
+            const canvas = document.getElementById('graphCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const N = adj.length;
+            if (N === 0) return;
+
+            const nodeColors = ['#f9e2af', '#89b4fa', '#a6e3a1', '#f38ba8', '#cba6f7'];
+            const sccMap = {};
+            sccs.forEach((scc, colorIdx) => {
+                scc.forEach(node => sccMap[node] = colorIdx % nodeColors.length);
+            });
+
+            // Tọa độ các nút theo vòng tròn
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(centerX, centerY) - 60;
+            const nodePos = [];
+
+            for (let i = 0; i < N; i++) {
+                const angle = (2 * Math.PI * i) / N - Math.PI / 2;
+                nodePos.push({
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle)
+                });
+            }
+
+            // Vẽ các cạnh có hướng
+            for (let i = 0; i < N; i++) {
+                for (let j = 0; j < N; j++) {
+                    const weight = adj[i][j];
+                    if (weight > 0) {
+                        const p1 = nodePos[i];
+                        const p2 = nodePos[j];
+
+                        ctx.beginPath();
+                        ctx.strokeStyle = (sccMap[i] === sccMap[j]) ? '#a6adc8' : '#f38ba8';
+                        ctx.lineWidth = 1.5;
+
+                        if (i === j) {
+                            // Tự trỏ (Self-loop)
+                            ctx.arc(p1.x - 15, p1.y - 15, 15, 0, Math.PI * 2);
+                            ctx.stroke();
+                        } else {
+                            // Cạnh thẳng/cong
+                            ctx.moveTo(p1.x, p1.y);
+                            ctx.lineTo(p2.x, p2.y);
+                            ctx.stroke();
+
+                            // Vẽ mũi tên
+                            const headlen = 10;
+                            const dx = p2.x - p1.x;
+                            const dy = p2.y - p1.y;
+                            const angle = Math.atan2(dy, dx);
+                            const targetX = p2.x - 20 * Math.cos(angle);
+                            const targetY = p2.y - 20 * Math.sin(angle);
+
+                            ctx.beginPath();
+                            ctx.fillStyle = ctx.strokeStyle;
+                            ctx.moveTo(targetX, targetY);
+                            ctx.lineTo(targetX - headlen * Math.cos(angle - Math.PI / 6), targetY - headlen * Math.sin(angle - Math.PI / 6));
+                            ctx.lineTo(targetX - headlen * Math.cos(angle + Math.PI / 6), targetY - headlen * Math.sin(angle + Math.PI / 6));
+                            ctx.fill();
+                        }
+                    }
+                }
+            }
+
+            // Vẽ các nút
+            for (let i = 0; i < N; i++) {
+                const p = nodePos[i];
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
+                ctx.fillStyle = nodeColors[sccMap[i]];
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#11111b';
+                ctx.stroke();
+
+                ctx.fillStyle = '#11111b';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`V${i + 1}`, p.x, p.y);
+            }
+        }
+
+        function renderFrobeniusMatrix(adj, newOrder, orderedSCCs) {
+            const N = adj.length;
+            let html = `<table class="matrix-table"><tr><th></th>`;
+            
+            for (let i of newOrder) {
+                html += `<th>V${i + 1}</th>`;
+            }
+            html += `</tr>`;
+
+            // Xác định vị trí phạm vi khối SCC
+            let sccBoundaries = [];
+            let curr = 0;
+            orderedSCCs.forEach((scc, idx) => {
+                sccBoundaries.push({
+                    sccIdx: idx,
+                    start: curr,
+                    end: curr + scc.length - 1
+                });
+                curr += scc.length;
+            });
+
+            for (let r = 0; r < N; r++) {
+                const origRow = newOrder[r];
+                html += `<tr><th>V${origRow + 1}</th>`;
+                for (let c = 0; c < N; c++) {
+                    const origCol = newOrder[c];
+                    const val = adj[origRow][origCol];
+
+                    // Kiểm tra vị trí ô thuộc khối nào
+                    let cellClass = '';
+                    const rSCC = sccBoundaries.find(b => r >= b.start && r <= b.end);
+                    const cSCC = sccBoundaries.find(b => c >= b.start && c <= b.end);
+
+                    if (rSCC.sccIdx === cSCC.sccIdx) {
+                        cellClass = (rSCC.sccIdx % 2 === 0) ? 'diag-block-1' : 'diag-block-2';
+                    } else if (rSCC.sccIdx > cSCC.sccIdx) {
+                        // Khối góc dưới bên trái -> Bắt buộc bằng 0
+                        cellClass = 'zero-block';
+                    }
+
+                    html += `<td class="${cellClass}">${val.toFixed(1)}</td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</table>`;
+
+            document.getElementById('frobeniusMatrixContainer').innerHTML = html;
+        }
+
+        // Tải mẫu khi chạy lần đầu
+        window.onload = loadSampleSourceMatrix;
+    </script>
+</body>
+</html>
