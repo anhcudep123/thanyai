@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGỌC LONG P2P CONNECT // SOVEREIGN DARK PORTAL</title>
+    <!-- Nhúng thư viện MQTT.js chính thức -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --neon-green: #00FF66;
+            --dark-bg: #0A0A0F;
+            --panel-bg: #11111B;
+            --terminal-black: #020205;
+            --amber-gold: #FFB300;
+        }
+        body {
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+        }
+        .terminal-container {
+            width: 100%;
+            max-width: 1100px;
+            background: var(--terminal-black);
+            border: 2px solid var(--neon-green);
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 0 30px rgba(0, 255, 102, 0.15);
+        }
+        h1 {
+            text-align: center;
+            font-size: 26px;
+            text-shadow: 0 0 10px var(--neon-green);
+            border-bottom: 2px dashed var(--neon-green);
+            padding-bottom: 15px;
+            margin-top: 0;
+        }
+        h2 { color: var(--amber-gold); font-size: 18px; margin-top: 0; border-bottom: 1px solid var(--amber-gold); padding-bottom: 5px; }
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 20px; }
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid #1E1E2F;
+            border-radius: 6px;
+            padding: 20px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        textarea, input, select {
+            background: var(--terminal-black);
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            padding: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+        textarea { height: 110px; resize: none; overflow-y: auto; color: var(--amber-gold); }
+        button {
+            background: #003311;
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            padding: 14px 25px;
+            font-size: 15px;
+            font-weight: bold;
+            font-family: inherit;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            box-shadow: 0 4px 0 #002200;
+            transition: all 0.1s ease;
+        }
+        button:hover { background: #005522; color: #FFFFFF; box-shadow: 0 2px 0 #002200; transform: translateY(2px); }
+        button:active { box-shadow: 0 0px 0 #002200; transform: translateY(4px); }
+        .status-bar {
+            background: #161622;
+            border-left: 4px solid var(--amber-gold);
+            padding: 12px;
+            font-weight: bold;
+            color: var(--amber-gold);
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .video-box { width: 100%; height: 220px; background: #000; border: 1px solid var(--neon-green); border-radius: 4px; object-fit: cover; margin-top: 10px; }
+        .pulse-text { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+        .btn-row { display: flex; gap: 15px; }
+        .btn-row button { margin-top: 0; }
+    </style>
+</head>
+<body>
+
+<div class="terminal-container">
+    <h1>NGỌC LONG P2P SYSTEM // SECURE DARKNET INTERFACE</h1>
+    <div id="global-status" class="status-bar pulse-text">>>> HỆ THỐNG: Sẵn sàng thực thi lệnh cô lập trường khí vĩ mô...</div>
+
+    <!-- MẠNG LƯỚI AUTOPILOT MQTT NÉN DÒNG -->
+    <div class="panel">
+        <h2>🚀 Cổng Điều Phối Tự Động Hóa (MQTT Autopilot Core)</h2>
+        <p style="margin: 0 0 10px 0; font-size: 13px; color: #888;">Nhập chung mã phòng bí mật để đồng bộ hóa mạch chéo không cần chép tay</p>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <input type="text" id="mqtt-room" value="ngoclong_imperial_vault_999" style="flex: 2; margin: 0;">
+            <button style="margin: 0; flex: 1; padding: 11px;" onclick="connectMQTTBroker()">Vận Hành Khóa Ngầm</button>
+            <button style="margin: 0; flex: 1; padding: 11px; background:#330000; border-color:#FF3333; color:#FF6666;" onclick="disconnectMQTT()">Ngắt Kết Nối</button>
+        </div>
+    </div>
+
+    <div class="grid-layout">
+        <!-- PHÂN KHU THỦ CÔNG & HIỂN THỊ ĐA PHƯƠNG THỨC -->
+        <div class="panel">
+            <h2>🔒 Cài Đặt Nâng Cao (Air-Gapped SDP Ledger)</h2>
+            <button onclick="createSovereignOffer()">1. Xuất Bản Mã Khai Ấn (Create Offer)</button>
+
+            <label style="margin-top:10px;">Mã của bạn (Cung cấp chuỗi này cho đối tác):</label>
+            <textarea id="local-sdp" readonly placeholder="Mã Base64 chốt chặn tĩnh mạch sẽ hiện hình tại đây..."></textarea>
+            <button onclick="copyLocalSDP()" style="background:#332200; border-color:var(--amber-gold); color:var(--amber-gold);">📋 Sao Chép Mã Của Bạn</button>
+
+            <label style="margin-top:15px;">2. Áp Dụng Mã Đối Tác (Apply Remote SDP):</label>
+            <textarea id="remote-sdp" placeholder="Dán chuỗi băm của đối tác vào đây nếu vận hành thủ công..."></textarea>
+
+            <button onclick="applyPartnerSDP()">Xác Thực & Khóa Thể Hang Dữ Liệu</button>
+        </div>
+
+        <!-- PHÂN KHU HIỂN THỊ TRỰC QUAN X-RAY VIDEO CALL -->
+        <div class="panel">
+            <h2>👁️ Màn Hình Trực Quan & Truyền Dẫn Linh Lực</h2>
+            <div class="btn-row">
+                <button onclick="startMediaFeed(true)">Gọi Video Chân Trần</button>
+                <button onclick="startMediaFeed(false)">Gọi Thoại Định Tâm</button>
+            </div>
+            <div style="display: flex; gap: 15px; margin-top: 10px;">
+                <div style="flex:1; text-align:center;">
+                    <span style="font-size:12px; font-weight:bold;">LUỒN ĐIỆN CỦA BẠN</span>
+                    <video id="localVideo" class="video-box" autoplay playsinline muted></video>
+                </div>
+                <div style="flex:1; text-align:center;">
+                    <span style="font-size:12px; font-weight:bold;">LINH ĐÀI ĐỐI TÁC</span>
+                    <video id="remoteVideo" class="video-box" autoplay playsinline></video>
+                </div>
+            </div>
+            <button onclick="closePeerConnection()" style="background:#330000; border-color:#FF3333; color:#FF6666; margin-top:15px;">✖ Đóng Kết Nối P2P</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let localStream;
+    let peerConnection;
+    let mqttClient;
+    let roomChannel;
+    // Loại bỏ STUN/TURN để triệt tiêu nguy cơ rò rỉ IP thực.
+    // CẢNH BÁO: Kết nối P2P qua NAT sẽ thất bại nếu không có STUN/TURN.
+    const rtcConfig = { iceServers: [] };
+
+    const globalStatus = document.getElementById('global-status');
+    const localSdpEl = document.getElementById('local-sdp');
+    const remoteSdpEl = document.getElementById('remote-sdp');
+
+    // ==== HÀM MÃ HÓA BASE64 AN TOÀN UNICODE ====
+    function utf8ToBase64(str) {
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+    function base64ToUtf8(b64) {
+        return decodeURIComponent(escape(atob(b64)));
+    }
+
+    // ==== KHỞI TẠO MEDIA ====
+    async function startMediaFeed(useVideo) {
+        try {
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+            }
+            localStream = await navigator.mediaDevices.getUserMedia({ video: useVideo, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+            globalStatus.innerText = ">>> HỆ THỐNG: Đã sạc đầy camera/micro tự thân, sẵn sàng kết nối chéo.";
+
+            // Nếu peerConnection đã tồn tại, thay thế track
+            if (peerConnection) {
+                const senders = peerConnection.getSenders();
+                senders.forEach(sender => peerConnection.removeTrack(sender));
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            }
+        } catch (e) {
+            globalStatus.innerText = ">>> LỖI PHẦN CỨNG LÂM SÀNG: " + e.message;
+        }
+    }
+
+    // ==== KHỞI TẠO PEER CONNECTION ====
+    function initPeerConnection() {
+        if (peerConnection) return;
+        peerConnection = new RTCPeerConnection(rtcConfig);
+
+        if (localStream) {
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+        }
+
+        peerConnection.ontrack = (event) => {
+            document.getElementById('remoteVideo').srcObject = event.streams[0];
+            globalStatus.innerText = "[MẠNG NỒI P2P ĐÃ PHONG ẤN VIÊN MÃN - KẾT NỐI KHÍT KHAO CHÂN TRẦN]";
+        };
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate === null) {
+                const sdpBase64 = utf8ToBase64(JSON.stringify(peerConnection.localDescription));
+                localSdpEl.value = sdpBase64;
+
+                // NẾU CÓ BƯU ĐIỆN MQTT: TỰ ĐỘNG BƠM MÃ QUA MẠNG TỐI
+                if (mqttClient && mqttClient.connected && roomChannel) {
+                    mqttClient.publish(roomChannel, JSON.stringify({ sdp: sdpBase64 }));
+                    globalStatus.innerText = ">>> HỆ THỐNG: Mã băm SDP đã được lệnh MQTT tự động điền khít khao sang đối tác.";
+                }
+            }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+            globalStatus.innerText = ">>> TRẠNG THÁI P2P: " + peerConnection.connectionState;
+        };
+    }
+
+    // ==== TẠO OFFER ====
+    async function createSovereignOffer() {
+        initPeerConnection();
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        globalStatus.innerText = ">>> HỆ THỐNG: Đang thu hái và nén dòng áp suất dữ liệu màng bao...";
+    }
+
+    // ==== ÁP DỤNG SDP ĐỐI TÁC ====
+    async function applyPartnerSDP(rawSDP) {
+        initPeerConnection();
+        const sdpText = rawSDP || remoteSdpEl.value.trim();
+        if (!sdpText) {
+            globalStatus.innerText = ">>> LỖI: Không có mã SDP để áp dụng.";
+            return;
+        }
+
+        let sdpObj;
+        try {
+            sdpObj = JSON.parse(base64ToUtf8(sdpText));
+        } catch (e) {
+            globalStatus.innerText = ">>> LỖI GIẢI MÃ SDP: " + e.message;
+            return;
+        }
+
+        try {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(sdpObj));
+
+            if (sdpObj.type === 'offer') {
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                globalStatus.innerText = ">>> HỆ THỐNG: Đã ngậm chặt cấu hình Offer. Đang xuất bản Answer hồi đáp tự động...";
+            } else if (sdpObj.type === 'answer') {
+                globalStatus.innerText = ">>> HỆ THỐNG: Mã Answer trùng khớp ván thạch. Luồng điện lượng đã thông mạch.";
+            }
+        } catch (e) {
+            globalStatus.innerText = ">>> LỖI THIẾT LẬP SDP: " + e.message;
+        }
+    }
+
+    // ==== KẾT NỐI MQTT ====
+    function connectMQTTBroker() {
+        const roomName = document.getElementById('mqtt-room').value.trim();
+        if (!roomName) {
+            globalStatus.innerText = ">>> LỖI: Chưa nhập mã phòng.";
+            return;
+        }
+
+        // Nếu đã có client cũ, ngắt trước
+        if (mqttClient) {
+            try { mqttClient.end(true); } catch (e) {}
+            mqttClient = null;
+        }
+
+        roomChannel = `ngoclong/p2p/edition2/${roomName}`;
+        globalStatus.innerText = ">>> HỆ THỐNG: Đang định tuyến mạch qua trạm sạc trung gian Mosquitto ngầm...";
+
+        mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
+
+        mqttClient.on('connect', () => {
+            mqttClient.subscribe(roomChannel, (err) => {
+                if (err) {
+                    globalStatus.innerText = ">>> LỖI ĐĂNG KÝ KÊNH: " + err.message;
+                } else {
+                    globalStatus.innerText = ">>> HỆ THỐNG: Kích hoạt Autopilot MQTT vinh hiển. Sẵn sàng điền mã tự động vĩnh cửu.";
+                }
+            });
+        });
+
+        mqttClient.on('message', (topic, message) => {
+            try {
+                const payload = JSON.parse(message.toString());
+                const currentLocalSDP = localSdpEl.value;
+
+                // Ngăn chặn vòng lặp tự nhận lại mã băm của chính mình phát ra
+                if (payload.sdp && payload.sdp !== currentLocalSDP) {
+                    remoteSdpEl.value = payload.sdp;
+                    applyPartnerSDP(payload.sdp);
+                }
+            } catch (e) {
+                console.warn("MQTT message parse error:", e);
+            }
+        });
+
+        mqttClient.on('error', (err) => {
+            globalStatus.innerText = ">>> LỖI MQTT: " + err.message;
+        });
+    }
+
+    // ==== NGẮT MQTT ====
+    function disconnectMQTT() {
+        if (mqttClient) {
+            try { mqttClient.end(true); } catch (e) {}
+            mqttClient = null;
+            globalStatus.innerText = ">>> HỆ THỐNG: Đã ngắt kết nối MQTT.";
+        }
+    }
+
+    // ==== ĐÓNG PEER CONNECTION ====
+    function closePeerConnection() {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+        if (localStream) {
+            localStream.getTracks().forEach(t => t.stop());
+            localStream = null;
+        }
+        document.getElementById('localVideo').srcObject = null;
+        document.getElementById('remoteVideo').srcObject = null;
+        globalStatus.innerText = ">>> HỆ THỐNG: Đã đóng kết nối P2P và giải phóng media.";
+    }
+
+    // ==== SAO CHÉP SDP ====
+    function copyLocalSDP() {
+        if (!localSdpEl.value) {
+            globalStatus.innerText = ">>> LỖI: Chưa có mã SDP cục bộ để sao chép.";
+            return;
+        }
+        localSdpEl.select();
+        localSdpEl.setSelectionRange(0, 99999);
+        try {
+            navigator.clipboard.writeText(localSdpEl.value).then(() => {
+                globalStatus.innerText = ">>> HỆ THỐNG: Đã sao chép mã vương quyền vào bộ nhớ đệm.";
+            }).catch(() => {
+                document.execCommand('copy');
+                globalStatus.innerText = ">>> HỆ THỐNG: Đã sao chép mã vương quyền (fallback).";
+            });
+        } catch (e) {
+            document.execCommand('copy');
+            globalStatus.innerText = ">>> HỆ THỐNG: Đã sao chép mã vương quyền (execCommand).";
+        }
+    }
+</script>
+</body>
+</html>
