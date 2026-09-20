@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="toclong80@gmail.com">
+    <title>NGỌC LONG // DARK WEB P2P MATRIX</title>
+    
+    <!-- Nhúng Tailwind CSS & Cấu hình giao diện Terminal -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { matrix: '#00FF00', dark: '#050508', panel: '#0a0a0f', danger: '#FF0000' },
+                    fontFamily: { mono: ['"Courier New"', 'Courier', 'monospace'] }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons & MQTT JS -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    
+    <style>
+        body { background-color: #050508; color: #00FF00; font-family: 'Courier New', Courier, monospace; overflow-x: hidden; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #003300; border: 1px solid #00FF00; }
+        ::-webkit-scrollbar-thumb:hover { background: #00FF00; }
+        
+        .glow-border { border: 1px solid #00FF00; box-shadow: 0 0 10px rgba(0, 255, 0, 0.15); }
+        .glow-text { text-shadow: 0 0 5px rgba(0, 255, 0, 0.5); }
+        .scanline {
+            width: 100%; height: 100px; z-index: 9999; position: absolute; pointer-events: none;
+            background: linear-gradient(0deg, rgba(0,255,0,0) 0%, rgba(0,255,0,0.1) 50%, rgba(0,255,0,0) 100%);
+            animation: scanline 6s linear infinite; opacity: 0.1;
+        }
+        @keyframes scanline { 0% { top: -100px; } 100% { top: 100vh; } }
+        
+        input, button, textarea, select { background: #000; color: #00FF00; outline: none; transition: all 0.2s; }
+        input:focus, textarea:focus, select:focus { box-shadow: 0 0 8px rgba(0,255,0,0.4); }
+        button:hover:not(:disabled) { background: #002200; box-shadow: 0 0 10px rgba(0,255,0,0.3); }
+        button:disabled { border-color: #003300; color: #003300; cursor: not-allowed; }
+        
+        video { transform: scaleX(-1); } /* Mirror effect cho local video */
+        .no-mirror { transform: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4">
+    <div class="scanline"></div>
+
+    <!-- HEADER -->
+    <header class="border-b border-matrix pb-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-bold glow-text">NGỌC LONG P2P CONNECT</h1>
+            <p class="text-xs">/// MẠNG LƯỚI GIAO TIẾP NGẦM MÃ HÓA END-TO-END</p>
+        </div>
+        <div class="flex items-center gap-3 border border-matrix px-4 py-2 bg-panel">
+            <span id="connection-dot" class="w-3 h-3 rounded-full bg-danger animate-pulse"></span>
+            <span id="connection-status-text" class="text-sm font-bold uppercase">OFFLINE</span>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-7xl mx-auto relative z-10">
+        
+        <!-- BẢNG ĐIỀU KHIỂN (Trái) -->
+        <section class="lg:col-span-4 flex flex-col gap-6">
+            
+            <!-- Room Config -->
+            <div class="glow-border p-4 bg-panel">
+                <h2 class="text-sm font-bold mb-4 border-b border-matrix border-dashed pb-2 flex items-center gap-2">
+                    <i data-lucide="terminal" class="w-4 h-4"></i> CẤU HÌNH KẾT NỐI
+                </h2>
+                <div class="space-y-4 text-sm">
+                    <div>
+                        <label class="block mb-1 text-xs">MÃ PHÒNG (ROOM ID):</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="room-input" placeholder="Nhập mã phòng bí mật..." class="flex-1 border border-matrix p-2 text-sm font-mono">
+                            <button onclick="generateRandomRoom()" class="border border-matrix px-3 hover:bg-matrix hover:text-black">TẠO MÃ</button>
+                        </div>
+                    </div>
+                    <button id="connect-btn" onclick="startSignaling()" class="w-full border border-matrix p-2 font-bold hover:bg-matrix hover:text-black uppercase">
+                        Kích Hỏa Tín Hiệu Khởi Tạo
+                    </button>
+                    
+                    <div id="security-info" class="pt-4 border-t border-matrix border-dashed text-xs">
+                        <div class="flex justify-between mb-2"><span>IP CỦA BẠN:</span> <span id="local-ip" class="font-bold">Đang quét...</span></div>
+                        <div id="peer-ip-list" class="space-y-1">
+                            <div class="flex justify-between text-gray-500"><span>ĐỐI TÁC:</span> <span>Chưa kết nối</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Media Controls -->
+            <div class="glow-border p-4 bg-panel">
+                <h2 class="text-sm font-bold mb-4 border-b border-matrix border-dashed pb-2 flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-4 h-4"></i> GIAO THỨC TRUYỀN THÔNG
+                </h2>
+                <div class="grid grid-cols-2 gap-3 mb-3 text-xs">
+                    <button id="btn-audio" onclick="toggleAudioCall()" disabled class="border border-matrix p-2 flex items-center justify-center gap-2"><i data-lucide="mic" class="w-4 h-4"></i> THOẠI</button>
+                    <button id="btn-webcam" onclick="toggleWebcam()" disabled class="border border-matrix p-2 flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4"></i> VIDEO</button>
+                </div>
+                <button id="btn-screen" onclick="toggleScreenShare()" disabled class="w-full mb-3 border border-matrix p-2 text-xs flex items-center justify-center gap-2">
+                    <i data-lucide="monitor" class="w-4 h-4"></i> CHIA SẺ MÀN HÌNH
+                </button>
+                
+                <!-- MENU CHỌN ĐỘ PHÂN GIẢI GHI HÌNH -->
+                <div class="mb-3">
+                    <label class="block mb-1 text-[10px] text-matrix font-bold">ĐỘ PHÂN GIẢI GHI HÌNH:</label>
+                    <select id="rec-resolution" class="w-full border border-matrix bg-black p-2 text-xs font-mono text-matrix">
+                        <option value="720">720p HD (1280 x 720) - Nhẹ</option>
+                        <option value="1080" selected>1080p Full HD (1920 x 1080) - Chuẩn</option>
+                        <option value="1440">1440p 2K (2560 x 1440) - Nét cao</option>
+                        <option value="2160">2160p 4K (3840 x 2160) - Siêu nét</option>
+                    </select>
+                </div>
+
+                <button id="btn-record" onclick="toggleRecording()" disabled class="w-full mb-3 border border-matrix p-2 text-xs flex items-center justify-center gap-2">
+                    <i data-lucide="radio" class="w-4 h-4"></i> <span id="record-text">GHI HÌNH (MP4)</span>
+                </button>
+                
+                <div class="border-t border-matrix border-dashed pt-3 relative cursor-pointer group">
+                    <input type="file" id="movie-file-input" accept="video/*" disabled class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none z-10">
+                    <div class="border border-matrix p-2 text-xs text-center group-hover:bg-matrix group-hover:text-black transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="film" class="w-4 h-4"></i> PHÁT PHIM CHUNG (CINEMA)
+                    </div>
+                </div>
+
+                <button id="btn-stop-stream" onclick="stopAllMediaStreams()" class="hidden w-full mt-4 border border-danger text-danger p-2 text-xs font-bold hover:bg-danger hover:text-black flex items-center justify-center gap-2">
+                    <i data-lucide="power-off" class="w-4 h-4"></i> NGẮT TRUYỀN THÔNG
+                </button>
+            </div>
+        </section>
+
+        <!-- KHU VỰC HIỂN THỊ & CHAT (Phải) -->
+        <section class="lg:col-span-8 flex flex-col gap-6 h-[80vh]">
+            
+            <!-- Màn hình Video Lưới -->
+            <div class="glow-border bg-black flex-1 relative flex flex-col p-2">
+                <div class="absolute top-0 left-0 bg-matrix text-black text-[10px] font-bold px-2 py-1 z-20">/// SATCOM_FEED</div>
+                
+                <!-- Khu vực Lưới Video -->
+                <div id="video-grid" class="w-full h-full grid grid-cols-1 gap-2 hidden z-10 p-4">
+                    <!-- Local Video -->
+                    <div id="local-video-wrapper" class="relative w-full h-full border border-matrix hidden">
+                        <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                        <div class="absolute bottom-2 left-2 bg-black border border-matrix text-[10px] px-2 py-1">ROOT_USER (BẠN)</div>
+                    </div>
+                    <!-- Remote Videos Container -->
+                    <div id="remote-videos-container" class="contents"></div>
+                </div>
+
+                <!-- Trình phát phim -->
+                <video id="local-movie-player" controls class="w-full h-full object-contain hidden z-10 no-mirror"></video>
+
+                <!-- Standby Screen -->
+                <div id="cinema-placeholder" class="w-full h-full flex flex-col items-center justify-center text-matrix/50 z-0">
+                    <i data-lucide="radar" class="w-16 h-16 animate-spin duration-[3000ms]"></i>
+                    <p class="mt-4 text-xs font-bold tracking-widest uppercase">Chờ tín hiệu ngoại vi...</p>
+                </div>
+            </div>
+
+            <!-- Terminal Chat & File Transfer -->
+            <div class="glow-border bg-panel h-80 flex flex-col relative overflow-hidden">
+                <div class="bg-matrix text-black text-[10px] font-bold px-2 py-1 flex justify-between">
+                    <span>/// SECURE_TERMINAL_CHAT & FILE_VAULT</span>
+                    <span>AES-256-GCM + PBKDF2</span>
+                </div>
+                
+                <div id="chat-box" class="flex-1 p-3 overflow-y-auto text-xs space-y-2 font-mono">
+                    <div class="text-matrix/50">Hệ thống sẵn sàng. Nhập lệnh hoặc kéo thả file để truyền tải.</div>
+                </div>
+
+                <!-- CẤU HÌNH MÃ HÓA TỆP DÙNG CHUNG THUẬT TOÁN WINCMD -->
+                <div class="p-2 border-t border-matrix/50 bg-black/60 flex flex-col gap-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="chk-encrypt-file" checked class="accent-matrix">
+                        <label for="chk-encrypt-file" class="text-[11px] font-bold cursor-pointer">🔑 MÃ HÓA TỆP VỚI AES-256-GCM (PBKDF2 200K VÒNG)</label>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <input type="password" id="file-passphrase" placeholder="Nhập Mật khẩu (Passphrase) giải/mã tệp..." value="NexusBrainSecure2026" class="flex-1 border border-matrix bg-black px-2 py-1 text-xs font-mono">
+                        <button onclick="togglePassVisibility()" class="border border-matrix px-2 py-1 text-[10px] hover:bg-matrix hover:text-black">HIỆN/ẨN</button>
+                    </div>
+                </div>
+
+                <!-- Giao diện Tải File -->
+                <div id="progress-container" class="hidden px-3 py-2 border-t border-matrix border-dashed text-[10px]">
+                    <div class="flex justify-between mb-1">
+                        <span id="progress-filename" class="truncate max-w-[70%]">Truyền_Dữ_Liệu...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                    <div class="w-full border border-matrix h-2 relative">
+                        <div id="progress-bar-fill" class="bg-matrix h-full w-0 transition-all"></div>
+                    </div>
+                </div>
+
+                <div class="p-2 border-t border-matrix flex gap-2">
+                    <div class="relative cursor-pointer w-8 h-8 border border-matrix flex items-center justify-center hover:bg-matrix hover:text-black group">
+                        <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none" disabled>
+                        <i data-lucide="paperclip" class="w-4 h-4"></i>
+                    </div>
+                    <form onsubmit="event.preventDefault(); sendChatMessage();" class="flex-1 flex gap-2">
+                        <input type="text" id="msg-input" placeholder="> Nhập tin nhắn..." disabled class="flex-1 border border-matrix bg-black px-2 text-xs">
+                        <button type="submit" id="send-btn" disabled class="border border-matrix px-4 text-xs font-bold hover:bg-matrix hover:text-black">GỬI</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER BẢN QUYỀN -->
+    <footer class="mt-6 border-t border-matrix/40 pt-3 text-center text-[10px] text-matrix/70 uppercase font-mono">
+        Bản quyền thuộc về NGỌC LONG P2P CONNECT // Tác giả: <a href="mailto:toclong80@gmail.com" class="underline hover:text-matrix">toclong80@gmail.com</a>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+
+        let room = "";
+        let peerId = "N0D3_" + Math.random().toString(16).substring(2, 8).toUpperCase();
+        let mqttClient = null;
+        
+        let peers = {};         
+        let dataChannels = {};  
+        let peerIPs = {};       
+        let incomingFiles = {}; 
+        
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+        let localStream = null;
+
+        const CHUNK_SIZE = 16384; 
+        let currentSendingOffset = 0;
+        let mediaRecorder;        
+        let recordedChunks = [];  
+        let isRecording = false;  
+
+        // --- THUẬT TOÁN MÃ HÓA AES-256-GCM + PBKDF2 TỪ WINCMD ---
+        const SALT_SIZE = 16;
+        const NONCE_SIZE = 12;
+        const PBKDF2_ITERATIONS = 200000;
+
+        async function deriveKey(passphrase, saltBytes) {
+            const enc = new TextEncoder();
+            const passKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+            return await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: saltBytes, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+                passKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+            );
+        }
+
+        async function encryptBuffer(rawBuffer, fileName, passphrase) {
+            const enc = new TextEncoder();
+            const fileNameBytes = enc.encode(fileName);
+            const salt = crypto.getRandomValues(new Uint8Array(SALT_SIZE));
+            const nonce = crypto.getRandomValues(new Uint8Array(NONCE_SIZE));
+            const key = await deriveKey(passphrase, salt);
+            const cipherBuffer = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: fileNameBytes }, key, rawBuffer);
+
+            const nameLen = fileNameBytes.length;
+            const resultBuffer = new Uint8Array(2 + nameLen + SALT_SIZE + NONCE_SIZE + cipherBuffer.byteLength);
+            const view = new DataView(resultBuffer.buffer);
+            view.setUint16(0, nameLen, false);
+            resultBuffer.set(fileNameBytes, 2);
+            resultBuffer.set(salt, 2 + nameLen);
+            resultBuffer.set(nonce, 2 + nameLen + SALT_SIZE);
+            resultBuffer.set(new Uint8Array(cipherBuffer), 2 + nameLen + SALT_SIZE + NONCE_SIZE);
+            return resultBuffer;
+        }
+
+        async function decryptBuffer(encBuffer, passphrase) {
+            const view = new DataView(encBuffer.buffer || encBuffer);
+            const nameLen = view.getUint16(0, false);
+            const rawBytes = new Uint8Array(encBuffer.buffer || encBuffer);
+            const fileNameBytes = rawBytes.slice(2, 2 + nameLen);
+            const salt = rawBytes.slice(2 + nameLen, 2 + nameLen + SALT_SIZE);
+            const nonce = rawBytes.slice(2 + nameLen + SALT_SIZE, 2 + nameLen + SALT_SIZE + NONCE_SIZE);
+            const ciphertext = rawBytes.slice(2 + nameLen + SALT_SIZE + NONCE_SIZE);
+
+            const key = await deriveKey(passphrase, salt);
+            const plainBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: fileNameBytes }, key, ciphertext);
+            return { plainBuffer, origFileName: new TextDecoder().decode(fileNameBytes) };
+        }
+
+        function togglePassVisibility() {
+            const txt = document.getElementById('file-passphrase');
+            txt.type = txt.type === 'password' ? 'text' : 'password';
+        }
+
+        window.onload = () => {
+            fetchLocalIP(); 
+            generateRandomRoom();
+            appendSystemMessage(`ID Định danh cục bộ: ${peerId}`);
+        };
+
+        async function fetchLocalIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                document.getElementById('local-ip').innerText = data.ip;
+            } catch (e) { document.getElementById('local-ip').innerText = "ERR_FETCH_IP"; }
+        }
+
+        function extractIP(candidateStr) {
+            const ipMatch = candidateStr.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/);
+            if (ipMatch) {
+                const ip = ipMatch[0];
+                if (ip.startsWith('192.168.') || ip.startsWith('10.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) return { ip: ip, type: 'LAN' };
+                if (ip.startsWith('127.')) return null; 
+                return { ip: ip, type: 'WAN' };
+            }
+            return null;
+        }
+
+        function updateIPListUI() {
+            const list = document.getElementById('peer-ip-list');
+            list.innerHTML = '';
+            const peerIds = Object.keys(peerIPs);
+            if (peerIds.length === 0) {
+                list.innerHTML = `<div class="flex justify-between text-gray-500"><span>ĐỐI TÁC:</span> <span>Chưa kết nối</span></div>`;
+                return;
+            }
+            peerIds.forEach(id => {
+                const info = peerIPs[id];
+                const shortId = id.substring(0, 7);
+                list.innerHTML += `<div class="flex justify-between"><span>[${shortId}]:</span> <span>${info.ip} (${info.type})</span></div>`;
+            });
+        }
+
+        function generateRandomRoom() { 
+            document.getElementById('room-input').value = "MATRIX_" + Math.floor(1000 + Math.random() * 9000).toString(); 
+        }
+
+        function appendSystemMessage(text) {
+            const box = document.getElementById('chat-box');
+            box.innerHTML += `<div><span class="text-matrix/70">[SYS]</span> ${text}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function appendChatMessage(sender, text, isMe) {
+            const box = document.getElementById('chat-box');
+            const color = isMe ? 'text-matrix' : 'text-white';
+            box.innerHTML += `<div><span class="${color} font-bold">[${sender}]:</span> ${text}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function updateStatusUI(state, text) { 
+            const dot = document.getElementById('connection-dot'); 
+            const label = document.getElementById('connection-status-text'); 
+            label.innerText = text; 
+            if(state === 'connected') { dot.className = 'w-3 h-3 rounded-full bg-matrix shadow-[0_0_8px_#00FF00]'; label.className = 'text-sm font-bold uppercase text-matrix'; }
+            else if(state === 'connecting') { dot.className = 'w-3 h-3 rounded-full bg-yellow-500 animate-pulse'; label.className = 'text-sm font-bold uppercase text-yellow-500'; }
+            else { dot.className = 'w-3 h-3 rounded-full bg-danger animate-pulse'; label.className = 'text-sm font-bold uppercase text-danger'; }
+        }
+
+        function enableControls() { 
+            ['msg-input', 'send-btn', 'file-input', 'btn-audio', 'btn-webcam', 'btn-screen', 'movie-file-input', 'btn-record'].forEach(id => document.getElementById(id).disabled = false); 
+        }
+
+        function updateVideoLayout() {
+            const grid = document.getElementById('video-grid');
+            const localWrapper = document.getElementById('local-video-wrapper');
+            const placeholder = document.getElementById('cinema-placeholder');
+            const moviePlayer = document.getElementById('local-movie-player');
+            const remoteWrappers = document.querySelectorAll('#remote-videos-container > div:not(.hidden)');
+            
+            const totalScreens = (localWrapper.classList.contains('hidden') ? 0 : 1) + remoteWrappers.length;
+            const isPlayingMovie = !moviePlayer.classList.contains('hidden');
+
+            if (isPlayingMovie) { grid.classList.add('hidden'); placeholder.classList.add('hidden'); return; }
+
+            if (totalScreens > 0) {
+                placeholder.classList.add('hidden'); grid.classList.remove('hidden');
+                if (totalScreens === 1) grid.className = "w-full h-full grid grid-cols-1 gap-2 z-10 p-4";
+                else if (totalScreens <= 2) grid.className = "w-full h-full grid grid-cols-1 sm:grid-cols-2 gap-2 z-10 p-4";
+                else grid.className = "w-full h-full grid grid-cols-2 lg:grid-cols-3 gap-2 z-10 p-4";
+            } else {
+                placeholder.classList.remove('hidden'); grid.classList.add('hidden');
+            }
+        }
+
+        function createRemoteVideoElement(targetPeerId) {
+            if(document.getElementById(`wrapper-${targetPeerId}`)) return;
+            const container = document.getElementById('remote-videos-container');
+            const shortId = targetPeerId.substring(0, 7);
+            const html = `
+                <div id="wrapper-${targetPeerId}" class="relative w-full h-full border border-matrix hidden">
+                    <video id="video-${targetPeerId}" autoplay playsinline class="w-full h-full object-cover no-mirror"></video>
+                    <div class="absolute bottom-2 left-2 bg-black border border-matrix text-[10px] px-2 py-1">${shortId}</div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+        }
+
+        function startSignaling() {
+            room = document.getElementById('room-input').value.trim();
+            if (!room) return;
+
+            document.getElementById('room-input').disabled = true;
+            document.getElementById('connect-btn').disabled = true;
+            updateStatusUI("connecting", "ESTABLISHING...");
+            appendSystemMessage("Đang kết nối Server tín hiệu MQTT ngầm...");
+
+            const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
+            try {
+                mqttClient = mqtt.connect(brokerUrl, { rejectUnauthorized: false });
+                mqttClient.on('connect', () => {
+                    mqttClient.subscribe(`nl_matrix/room/${room}/signals`, () => {
+                        sendSignal(null, { type: "hello", sender: peerId });
+                        updateStatusUI("connected", "SECURE_LINK_ACTIVE");
+                        enableControls();
+                        appendSystemMessage("Đã gia nhập Mạng lưới. Mã hóa P2P kích hoạt.");
+                    });
+                });
+                mqttClient.on('message', (topic, message) => {
+                    const data = JSON.parse(message.toString());
+                    if (data.sender !== peerId && (!data.target || data.target === peerId)) handleSignal(data);
+                });
+            } catch (err) { appendSystemMessage("LỖI: Không thể thông mạch MQTT."); }
+        }
+
+        function sendSignal(target, payload) { 
+            if (mqttClient?.connected) {
+                payload.target = target;
+                mqttClient.publish(`nl_matrix/room/${room}/signals`, JSON.stringify(payload)); 
+            }
+        }
+
+        async function handleSignal(data) {
+            const sender = data.sender;
+            switch(data.type) {
+                case "hello":
+                    sendSignal(sender, { type: "welcome", sender: peerId });
+                    break;
+                case "welcome":
+                    initWebRTCPeer(sender, true);
+                    break;
+                case "offer":
+                    initWebRTCPeer(sender, false);
+                    await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    const answer = await peers[sender].createAnswer();
+                    await peers[sender].setLocalDescription(answer);
+                    sendSignal(sender, { type: "answer", sdp: answer, sender: peerId });
+                    break;
+                case "answer":
+                    if (peers[sender]) await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    break;
+                case "candidate":
+                    if (peers[sender] && data.candidate) {
+                        peers[sender].addIceCandidate(new RTCIceCandidate(data.candidate));
+                        const ipInfo = extractIP(data.candidate.candidate);
+                        if (ipInfo && (ipInfo.type === 'WAN' || !peerIPs[sender])) {
+                            peerIPs[sender] = ipInfo;
+                            updateIPListUI();
+                        }
+                    }
+                    break;
+                case "renegotiate-offer":
+                    if (peers[sender]) {
+                        await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+                        const rAnswer = await peers[sender].createAnswer();
+                        await peers[sender].setLocalDescription(rAnswer);
+                        sendSignal(sender, { type: "renegotiate-answer", sdp: rAnswer, sender: peerId });
+                    }
+                    break;
+                case "renegotiate-answer":
+                    if (peers[sender]) await peers[sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    break;
+            }
+        }
+
+        function initWebRTCPeer(targetPeerId, initiator) {
+            if(peers[targetPeerId]) return;
+            
+            const pc = new RTCPeerConnection(rtcConfig);
+            peers[targetPeerId] = pc;
+            createRemoteVideoElement(targetPeerId);
+
+            pc.onicecandidate = (e) => { 
+                if (e.candidate) sendSignal(targetPeerId, { type: "candidate", candidate: e.candidate, sender: peerId }); 
+            };
+
+            pc.ontrack = (event) => {
+                const stream = event.streams[0];
+                const remoteVideo = document.getElementById(`video-${targetPeerId}`);
+                const remoteWrapper = document.getElementById(`wrapper-${targetPeerId}`);
+                
+                remoteVideo.srcObject = stream;
+                remoteWrapper.classList.remove('hidden');
+
+                stream.onremovetrack = () => { remoteWrapper.classList.add('hidden'); updateVideoLayout(); };
+                updateVideoLayout();
+            };
+
+            if (initiator) {
+                const dc = pc.createDataChannel("p2p-channel");
+                dataChannels[targetPeerId] = dc;
+                setupDataChannelEvents(targetPeerId, dc);
+                
+                pc.createOffer().then(offer => {
+                    pc.setLocalDescription(offer);
+                    sendSignal(targetPeerId, { type: "offer", sdp: offer, sender: peerId });
+                });
+            } else {
+                pc.ondatachannel = (e) => { 
+                    dataChannels[targetPeerId] = e.channel; 
+                    setupDataChannelEvents(targetPeerId, e.channel); 
+                };
+            }
+
+            pc.onconnectionstatechange = () => {
+                if (pc.connectionState === 'connected') appendSystemMessage(`Node hợp lệ: [${targetPeerId.substring(0,7)}] kết nối thành công.`);
+                else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                    appendSystemMessage(`Mất liên kết với Node: [${targetPeerId.substring(0,7)}]`);
+                    delete peers[targetPeerId]; delete dataChannels[targetPeerId]; delete peerIPs[targetPeerId];
+                    updateIPListUI();
+                    const wrapper = document.getElementById(`wrapper-${targetPeerId}`);
+                    if(wrapper) wrapper.remove();
+                    updateVideoLayout();
+                }
+            };
+            
+            if(localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+        }
+
+        function setupDataChannelEvents(targetPeerId, dc) {
+            dc.binaryType = 'arraybuffer';
+            dc.onmessage = async (event) => {
+                const rawData = event.data;
+                const shortId = targetPeerId.substring(0, 7);
+                if (typeof rawData === 'string') {
+                    const msg = JSON.parse(rawData);
+                    if (msg.type === 'chat') appendChatMessage(shortId, msg.text, false);
+                    else if (msg.type === 'file-start') { 
+                        incomingFiles[targetPeerId] = { name: msg.name, size: msg.size, chunks: [], receivedSize: 0, encrypted: msg.encrypted };
+                        showProgressUI(msg.name); 
+                    } 
+                    else if (msg.type === 'file-end') { 
+                        const fileData = incomingFiles[targetPeerId];
+                        const blob = new Blob(fileData.chunks);
+                        const fullBuffer = await blob.arrayBuffer();
+                        const pwd = document.getElementById('file-passphrase').value;
+
+                        // XỬ LÝ GIẢI MÃ NẾU LÀ TỆP MÃ HÓA
+                        if (fileData.name.endsWith('.enc') || fileData.encrypted) {
+                            if (pwd) {
+                                try {
+                                    appendSystemMessage(`Đang tiến hành giải mã AES-256 tệp [${fileData.name}]...`);
+                                    const { plainBuffer, origFileName } = await decryptBuffer(fullBuffer, pwd);
+                                    downloadFile(new Blob([plainBuffer]), origFileName);
+                                    appendSystemMessage(`GIẢI MÃ THÀNH CÔNG! Đã khôi phục tệp gốc: [${origFileName}]`);
+                                } catch (err) {
+                                    appendSystemMessage(`LỖI GIẢI MÃ: Mật khẩu sai hoặc tệp hư hỏng. Tải về bản mã hóa [.enc].`);
+                                    downloadFile(blob, fileData.name);
+                                }
+                            } else {
+                                appendSystemMessage(`Nhận tệp mã hóa [.enc]. Chưa có mật khẩu, lưu dạng gốc [.enc].`);
+                                downloadFile(blob, fileData.name);
+                            }
+                        } else {
+                            downloadFile(blob, fileData.name);
+                            appendSystemMessage(`Đã nhận trọn vẹn tệp: [${fileData.name}]`); 
+                        }
+
+                        hideProgressUI(); 
+                        delete incomingFiles[targetPeerId];
+                    }
+                } else {
+                    const fileData = incomingFiles[targetPeerId];
+                    if (fileData) {
+                        fileData.chunks.push(rawData); fileData.receivedSize += rawData.byteLength;
+                        updateProgressUI(fileData.receivedSize, fileData.size);
+                    }
+                }
+            };
+        }
+
+        async function triggerRenegotiation() {
+            for (const [id, pc] of Object.entries(peers)) {
+                if(pc.connectionState === 'connected') {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    sendSignal(id, { type: "renegotiate-offer", sdp: offer, sender: peerId });
+                }
+            }
+        }
+
+        // CÁC HÀM XỬ LÝ MEDIA
+        async function toggleAudioCall() {
+            try {
+                if (localStream) stopAllMediaStreams();
+                localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                setupLocalMediaUI(false);
+                Object.values(peers).forEach(pc => localStream.getTracks().forEach(t => pc.addTrack(t, localStream)));
+                await triggerRenegotiation();
+                appendSystemMessage("MICROPHONE ACTIVE - Đường truyền thoại mở.");
+            } catch (err) { appendSystemMessage("LỖI: Truy cập Micro bị từ chối."); }
+        }
+
+        async function toggleWebcam() {
+            try {
+                if (localStream) stopAllMediaStreams();
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                setupLocalMediaUI(true);
+                Object.values(peers).forEach(pc => localStream.getTracks().forEach(t => pc.addTrack(t, localStream)));
+                await triggerRenegotiation();
+                appendSystemMessage("CAMERA ACTIVE - Mắt thần khởi động.");
+            } catch (err) { appendSystemMessage("LỖI: Truy cập Camera bị từ chối."); }
+        }
+
+        async function toggleScreenShare() {
+            try {
+                if (localStream) stopAllMediaStreams();
+                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                setupLocalMediaUI(true, true);
+                Object.values(peers).forEach(pc => localStream.getTracks().forEach(t => pc.addTrack(t, localStream)));
+                await triggerRenegotiation();
+                localStream.getVideoTracks()[0].onended = stopAllMediaStreams;
+                appendSystemMessage("SCREEN_SHARE ACTIVE - Đang truyền tín hiệu màn hình.");
+            } catch (err) { }
+        }
+
+        function setupLocalMediaUI(hasVideo, isScreenShare = false) {
+            const localWrapper = document.getElementById('local-video-wrapper');
+            const localVideo = document.getElementById('local-video');
+            if (hasVideo) {
+                localVideo.srcObject = localStream;
+                localVideo.className = isScreenShare ? "w-full h-full object-contain no-mirror" : "w-full h-full object-cover";
+            }
+            localWrapper.classList.remove('hidden');
+            document.getElementById('btn-stop-stream').classList.remove('hidden');
+            updateVideoLayout();
+        }
+
+        document.getElementById('movie-file-input').addEventListener('change', function() {
+            const file = this.files[0]; if (!file) return;
+            stopAllMediaStreams(true); 
+            const localMoviePlayer = document.getElementById('local-movie-player');
+            localMoviePlayer.src = URL.createObjectURL(file);
+            localMoviePlayer.classList.remove('hidden');
+            
+            localMoviePlayer.onloadedmetadata = () => {
+                localMoviePlayer.play(); updateVideoLayout();
+                setTimeout(async () => {
+                    try {
+                        localStream = localMoviePlayer.captureStream ? localMoviePlayer.captureStream(30) : localMoviePlayer.mozCaptureStream(30);
+                        Object.values(peers).forEach(pc => localStream.getTracks().forEach(t => pc.addTrack(t, localStream)));
+                        document.getElementById('btn-stop-stream').classList.remove('hidden');
+                        await triggerRenegotiation();
+                        appendSystemMessage(`CINEMA_MODE: Đang phát tệp [${file.name}] vào luồng.`);
+                    } catch (e) { appendSystemMessage("LỖI: Trình duyệt không hỗ trợ captureStream phim."); }
+                }, 500);
+            };
+        });
+
+        function stopAllMediaStreams(skipRenegotiation = false) {
+            if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+            for (const pc of Object.values(peers)) {
+                const senders = pc.getSenders();
+                senders.forEach(s => pc.removeTrack(s));
+            }
+            if (!skipRenegotiation) triggerRenegotiation();
+
+            document.getElementById('local-video').srcObject = null;
+            document.getElementById('local-video-wrapper').classList.add('hidden');
+            
+            const moviePlayer = document.getElementById('local-movie-player');
+            moviePlayer.pause(); moviePlayer.src = ""; moviePlayer.classList.add('hidden');
+            document.getElementById('btn-stop-stream').classList.add('hidden');
+            document.getElementById('movie-file-input').value = "";
+            
+            updateVideoLayout(); appendSystemMessage("STREAM OFFLINE - Đã ngắt toàn bộ luồng phương tiện.");
+        }
+
+        // GHI HÌNH CÓ TÙY CHỌN ĐỘ PHÂN GIẢI
+        async function toggleRecording() { if (isRecording) stopRecording(); else startRecording(); }
+        async function startRecording() {
+            try {
+                const resChoice = document.getElementById('rec-resolution').value;
+                let targetWidth = 1920, targetHeight = 1080, targetBitrate = 8000000;
+
+                if (resChoice === "720") {
+                    targetWidth = 1280; targetHeight = 720; targetBitrate = 3000000;
+                } else if (resChoice === "1080") {
+                    targetWidth = 1920; targetHeight = 1080; targetBitrate = 8000000;
+                } else if (resChoice === "1440") {
+                    targetWidth = 2560; targetHeight = 1440; targetBitrate = 16000000;
+                } else if (resChoice === "2160") {
+                    targetWidth = 3840; targetHeight = 2160; targetBitrate = 40000000;
+                }
+
+                const stream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { width: { ideal: targetWidth, max: targetWidth }, height: { ideal: targetHeight, max: targetHeight }, frameRate: { ideal: 60 } }, 
+                    audio: true 
+                });
+                
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(stream, { videoBitsPerSecond: targetBitrate });
+                
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    const fileName = `RECORD_${resChoice}P_${Date.now()}.mp4`;
+                    downloadFile(new Blob(recordedChunks, { type: 'video/mp4' }), fileName);
+                    document.getElementById('record-text').innerText = "GHI HÌNH (MP4)"; 
+                    isRecording = false; 
+                    appendSystemMessage(`Đã xuất bản ghi hình [${resChoice}p] thành công.`); 
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start(); isRecording = true; 
+                document.getElementById('record-text').innerText = `ĐANG GHI [${resChoice}P]... (DỪNG)`; 
+                appendSystemMessage(`Hệ thống đang ghi hình ở chế độ ${resChoice}p...`); 
+                stream.getVideoTracks()[0].onended = () => { if (isRecording) stopRecording(); };
+
+            } catch (err) { appendSystemMessage("Thao tác ghi hình bị hủy hoặc thiết bị không hỗ trợ."); }
+        }
+        function stopRecording() { if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop(); }
+
+        // CHAT VÀ TRUYỀN FILE CÓ MÃ HÓA AES-256
+        function sendChatMessage() {
+            const input = document.getElementById('msg-input'); const text = input.value.trim();
+            if (!text || Object.keys(dataChannels).length === 0) return;
+            const payload = JSON.stringify({ type: 'chat', text });
+            Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); });
+            appendChatMessage("BẠN", text, true); input.value = "";
+        }
+
+        document.getElementById('file-input').addEventListener('change', async function() {
+            const file = this.files[0]; 
+            if (!file || Object.keys(dataChannels).length === 0) return;
+
+            const useCrypto = document.getElementById('chk-encrypt-file').checked;
+            const pwd = document.getElementById('file-passphrase').value;
+
+            if (useCrypto && !pwd) {
+                appendSystemMessage("LỖI: Vui lòng nhập Mật khẩu (Passphrase) để mã hóa tệp!");
+                return;
+            }
+
+            if (useCrypto) {
+                appendSystemMessage(`Đang mã hóa tệp [${file.name}] bằng AES-256-GCM (PBKDF2 200k vòng)...`);
+                const rawBuffer = await file.arrayBuffer();
+                const encBytes = await encryptBuffer(rawBuffer, file.name, pwd);
+                const encBuffer = encBytes.buffer;
+                const encFileName = file.name + ".enc";
+
+                const payload = JSON.stringify({ type: 'file-start', name: encFileName, size: encBuffer.byteLength, encrypted: true });
+                Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); });
+                
+                showProgressUI(encFileName);
+                sendBufferChunks(encBuffer, encFileName);
+            } else {
+                const payload = JSON.stringify({ type: 'file-start', name: file.name, size: file.size, encrypted: false });
+                Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); });
+                
+                showProgressUI(file.name);
+                const rawBuffer = await file.arrayBuffer();
+                sendBufferChunks(rawBuffer, file.name);
+            }
+        });
+
+        function sendBufferChunks(buffer, fileName) {
+            currentSendingOffset = 0;
+            const totalSize = buffer.byteLength;
+            
+            function sendNextChunk() {
+                let bufferFull = false;
+                const end = Math.min(currentSendingOffset + CHUNK_SIZE, totalSize);
+                const chunk = buffer.slice(currentSendingOffset, end);
+                
+                Object.values(dataChannels).forEach(dc => { 
+                    if(dc.readyState === 'open') {
+                        dc.send(chunk);
+                        if(dc.bufferedAmount > 16000000) bufferFull = true;
+                    }
+                });
+                
+                currentSendingOffset = end;
+                updateProgressUI(currentSendingOffset, totalSize);
+                
+                if (currentSendingOffset < totalSize) { 
+                    if (bufferFull) setTimeout(sendNextChunk, 50); else sendNextChunk(); 
+                } else { 
+                    const payload = JSON.stringify({ type: 'file-end' });
+                    Object.values(dataChannels).forEach(dc => { if(dc.readyState === 'open') dc.send(payload); });
+                    appendSystemMessage(`Tệp [${fileName}] đã được truyền tải hoàn tất.`); 
+                    hideProgressUI(); 
+                    document.getElementById('file-input').value = ""; 
+                }
+            }
+            sendNextChunk();
+        }
+        
+        function downloadFile(blob, fileName) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url); }
+        function showProgressUI(fileName) { document.getElementById('progress-container').classList.remove('hidden'); document.getElementById('progress-filename').innerText = fileName; }
+        function updateProgressUI(current, total) { const pct = Math.min(Math.round((current / total) * 100), 100); document.getElementById('progress-bar-fill').style.width = pct + "%"; document.getElementById('progress-percent').innerText = pct + "%"; }
+        function hideProgressUI() { document.getElementById('progress-container').classList.add('hidden'); }
+    </script>
+</body>
+</html>
