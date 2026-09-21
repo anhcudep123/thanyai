@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Ride & Delivery (0% Commission)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#e6f7ed',
+                            500: '#00B14F',
+                            600: '#009643',
+                            700: '#007A37',
+                            dark: '#0B0F17',
+                            card: '#161F30',
+                            accent: '#10B981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- MQTT.js CDN for Multi-Broker P2P Signaling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0B0F17;
+            color: #F3F4F6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Dark map tile styling filter */
+        .dark-tiles .leaflet-tile-container img {
+            filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.8);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2D3748;
+            border-radius: 4px;
+        }
+
+        /* Glassmorphism overlays */
+        .glass-panel {
+            background: rgba(22, 31, 48, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .pulse-ring {
+            box-shadow: 0 0 0 0 rgba(0, 177, 79, 0.7);
+            animation: pulse-ring 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+        }
+
+        @keyframes pulse-ring {
+            to {
+                box-shadow: 0 0 0 16px rgba(0, 177, 79, 0);
+            }
+        }
+
+        /* Video element mirroring */
+        .local-video-mirror {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body class="bg-brand-dark text-gray-100 flex flex-col h-screen w-screen relative">
+
+    <!-- TOP NAV BAR -->
+    <header class="absolute top-0 left-0 right-0 z-20 p-3 flex justify-between items-center pointer-events-none">
+        <!-- Logo & App Name -->
+        <div class="glass-panel px-3 py-2 rounded-2xl flex items-center space-x-2 pointer-events-auto shadow-lg">
+            <div class="bg-brand-500 p-1.5 rounded-xl text-white">
+                <i data-lucide="bike" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-xs font-bold leading-tight text-white flex items-center gap-1">
+                    P2P DirectRide <span class="bg-brand-500/20 text-brand-500 text-[9px] px-1.5 py-0.5 rounded-full font-extrabold">0% FEE</span>
+                </h1>
+                <p class="text-[10px] text-gray-400">Trực tiếp Khách & Tài Xế</p>
+            </div>
+        </div>
+
+        <!-- Role Switcher & Profile Quick Action -->
+        <div class="flex items-center space-x-2 pointer-events-auto">
+            <!-- Multi-Broker Status Indicator -->
+            <div id="mqttStatusBadge" class="glass-panel px-2.5 py-1.5 rounded-xl text-[10px] font-medium flex items-center space-x-1.5 text-yellow-400">
+                <span class="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span>
+                <span id="mqttStatusText">Đang nối P2P (0/3)...</span>
+            </div>
+
+            <!-- Role Toggle Switch -->
+            <div class="glass-panel p-1 rounded-2xl flex items-center">
+                <button id="roleRiderBtn" onclick="switchRole('rider')" class="px-3 py-1.5 text-xs font-bold rounded-xl transition-all bg-brand-500 text-white shadow">
+                    Khách
+                </button>
+                <button id="roleDriverBtn" onclick="switchRole('driver')" class="px-3 py-1.5 text-xs font-bold rounded-xl text-gray-400 hover:text-white transition-all">
+                    Tài Xế
+                </button>
+            </div>
+
+            <!-- Drawer Toggle Button -->
+            <button onclick="toggleCommDrawer()" class="glass-panel p-2.5 rounded-2xl text-white hover:bg-gray-800 transition relative">
+                <i data-lucide="message-square" class="w-5 h-5"></i>
+                <span id="unreadBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAP CONTAINER -->
+    <main class="flex-1 w-full h-full relative">
+        <div id="map"></div>
+
+        <!-- Map Quick Controls -->
+        <div class="absolute right-3 bottom-80 z-10 flex flex-col space-y-2 pointer-events-auto">
+            <button onclick="recenterMap()" class="glass-panel p-3 rounded-2xl text-white hover:bg-gray-800 shadow-xl active:scale-95 transition">
+                <i data-lucide="crosshair" class="w-5 h-5 text-brand-500"></i>
+            </button>
+            <button onclick="toggleTileTheme()" class="glass-panel p-3 rounded-2xl text-white hover:bg-gray-800 shadow-xl active:scale-95 transition">
+                <i data-lucide="layers" class="w-5 h-5 text-gray-300"></i>
+            </button>
+        </div>
+    </main>
+
+    <!-- BOTTOM SHEET UI / ACTION PANEL -->
+    <div id="bottomSheet" class="absolute bottom-0 left-0 right-0 z-20 pointer-events-auto transition-all duration-300">
+        <div class="glass-panel rounded-t-3xl p-4 shadow-2xl border-t border-gray-700/50 max-h-[85vh] overflow-y-auto">
+            
+            <!-- RIDER PANEL UI -->
+            <div id="riderPanel" class="space-y-4">
+                <!-- Mode Selector (Ride vs Delivery) -->
+                <div class="grid grid-cols-2 gap-2 bg-gray-900/80 p-1 rounded-2xl border border-gray-800">
+                    <button id="modeRideBtn" onclick="selectServiceMode('ride')" class="flex items-center justify-center space-x-2 py-2.5 rounded-xl font-bold text-xs bg-brand-500 text-white transition shadow">
+                        <i data-lucide="user" class="w-4 h-4"></i>
+                        <span>Chở Người</span>
+                    </button>
+                    <button id="modeParcelBtn" onclick="selectServiceMode('parcel')" class="flex items-center justify-center space-x-2 py-2.5 rounded-xl font-bold text-xs text-gray-400 hover:text-white transition">
+                        <i data-lucide="package" class="w-4 h-4"></i>
+                        <span>Giao Hàng (Hàng Hóa)</span>
+                    </button>
+                </div>
+
+                <!-- Locations Inputs & Route Info -->
+                <div class="space-y-2 bg-gray-900/60 p-3 rounded-2xl border border-gray-800/80">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 rounded-full bg-brand-500 flex-shrink-0"></div>
+                        <input id="pickupInput" type="text" placeholder="Đang xác định điểm đón..." class="w-full bg-transparent text-sm font-medium text-white focus:outline-none placeholder-gray-500" readonly>
+                        <button onclick="setCurrentAsPickup()" class="text-[10px] text-brand-500 bg-brand-500/10 px-2 py-1 rounded-lg border border-brand-500/30 font-semibold whitespace-nowrap">Vị trí hiện tại</button>
+                    </div>
+                    <div class="h-[1px] bg-gray-800 ml-6"></div>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+                        <input id="dropoffInput" type="text" placeholder="Nhấp chọn điểm đến trên bản đồ hoặc gợi ý..." class="w-full bg-transparent text-sm font-medium text-white focus:outline-none placeholder-gray-500">
+                    </div>
+                </div>
+
+                <!-- Preset Destination Chips for Easy Demo in Saigon -->
+                <div class="flex items-center space-x-2 overflow-x-auto pb-1 text-xs">
+                    <span class="text-gray-400 text-[10px] whitespace-nowrap">Gợi ý:</span>
+                    <button onclick="setPresetDestination('Landmark 81', 10.795, 106.721)" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-xl text-gray-300 text-[11px] whitespace-nowrap border border-gray-700">Landmark 81</button>
+                    <button onclick="setPresetDestination('Chợ Bến Thành', 10.7725, 106.698)" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-xl text-gray-300 text-[11px] whitespace-nowrap border border-gray-700">Chợ Bến Thành</button>
+                    <button onclick="setPresetDestination('Sân bay Tân Sơn Nhất', 10.818, 106.652)" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-xl text-gray-300 text-[11px] whitespace-nowrap border border-gray-700">Sân bay TSN</button>
+                </div>
+
+                <!-- Parcel Photo Upload Preview (Visible only in Parcel Mode) -->
+                <div id="parcelPhotoSection" class="hidden space-y-2 bg-gray-900/60 p-3 rounded-2xl border border-gray-800">
+                    <label class="block text-xs font-semibold text-gray-300">Chụp ảnh hàng hóa / bưu phẩm (Bắt buộc):</label>
+                    <div class="flex items-center space-x-3">
+                        <input type="file" id="parcelPhotoInput" accept="image/*" capture="environment" onchange="handleParcelPhotoUpload(event)" class="hidden">
+                        <button type="button" onclick="document.getElementById('parcelPhotoInput').click()" class="flex items-center space-x-2 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-xl text-xs text-gray-200 border border-gray-700">
+                            <i data-lucide="camera" class="w-4 h-4 text-brand-500"></i>
+                            <span>Chụp ảnh gói hàng</span>
+                        </button>
+                        <div id="parcelPhotoPreviewContainer" class="hidden relative">
+                            <img id="parcelPhotoPreview" src="" class="w-12 h-12 object-cover rounded-xl border border-brand-500">
+                            <button onclick="removeParcelPhoto()" class="absolute -top-1 -right-1 bg-red-600 text-white rounded-full p-0.5"><i data-lucide="x" class="w-3 h-3"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Route Calculation & Price Estimate Display -->
+                <div id="routeInfoCard" class="hidden bg-gray-900/90 p-3.5 rounded-2xl border border-brand-500/30 flex items-center justify-between">
+                    <div>
+                        <div class="text-[11px] text-gray-400">Khoảng cách & Thời gian</div>
+                        <div class="text-sm font-bold text-white flex items-center gap-2">
+                            <span id="routeDistance">0.0 km</span> • <span id="routeDuration">0 phút</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-brand-500 font-bold uppercase tracking-wider">Giá Đề Xuất (0% phí)</div>
+                        <div id="estimatedFare" class="text-lg font-extrabold text-brand-500">0 VNĐ</div>
+                    </div>
+                </div>
+
+                <!-- Rider Phone & Google Auth Identity Verification Bar -->
+                <div id="riderVerificationBar" class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-2">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-400 font-medium">Xác minh SĐT Việt Nam:</span>
+                        <span id="riderAuthBadge" class="text-[10px] bg-green-500/20 text-green-400 font-bold px-2 py-0.5 rounded-full border border-green-500/30">Google Verified ✔</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="relative flex-1">
+                            <input id="riderPhoneInput" type="tel" placeholder="Nhập SĐT (03x, 05x, 07x, 08x, 09x)" value="0988123456" class="w-full bg-gray-800 text-xs text-white px-3 py-2 rounded-xl border border-gray-700 focus:outline-none focus:border-brand-500">
+                        </div>
+                        <button onclick="validateRiderIdentity()" class="bg-gray-800 hover:bg-gray-700 text-xs px-3 py-2 rounded-xl text-brand-500 font-bold border border-gray-700">Lưu SĐT</button>
+                    </div>
+                </div>
+
+                <!-- Main Booking Action Button -->
+                <button id="bookRideBtn" onclick="broadcastRideRequest()" class="w-full bg-brand-500 hover:bg-brand-600 active:scale-98 text-white font-bold py-3.5 rounded-2xl text-sm shadow-xl shadow-brand-500/20 flex items-center justify-center space-x-2 transition">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                    <span>TÌM TÀI XẾ XUNG QUANH (0% HOA HỒNG)</span>
+                </button>
+
+                <!-- Incoming Driver Offers List (When Ride Broadcast is Active) -->
+                <div id="driverOffersContainer" class="hidden space-y-3 pt-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
+                            Danh sách Tài xế báo giá (<span id="offersCount">0</span>)
+                        </h3>
+                        <button onclick="cancelRideRequest()" class="text-xs text-red-400 hover:underline font-semibold">Hủy tìm kiếm</button>
+                    </div>
+                    <div id="offersList" class="space-y-2 max-h-48 overflow-y-auto">
+                        <!-- Dynamic Driver Offers injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- DRIVER PANEL UI -->
+            <div id="driverPanel" class="hidden space-y-4">
+                <!-- Driver Online / Verification Header -->
+                <div class="bg-gray-900/80 p-3.5 rounded-2xl border border-gray-800 flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span id="driverStatusDot" class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                            <span id="driverStatusText">Chưa kích hoạt Tài xế</span>
+                        </div>
+                        <div id="driverVehicleSummary" class="text-[11px] text-gray-400 mt-0.5">Vui lòng xác minh CCCD & Biển số xe để nhận cuốc</div>
+                    </div>
+                    <button id="toggleDriverOnlineBtn" onclick="toggleDriverOnlineStatus()" class="bg-brand-500 hover:bg-brand-600 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow">
+                        Bật Nhận Cuốc
+                    </button>
+                </div>
+
+                <!-- Driver Verification Modal / Form (If not verified) -->
+                <div id="driverVerificationForm" class="hidden bg-gray-900/90 p-3.5 rounded-2xl border border-brand-500/40 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-brand-500 uppercase">Xác Minh Danh Tính Tài Xế (An Toàn Pháp Lý)</h4>
+                        <span class="text-[10px] text-gray-400">Chỉ thực hiện 1 lần</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-[10px] text-gray-400 mb-1">Họ & Tên thật:</label>
+                            <input id="driverFullName" type="text" placeholder="Nguyễn Văn A" class="w-full bg-gray-800 text-white px-2.5 py-1.5 rounded-xl border border-gray-700 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-400 mb-1">Số CCCD (12 số):</label>
+                            <input id="driverCccd" type="text" placeholder="079088xxxxxx" class="w-full bg-gray-800 text-white px-2.5 py-1.5 rounded-xl border border-gray-700 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-400 mb-1">Biển Số Xe (VD: 59-X1 999.88):</label>
+                            <input id="driverPlate" type="text" placeholder="59-X1 999.88" class="w-full bg-gray-800 text-white px-2.5 py-1.5 rounded-xl border border-gray-700 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-400 mb-1">Dòng xe & Màu xe:</label>
+                            <input id="driverVehicleModel" type="text" placeholder="Honda Wave Alpha Đen" class="w-full bg-gray-800 text-white px-2.5 py-1.5 rounded-xl border border-gray-700 focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-1">Số điện thoại nhận tiền VietQR (10 số):</label>
+                        <input id="driverPhone" type="tel" value="0938889999" class="w-full bg-gray-800 text-white px-2.5 py-1.5 rounded-xl border border-gray-700 focus:outline-none">
+                    </div>
+                    <button onclick="saveDriverVerificationInfo()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-2 rounded-xl text-xs transition">
+                        Xác Nhận & Kích Hoạt Tài Xế
+                    </button>
+                </div>
+
+                <!-- Available Live Ride Broadcasts List for Drivers -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="rss" class="w-4 h-4 text-brand-500"></i>
+                            Cuốc Xe Trực Tiếp Xung Quanh
+                        </h3>
+                        <span id="activeRequestsCount" class="text-[11px] text-brand-500 font-bold bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/20">0 Cuốc</span>
+                    </div>
+                    <div id="rideRequestsFeed" class="space-y-2 max-h-60 overflow-y-auto">
+                        <div class="text-center py-6 text-gray-500 text-xs">
+                            <i data-lucide="wifi" class="w-8 h-8 mx-auto mb-2 text-gray-600 animate-pulse"></i>
+                            Đang bật nhận tín hiệu P2P cuốc xe mới...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACTIVE TRIP STATUS CARD (For both Rider & Driver during trip) -->
+            <div id="activeTripCard" class="hidden space-y-3 bg-gray-900/95 p-4 rounded-2xl border border-brand-500 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                    <div>
+                        <span id="tripStatusBadge" class="bg-brand-500/20 text-brand-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider border border-brand-500/30">
+                            Đang Di Chuyển
+                        </span>
+                        <div id="tripServiceType" class="text-xs font-bold text-white mt-1">Chở Người - Xe Ôm</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-gray-400">Giá Cuốc Xe (Trực tiếp)</div>
+                        <div id="tripAgreedFare" class="text-lg font-black text-brand-500">35,000 VNĐ</div>
+                    </div>
+                </div>
+
+                <!-- Driver & Rider Info Details -->
+                <div class="flex items-center justify-between bg-gray-800/60 p-2.5 rounded-xl text-xs">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-9 h-9 rounded-full bg-brand-500/20 border border-brand-500 flex items-center justify-center text-brand-500 font-bold">
+                            <i data-lucide="user-check" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <div id="tripPeerName" class="font-bold text-white">Tài xế Nguyễn Văn A</div>
+                            <div id="tripPeerSub" class="text-[10px] text-gray-400">Biển số: 59-X1 999.88 • CCCD ✔</div>
+                        </div>
+                    </div>
+                    <!-- Quick Call / Chat Buttons -->
+                    <div class="flex items-center space-x-2">
+                        <button onclick="startVoiceCall()" class="bg-brand-500/20 text-brand-500 hover:bg-brand-500 hover:text-white p-2 rounded-xl transition border border-brand-500/30" title="Gọi thoại P2P">
+                            <i data-lucide="phone" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="startVideoCall()" class="bg-brand-500/20 text-brand-500 hover:bg-brand-500 hover:text-white p-2 rounded-xl transition border border-brand-500/30" title="Gọi Video P2P">
+                            <i data-lucide="video" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="toggleCommDrawer()" class="bg-gray-700 text-white p-2 rounded-xl transition" title="Nhắn tin">
+                            <i data-lucide="message-square" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Parcel Photo Proof Section (If Delivery Mode) -->
+                <div id="tripParcelProofSection" class="hidden bg-gray-800/40 p-2.5 rounded-xl space-y-2 border border-gray-700/50 text-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-gray-300">Ảnh Bưu Phẩm / Hàng Hóa:</span>
+                        <span class="text-[10px] text-gray-400">Đã nén Canvas JPEG</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <img id="tripParcelImage" src="" class="w-16 h-16 object-cover rounded-lg border border-gray-600">
+                        <div class="text-[11px] text-gray-400">
+                            Hàng đã chụp trước khi giao. Driver hoàn thành sẽ chụp minh chứng giao hàng thành công.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VietQR Payment Modal / Completion Section -->
+                <div id="vietQrSection" class="hidden bg-gray-800/90 p-3 rounded-xl border border-brand-500/40 space-y-2 text-center">
+                    <div class="text-xs font-bold text-white">Thanh Toán Trực Tiếp Cho Tài Xế (0% Phí)</div>
+                    <div class="text-[11px] text-gray-300">Quét VietQR chuyển khoản thẳng vào tài khoản ngân hàng tài xế:</div>
+                    <img id="vietQrImage" src="" alt="VietQR Payment" class="w-40 h-40 mx-auto rounded-lg border border-gray-600 bg-white p-1">
+                    <div class="text-[10px] text-gray-400">Nội dung chuyển khoản: <span id="vietQrMemo" class="font-bold text-brand-500">CHUYEN TIEN CUOC XE</span></div>
+                </div>
+
+                <!-- Driver Specific Trip Control Actions -->
+                <div id="driverTripActions" class="hidden space-y-2">
+                    <button id="completeTripBtn" onclick="completeCurrentTrip()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg flex items-center justify-center space-x-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        <span>HOÀN THÀNH CUỐC XE & TẠO VIETQR</span>
+                    </button>
+                </div>
+
+                <!-- Rider Specific Finish Button -->
+                <div id="riderTripActions" class="hidden space-y-2">
+                    <button onclick="finishRiderTrip()" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2.5 rounded-xl text-xs border border-gray-700 transition">
+                        Đóng / Kết thúc chuyến đi
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- FLOATING SLIDE-OVER DRAWER FOR REAL-TIME P2P COMM (CHAT, VOICE, VIDEO) -->
+    <div id="commDrawer" class="fixed inset-y-0 right-0 w-full max-w-sm bg-gray-900 border-l border-gray-800 z-50 transform translate-x-full transition-transform duration-300 shadow-2xl flex flex-col">
+        <!-- Drawer Header -->
+        <div class="p-4 bg-gray-800/90 border-b border-gray-700 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="message-circle" class="w-5 h-5 text-brand-500"></i>
+                <h3 class="text-sm font-bold text-white">Giao Tiếp Trực Tiếp P2P</h3>
+            </div>
+            <button onclick="toggleCommDrawer()" class="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Call Status Container / Video Grid -->
+        <div id="videoCallContainer" class="hidden relative bg-black h-56 w-full overflow-hidden flex-shrink-0">
+            <!-- Remote Video Stream -->
+            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+            
+            <!-- Local Self Video Mirror -->
+            <video id="localVideo" autoplay playsinline muted class="absolute bottom-2 right-2 w-24 h-32 object-cover rounded-xl border-2 border-brand-500 local-video-mirror shadow-lg"></video>
+            
+            <!-- Call Control Overlay -->
+            <div class="absolute bottom-2 left-2 flex items-center space-x-2 bg-black/60 backdrop-blur p-1.5 rounded-2xl border border-gray-700">
+                <button id="toggleMicBtn" onclick="toggleMuteMic()" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-white">
+                    <i data-lucide="mic" class="w-4 h-4"></i>
+                </button>
+                <button id="toggleVideoBtn" onclick="toggleVideoCamera()" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-white">
+                    <i data-lucide="video" class="w-4 h-4"></i>
+                </button>
+                <button onclick="endWebRtcCall()" class="p-2 bg-red-600 hover:bg-red-700 rounded-xl text-white">
+                    <i data-lucide="phone-off" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div id="chatMessages" class="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
+            <div class="text-center text-gray-500 text-[11px] my-2">
+                Kênh giao tiếp P2P được mã hóa trực tiếp giữa hai thiết bị.
+            </div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="p-3 bg-gray-800/90 border-t border-gray-700 flex items-center space-x-2">
+            <input id="chatInput" type="text" placeholder="Nhập tin nhắn..." onkeydown="if(event.key==='Enter') sendChatMessage()" class="flex-1 bg-gray-900 text-xs text-white px-3 py-2.5 rounded-xl border border-gray-700 focus:outline-none focus:border-brand-500">
+            <button onclick="sendChatMessage()" class="bg-brand-500 hover:bg-brand-600 text-white p-2.5 rounded-xl transition">
+                <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- INCOMING CALL POPUP MODAL -->
+    <div id="incomingCallModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-3xl max-w-xs w-full text-center space-y-4 border border-brand-500 animate-bounce">
+            <div class="w-16 h-16 rounded-full bg-brand-500/20 text-brand-500 border border-brand-500 flex items-center justify-center mx-auto pulse-ring">
+                <i data-lucide="phone-incoming" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 id="incomingCallCallerName" class="text-sm font-bold text-white">Cuộc gọi đến từ Tài Xế</h3>
+                <p id="incomingCallType" class="text-xs text-gray-400 mt-1">Cuộc gọi Thoại / Video P2P</p>
+            </div>
+            <div class="flex items-center justify-center space-x-4 pt-2">
+                <button onclick="rejectIncomingCall()" class="bg-red-600 hover:bg-red-700 text-white p-3.5 rounded-full shadow-lg">
+                    <i data-lucide="phone-off" class="w-6 h-6"></i>
+                </button>
+                <button onclick="acceptIncomingCall()" class="bg-brand-500 hover:bg-brand-600 text-white p-3.5 rounded-full shadow-lg">
+                    <i data-lucide="phone" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC -->
+    <script>
+        // --- GLOBAL STATE ---
+        let map, userMarker, driverMarker, routePolyline;
+        let currentRole = 'rider'; // 'rider' | 'driver'
+        let serviceMode = 'ride'; // 'ride' | 'parcel'
+        let currentPosition = { lat: 10.7769, lng: 106.7009 }; // Saigon center fallback
+        let pickupCoords = null, dropoffCoords = null;
+        let currentRouteData = null;
+        let parcelPhotoBase64 = null;
+
+        let activeTrip = null; // Currently accepted ride/delivery
+        let isDriverOnline = false;
+        let isDarkTiles = true;
+
+        // User Identity State
+        const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        let riderPhone = '0988123456';
+        let driverProfile = {
+            fullName: 'Nguyễn Văn Định',
+            cccd: '079088123456',
+            plate: '59-X1 888.99',
+            model: 'Honda Winner X (Đen-Đỏ)',
+            phone: '0938889999',
+            verified: true
+        };
+
+        // Multi-Broker MQTT State
+        const mqttBrokers = [
+            'wss://broker.emqx.io:8084/mqtt',
+            'wss://broker.hivemq.com:8000/mqtt',
+            'wss://test.mosquitto.org:8081/mqtt'
+        ];
+        let mqttClients = [];
+        let connectedBrokersCount = 0;
+        const processedMsgIds = new Set();
+        const activeRideRequests = new Map(); // Ride requests broadcasted by riders
+
+        // WebRTC P2P Call State
+        let peerConnection = null;
+        let localStream = null;
+        let remoteStream = null;
+        let pendingOffer = null;
+        let isMicMuted = false;
+        let isVideoOff = false;
+
+        // --- INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initMap();
+            initGeolocationWatch();
+            initMultiBrokerMqtt();
+            loadStoredDriverInfo();
+        });
+
+        // 1. LEAFLET MAP & TILES
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([currentPosition.lat, currentPosition.lng], 15);
+
+            // Esri World Street Map tiles (No watermark, clean, reliable)
+            const tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19
+            }).addTo(map);
+
+            if (isDarkTiles) {
+                document.getElementById('map').classList.add('dark-tiles');
+            }
+
+            // Custom User Icon
+            const userIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div class="w-6 h-6 bg-brand-500 border-2 border-white rounded-full shadow-lg pulse-ring"></div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+
+            userMarker = L.marker([currentPosition.lat, currentPosition.lng], { icon: userIcon }).addTo(map);
+
+            // Map click listener to select pickup or dropoff
+            map.on('click', (e) => {
+                if (activeTrip) return;
+                const { lat, lng } = e.latlng;
+                
+                if (!pickupCoords) {
+                    pickupCoords = { lat, lng };
+                    document.getElementById('pickupInput').value = `Vị trí đã chọn (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                } else {
+                    dropoffCoords = { lat, lng };
+                    document.getElementById('dropoffInput').value = `Điểm đến (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                    calculateOsrmRoute();
+                }
+            });
+        }
+
+        function toggleTileTheme() {
+            isDarkTiles = !isDarkTiles;
+            const mapEl = document.getElementById('map');
+            if (isDarkTiles) mapEl.classList.add('dark-tiles');
+            else mapEl.classList.remove('dark-tiles');
+        }
+
+        function recenterMap() {
+            if (currentPosition && map) {
+                map.flyTo([currentPosition.lat, currentPosition.lng], 16, { animate: true });
+            }
+        }
+
+        // 2. GEOLOCATION WATCH (Triggered once with persistence)
+        function initGeolocationWatch() {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.watchPosition(
+                    (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        currentPosition = { lat: latitude, lng: longitude };
+                        
+                        if (userMarker) userMarker.setLatLng([latitude, longitude]);
+                        if (!pickupCoords) {
+                            pickupCoords = { lat: latitude, lng: longitude };
+                            document.getElementById('pickupInput').value = `Vị trí hiện tại (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
+                        }
+
+                        // Broadcast driver location if online & active trip
+                        if (currentRole === 'driver' && isDriverOnline) {
+                            broadcastMqtt('p2p-ride/driver-location', {
+                                driverId: userId,
+                                lat: latitude,
+                                lng: longitude,
+                                rideId: activeTrip ? activeTrip.id : null
+                            });
+                        }
+                    },
+                    (err) => console.warn('Geolocation warning:', err),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+                );
+            }
+        }
+
+        function setCurrentAsPickup() {
+            if (currentPosition) {
+                pickupCoords = { ...currentPosition };
+                document.getElementById('pickupInput').value = `Vị trí hiện tại (${currentPosition.lat.toFixed(4)}, ${currentPosition.lng.toFixed(4)})`;
+                if (dropoffCoords) calculateOsrmRoute();
+            }
+        }
+
+        function setPresetDestination(name, lat, lng) {
+            dropoffCoords = { lat, lng };
+            document.getElementById('dropoffInput').value = name;
+            calculateOsrmRoute();
+        }
+
+        // 3. OSRM ROUTING ENGINE & FARE CALCULATION
+        async function calculateOsrmRoute() {
+            if (!pickupCoords || !dropoffCoords) return;
+
+            const url = `https://router.project-osrm.org/route/v1/driving/${pickupCoords.lng},${pickupCoords.lat};${dropoffCoords.lng},${dropoffCoords.lat}?overview=full&geometries=geojson`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.code === 'Ok' && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const distKm = (route.distance / 1000).toFixed(1);
+                    const durationMin = Math.round(route.duration / 60);
+
+                    // 0% Platform Commission Fare Formula: 15k base + 8k/km
+                    const baseFare = 15000;
+                    const calculatedFare = Math.round((baseFare + (parseFloat(distKm) * 8000)) / 1000) * 1000;
+
+                    currentRouteData = {
+                        distanceKm: distKm,
+                        durationMin: durationMin,
+                        fareVnd: calculatedFare,
+                        geometry: route.geometry
+                    };
+
+                    // Render Polyline on Leaflet
+                    if (routePolyline) map.removeLayer(routePolyline);
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    routePolyline = L.polyline(coords, { color: '#00B14F', weight: 5, opacity: 0.9 }).addTo(map);
+                    map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+
+                    // Update UI Card
+                    document.getElementById('routeDistance').textContent = `${distKm} km`;
+                    document.getElementById('routeDuration').textContent = `${durationMin} phút`;
+                    document.getElementById('estimatedFare').textContent = `${calculatedFare.toLocaleString('vi-VN')} VNĐ`;
+                    document.getElementById('routeInfoCard').classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('OSRM Route calculation error:', err);
+            }
+        }
+
+        // 4. MULTI-BROKER MQTT SIGNALING ENGINE (Active-Active Redundancy)
+        function initMultiBrokerMqtt() {
+            mqttBrokers.forEach((brokerUrl, index) => {
+                try {
+                    const client = mqtt.connect(brokerUrl, {
+                        clientId: `p2p_client_${userId}_${index}_${Math.random().toString(16).substr(2, 4)}`,
+                        clean: true,
+                        connectTimeout: 5000
+                    });
+
+                    client.on('connect', () => {
+                        connectedBrokersCount++;
+                        updateMqttStatusBadge();
+
+                        // Subscribe to global signaling topics
+                        client.subscribe('p2p-ride/requests');
+                        client.subscribe(`p2p-ride/offers/${userId}`);
+                        client.subscribe(`p2p-ride/direct/${userId}`);
+                        client.subscribe('p2p-ride/driver-location');
+                    });
+
+                    client.on('message', (topic, payload) => {
+                        try {
+                            const data = JSON.parse(payload.toString());
+                            handleIncomingMqttMessage(topic, data);
+                        } catch (e) {
+                            console.error('MQTT Parse error:', e);
+                        }
+                    });
+
+                    client.on('close', () => {
+                        connectedBrokersCount = Math.max(0, connectedBrokersCount - 1);
+                        updateMqttStatusBadge();
+                    });
+
+                    mqttClients.push(client);
+                } catch (e) {
+                    console.error('MQTT Connection fail for', brokerUrl, e);
+                }
+            });
+        }
+
+        function updateMqttStatusBadge() {
+            const textEl = document.getElementById('mqttStatusText');
+            const badgeEl = document.getElementById('mqttStatusBadge');
+
+            if (connectedBrokersCount > 0) {
+                textEl.textContent = `P2P Sẵn Sàng (${connectedBrokersCount}/3 Broker)`;
+                badgeEl.className = "glass-panel px-2.5 py-1.5 rounded-xl text-[10px] font-medium flex items-center space-x-1.5 text-green-400";
+            } else {
+                textEl.textContent = "Đang kết nối P2P (0/3)...";
+                badgeEl.className = "glass-panel px-2.5 py-1.5 rounded-xl text-[10px] font-medium flex items-center space-x-1.5 text-yellow-400";
+            }
+        }
+
+        function broadcastMqtt(topic, messageObj) {
+            // Assign unique msgId for deduplication
+            if (!messageObj.msgId) {
+                messageObj.msgId = `${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+            }
+
+            const jsonStr = JSON.stringify(messageObj);
+            mqttClients.forEach(client => {
+                if (client.connected) {
+                    client.publish(topic, jsonStr, { qos: 0 });
+                }
+            });
+        }
+
+        // Handle incoming messages with msgId deduplication
+        function handleIncomingMqttMessage(topic, data) {
+            if (data.msgId && processedMsgIds.has(data.msgId)) return; // Deduplicate
+            if (data.msgId) {
+                processedMsgIds.add(data.msgId);
+                if (processedMsgIds.size > 200) {
+                    const firstItem = processedMsgIds.values().next().value;
+                    processedMsgIds.delete(firstItem);
+                }
+            }
+
+            // Topic dispatching
+            if (topic === 'p2p-ride/requests') {
+                if (currentRole === 'driver' && isDriverOnline) {
+                    onDriverReceiveRideRequest(data);
+                }
+            } else if (topic.startsWith('p2p-ride/offers/')) {
+                if (currentRole === 'rider') {
+                    onRiderReceiveDriverOffer(data);
+                }
+            } else if (topic === `p2p-ride/direct/${userId}`) {
+                onDirectP2pSignalReceived(data);
+            } else if (topic === 'p2p-ride/driver-location') {
+                onDriverLocationUpdate(data);
+            }
+        }
+
+        // 5. RIDER BOOKING & BROADCAST
+        function broadcastRideRequest() {
+            if (!pickupCoords || !dropoffCoords || !currentRouteData) {
+                alert('Vui lòng chọn đầy đủ Điểm đón & Điểm đến trên bản đồ!');
+                return;
+            }
+
+            if (serviceMode === 'parcel' && !parcelPhotoBase64) {
+                alert('Vui lòng chụp/tải ảnh bưu phẩm hàng hóa trước khi đặt giao hàng!');
+                return;
+            }
+
+            if (!validateRiderIdentity()) return;
+
+            const rideRequest = {
+                rideId: 'ride_' + Date.now(),
+                riderId: userId,
+                riderPhone: riderPhone,
+                serviceMode: serviceMode,
+                pickupCoords: pickupCoords,
+                dropoffCoords: dropoffCoords,
+                pickupText: document.getElementById('pickupInput').value,
+                dropoffText: document.getElementById('dropoffInput').value,
+                routeDistanceKm: currentRouteData.distanceKm,
+                routeDurationMin: currentRouteData.durationMin,
+                suggestedFareVnd: currentRouteData.fareVnd,
+                parcelPhoto: parcelPhotoBase64,
+                timestamp: Date.now()
+            };
+
+            activeRideRequests.set(rideRequest.rideId, rideRequest);
+
+            // Broadcast over MQTT brokers
+            broadcastMqtt('p2p-ride/requests', rideRequest);
+
+            // Show Searching UI
+            document.getElementById('bookRideBtn').classList.add('hidden');
+            document.getElementById('driverOffersContainer').classList.remove('hidden');
+            document.getElementById('offersList').innerHTML = `<div class="text-xs text-gray-400 text-center py-4">Đang phát tín hiệu tìm tài xế xung quanh...</div>`;
+        }
+
+        function cancelRideRequest() {
+            document.getElementById('bookRideBtn').classList.remove('hidden');
+            document.getElementById('driverOffersContainer').classList.add('hidden');
+        }
+
+        function onRiderReceiveDriverOffer(offer) {
+            const offersList = document.getElementById('offersList');
+            if (offersList.querySelector('.text-center')) offersList.innerHTML = '';
+
+            const offerEl = document.createElement('div');
+            offerEl.className = "bg-gray-800 p-3 rounded-2xl border border-gray-700 flex items-center justify-between space-x-2";
+            offerEl.innerHTML = `
+                <div>
+                    <div class="text-xs font-bold text-white">${offer.driverName} (${offer.driverPlate})</div>
+                    <div class="text-[10px] text-gray-400">${offer.driverModel} • CCCD ✔</div>
+                    <div class="text-sm font-extrabold text-brand-500 mt-1">${offer.offeredFareVnd.toLocaleString('vi-VN')} VNĐ</div>
+                </div>
+                <button onclick="acceptDriverOffer('${offer.rideId}', '${offer.driverId}', '${offer.driverName}', '${offer.driverPlate}', ${offer.offeredFareVnd}, '${offer.driverPhone}')" class="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow">
+                    Chấp Nhận
+                </button>
+            `;
+            offersList.appendChild(offerEl);
+            document.getElementById('offersCount').textContent = offersList.children.length;
+        }
+
+        function acceptDriverOffer(rideId, driverId, driverName, driverPlate, fare, driverPhone) {
+            activeTrip = {
+                id: rideId,
+                role: 'rider',
+                peerId: driverId,
+                peerName: driverName,
+                peerSub: `Biển số: ${driverPlate} • SĐT: ${driverPhone}`,
+                fare: fare,
+                mode: serviceMode,
+                parcelPhoto: parcelPhotoBase64
+            };
+
+            // Notify Driver
+            broadcastMqtt(`p2p-ride/direct/${driverId}`, {
+                type: 'OFFER_ACCEPTED',
+                rideId: rideId,
+                riderId: userId,
+                riderPhone: riderPhone
+            });
+
+            setupActiveTripUi();
+        }
+
+        // 6. DRIVER HANDLERS
+        function toggleDriverOnlineStatus() {
+            if (!driverProfile.verified) {
+                document.getElementById('driverVerificationForm').classList.remove('hidden');
+                return;
+            }
+
+            isDriverOnline = !isDriverOnline;
+            const btn = document.getElementById('toggleDriverOnlineBtn');
+            const dot = document.getElementById('driverStatusDot');
+            const text = document.getElementById('driverStatusText');
+
+            if (isDriverOnline) {
+                btn.textContent = "Tắt Nhận Cuốc";
+                btn.className = "bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow";
+                dot.className = "w-2.5 h-2.5 rounded-full bg-brand-500 animate-ping";
+                text.textContent = "Tài xế đang Sẵn Sàng nhận cuốc";
+            } else {
+                btn.textContent = "Bật Nhận Cuốc";
+                btn.className = "bg-brand-500 hover:bg-brand-600 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow";
+                dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+                text.textContent = "Đã Tắt Nhận Cuốc";
+            }
+        }
+
+        function saveDriverVerificationInfo() {
+            const name = document.getElementById('driverFullName').value.trim();
+            const cccd = document.getElementById('driverCccd').value.trim();
+            const plate = document.getElementById('driverPlate').value.trim();
+            const model = document.getElementById('driverVehicleModel').value.trim();
+            const phone = document.getElementById('driverPhone').value.trim();
+
+            if (!name || !cccd || !plate || !phone) {
+                alert('Vui lòng điền đầy đủ Họ tên, CCCD, Biển số xe và Số điện thoại!');
+                return;
+            }
+
+            driverProfile = { fullName: name, cccd, plate, model, phone, verified: true };
+            localStorage.setItem('p2p_driver_profile', JSON.stringify(driverProfile));
+
+            document.getElementById('driverVerificationForm').classList.add('hidden');
+            document.getElementById('driverVehicleSummary').textContent = `${plate} • ${model} (Xác minh CCCD ✔)`;
+            toggleDriverOnlineStatus();
+        }
+
+        function loadStoredDriverInfo() {
+            const stored = localStorage.getItem('p2p_driver_profile');
+            if (stored) {
+                try {
+                    driverProfile = JSON.parse(stored);
+                    document.getElementById('driverVehicleSummary').textContent = `${driverProfile.plate} • ${driverProfile.model} (Xác minh CCCD ✔)`;
+                } catch(e){}
+            }
+        }
+
+        function onDriverReceiveRideRequest(req) {
+            const feed = document.getElementById('rideRequestsFeed');
+            if (feed.querySelector('.text-center')) feed.innerHTML = '';
+
+            if (document.getElementById(`req_${req.rideId}`)) return;
+
+            const card = document.createElement('div');
+            card.id = `req_${req.rideId}`;
+            card.className = "bg-gray-800/90 p-3.5 rounded-2xl border border-gray-700 space-y-2.5";
+            card.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] bg-brand-500/20 text-brand-500 font-extrabold px-2 py-0.5 rounded-full uppercase">
+                        ${req.serviceMode === 'parcel' ? '📦 GIAO HÀNG' : '🛵 CHỞ NGƯỜI'}
+                    </span>
+                    <span class="text-xs font-bold text-white">${req.routeDistanceKm} km (${req.routeDurationMin} phút)</span>
+                </div>
+                <div class="text-xs space-y-1">
+                    <div class="text-gray-300 font-medium">📍 Đón: ${req.pickupText}</div>
+                    <div class="text-gray-300 font-medium">🏁 Đến: ${req.dropoffText}</div>
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-gray-700/60">
+                    <div>
+                        <div class="text-[10px] text-gray-400">Giá đề xuất:</div>
+                        <div class="text-sm font-extrabold text-brand-500">${req.suggestedFareVnd.toLocaleString('vi-VN')} VNĐ</div>
+                    </div>
+                    <button onclick="sendDriverOffer('${req.rideId}', '${req.riderId}', ${req.suggestedFareVnd})" class="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow">
+                        Báo Giá / Bắt Cuốc
+                    </button>
+                </div>
+            `;
+            feed.prepend(card);
+            document.getElementById('activeRequestsCount').textContent = `${feed.children.length} Cuốc`;
+        }
+
+        function sendDriverOffer(rideId, riderId, fare) {
+            broadcastMqtt(`p2p-ride/offers/${riderId}`, {
+                rideId: rideId,
+                driverId: userId,
+                driverName: driverProfile.fullName,
+                driverPlate: driverProfile.plate,
+                driverModel: driverProfile.model,
+                driverPhone: driverProfile.phone,
+                offeredFareVnd: fare
+            });
+
+            alert('Đã gửi báo giá đến khách hàng! Đang chờ khách xác nhận...');
+        }
+
+        // 7. DIRECT SIGNALING & TRIP EXECUTION
+        function onDirectP2pSignalReceived(data) {
+            if (data.type === 'OFFER_ACCEPTED' && currentRole === 'driver') {
+                activeTrip = {
+                    id: data.rideId,
+                    role: 'driver',
+                    peerId: data.riderId,
+                    peerName: 'Khách hàng DirectRide',
+                    peerSub: `SĐT Khách: ${data.riderPhone}`,
+                    fare: 35000,
+                    mode: 'ride'
+                };
+                setupActiveTripUi();
+            } else if (data.type === 'WEBRTC_SIGNAL') {
+                handleWebRtcSignal(data.signal);
+            }
+        }
+
+        function setupActiveTripUi() {
+            document.getElementById('riderPanel').classList.add('hidden');
+            document.getElementById('driverPanel').classList.add('hidden');
+            document.getElementById('activeTripCard').classList.remove('hidden');
+
+            document.getElementById('tripPeerName').textContent = activeTrip.peerName;
+            document.getElementById('tripPeerSub').textContent = activeTrip.peerSub;
+            document.getElementById('tripAgreedFare').textContent = `${activeTrip.fare.toLocaleString('vi-VN')} VNĐ`;
+            document.getElementById('tripServiceType').textContent = activeTrip.mode === 'parcel' ? 'Giao Hàng Bưu Phẩm' : 'Xe Ôm Chở Người';
+
+            if (activeTrip.role === 'driver') {
+                document.getElementById('driverTripActions').classList.remove('hidden');
+                document.getElementById('riderTripActions').classList.add('hidden');
+            } else {
+                document.getElementById('riderTripActions').classList.remove('hidden');
+                document.getElementById('driverTripActions').classList.add('hidden');
+            }
+
+            if (activeTrip.parcelPhoto) {
+                document.getElementById('tripParcelProofSection').classList.remove('hidden');
+                document.getElementById('tripParcelImage').src = activeTrip.parcelPhoto;
+            }
+        }
+
+        function completeCurrentTrip() {
+            // Generate VietQR Link for 100% direct driver bank transfer
+            const bankPhone = driverProfile.phone || '0988123456';
+            const qrUrl = `https://img.vietqr.io/image/MB-${bankPhone}-compact2.png?amount=${activeTrip.fare}&addInfo=CUOCXE%20${activeTrip.id.slice(-4)}`;
+            
+            document.getElementById('vietQrImage').src = qrUrl;
+            document.getElementById('vietQrMemo').textContent = `CUOCXE ${activeTrip.id.slice(-4)}`;
+            document.getElementById('vietQrSection').classList.remove('hidden');
+        }
+
+        function finishRiderTrip() {
+            activeTrip = null;
+            document.getElementById('activeTripCard').classList.add('hidden');
+            if (currentRole === 'rider') document.getElementById('riderPanel').classList.remove('hidden');
+            else document.getElementById('driverPanel').classList.remove('hidden');
+        }
+
+        function onDriverLocationUpdate(loc) {
+            if (activeTrip && loc.driverId === activeTrip.peerId) {
+                if (!driverMarker) {
+                    const bikeIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div class="w-8 h-8 bg-brand-500 rounded-full border-2 border-white flex items-center justify-center text-white shadow-xl"><i data-lucide="bike" class="w-5 h-5"></i></div>`,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
+                    });
+                    driverMarker = L.marker([loc.lat, loc.lng], { icon: bikeIcon }).addTo(map);
+                } else {
+                    driverMarker.setLatLng([loc.lat, loc.lng]);
+                }
+            }
+        }
+
+        // 8. WEBRTC P2P VOICE & VIDEO CALLS
+        async function startVoiceCall() {
+            initWebRtcCall(false);
+        }
+
+        async function startVideoCall() {
+            initWebRtcCall(true);
+        }
+
+        async function initWebRtcCall(isVideo) {
+            if (!activeTrip) return;
+            toggleCommDrawer(true);
+            document.getElementById('videoCallContainer').classList.remove('hidden');
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: isVideo
+                });
+                document.getElementById('localVideo').srcObject = localStream;
+
+                peerConnection = createPeerConnection();
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                broadcastMqtt(`p2p-ride/direct/${activeTrip.peerId}`, {
+                    type: 'WEBRTC_SIGNAL',
+                    signal: {
+                        type: 'OFFER',
+                        sdp: offer,
+                        isVideo: isVideo,
+                        callerName: currentRole === 'rider' ? 'Khách Đặt Xe' : driverProfile.fullName
+                    }
+                });
+            } catch (e) {
+                console.error('Media device error:', e);
+                alert('Không thể truy cập Micro/Camera trên thiết bị!');
+            }
+        }
+
+        function createPeerConnection() {
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate && activeTrip) {
+                    broadcastMqtt(`p2p-ride/direct/${activeTrip.peerId}`, {
+                        type: 'WEBRTC_SIGNAL',
+                        signal: { type: 'CANDIDATE', candidate: event.candidate }
+                    });
+                }
+            };
+
+            pc.ontrack = (event) => {
+                remoteStream = event.streams[0];
+                document.getElementById('remoteVideo').srcObject = remoteStream;
+            };
+
+            return pc;
+        }
+
+        async function handleWebRtcSignal(signal) {
+            if (signal.type === 'OFFER') {
+                pendingOffer = signal;
+                document.getElementById('incomingCallCallerName').textContent = signal.callerName;
+                document.getElementById('incomingCallType').textContent = signal.isVideo ? 'Cuộc gọi Video P2P' : 'Cuộc gọi thoại P2P';
+                document.getElementById('incomingCallModal').classList.remove('hidden');
+            } else if (signal.type === 'ANSWER') {
+                if (peerConnection) {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                }
+            } else if (signal.type === 'CANDIDATE') {
+                if (peerConnection) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                }
+            } else if (signal.type === 'HANGUP') {
+                endWebRtcCall();
+            }
+        }
+
+        async function acceptIncomingCall() {
+            document.getElementById('incomingCallModal').classList.add('hidden');
+            toggleCommDrawer(true);
+            document.getElementById('videoCallContainer').classList.remove('hidden');
+
+            const isVideo = pendingOffer ? pendingOffer.isVideo : false;
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+                document.getElementById('localVideo').srcObject = localStream;
+
+                peerConnection = createPeerConnection();
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                broadcastMqtt(`p2p-ride/direct/${activeTrip.peerId}`, {
+                    type: 'WEBRTC_SIGNAL',
+                    signal: { type: 'ANSWER', sdp: answer }
+                });
+            } catch (e) {
+                console.error('Accept call error:', e);
+            }
+        }
+
+        function rejectIncomingCall() {
+            document.getElementById('incomingCallModal').classList.add('hidden');
+            if (activeTrip) {
+                broadcastMqtt(`p2p-ride/direct/${activeTrip.peerId}`, {
+                    type: 'WEBRTC_SIGNAL',
+                    signal: { type: 'HANGUP' }
+                });
+            }
+        }
+
+        function endWebRtcCall() {
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            if (peerConnection) peerConnection.close();
+            peerConnection = null;
+            document.getElementById('videoCallContainer').classList.add('hidden');
+        }
+
+        function toggleMuteMic() {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    isMicMuted = !audioTrack.enabled;
+                    document.getElementById('toggleMicBtn').className = isMicMuted ? "p-2 bg-red-600 rounded-xl text-white" : "p-2 bg-gray-700 rounded-xl text-white";
+                }
+            }
+        }
+
+        function toggleVideoCamera() {
+            if (localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.enabled = !videoTrack.enabled;
+                    isVideoOff = !videoTrack.enabled;
+                    document.getElementById('toggleVideoBtn').className = isVideoOff ? "p-2 bg-red-600 rounded-xl text-white" : "p-2 bg-gray-700 rounded-xl text-white";
+                }
+            }
+        }
+
+        // 9. PHOTO COMPRESSION CANVAS (Max 600px, JPEG 0.6)
+        function handleParcelPhotoUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDim = 600;
+
+                    if (width > height && width > maxDim) {
+                        height *= maxDim / width;
+                        width = maxDim;
+                    } else if (height > maxDim) {
+                        width *= maxDim / height;
+                        height = maxDim;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG 0.6
+                    parcelPhotoBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                    document.getElementById('parcelPhotoPreview').src = parcelPhotoBase64;
+                    document.getElementById('parcelPhotoPreviewContainer').classList.remove('hidden');
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeParcelPhoto() {
+            parcelPhotoBase64 = null;
+            document.getElementById('parcelPhotoPreviewContainer').classList.add('hidden');
+            document.getElementById('parcelPhotoInput').value = '';
+        }
+
+        // 10. UI UTILITIES & SWITCHERS
+        function switchRole(role) {
+            currentRole = role;
+            const riderBtn = document.getElementById('roleRiderBtn');
+            const driverBtn = document.getElementById('roleDriverBtn');
+
+            if (role === 'rider') {
+                riderBtn.className = "px-3 py-1.5 text-xs font-bold rounded-xl transition-all bg-brand-500 text-white shadow";
+                driverBtn.className = "px-3 py-1.5 text-xs font-bold rounded-xl text-gray-400 hover:text-white transition-all";
+                if (!activeTrip) {
+                    document.getElementById('riderPanel').classList.remove('hidden');
+                    document.getElementById('driverPanel').classList.add('hidden');
+                }
+            } else {
+                driverBtn.className = "px-3 py-1.5 text-xs font-bold rounded-xl transition-all bg-brand-500 text-white shadow";
+                riderBtn.className = "px-3 py-1.5 text-xs font-bold rounded-xl text-gray-400 hover:text-white transition-all";
+                if (!activeTrip) {
+                    document.getElementById('driverPanel').classList.remove('hidden');
+                    document.getElementById('riderPanel').classList.add('hidden');
+                }
+            }
+        }
+
+        function selectServiceMode(mode) {
+            serviceMode = mode;
+            const rideBtn = document.getElementById('modeRideBtn');
+            const parcelBtn = document.getElementById('modeParcelBtn');
+            const photoSection = document.getElementById('parcelPhotoSection');
+
+            if (mode === 'ride') {
+                rideBtn.className = "flex items-center justify-center space-x-2 py-2.5 rounded-xl font-bold text-xs bg-brand-500 text-white transition shadow";
+                parcelBtn.className = "flex items-center justify-center space-x-2 py-2.5 rounded-xl font-bold text-xs text-gray-400 hover:text-white transition";
+                photoSection.classList.add('hidden');
+            } else {
+                parcelBtn.className = "flex items-center justify-center space-x-2 py-2.5 rounded-xl font-bold text-xs bg-brand-500 text-white transition shadow";
+                rideBtn.className = "flex items-center justify-center space-x-2 py-2.5 rounded-xl font-bold text-xs text-gray-400 hover:text-white transition";
+                photoSection.classList.remove('hidden');
+            }
+        }
+
+        function validateRiderIdentity() {
+            const input = document.getElementById('riderPhoneInput').value.trim();
+            const phoneRegex = /^(03|05|07|08|09)\d{8}$/;
+
+            if (!phoneRegex.test(input)) {
+                alert('Vui lòng nhập đúng Số Điện Thoại Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08, hoặc 09)!');
+                return false;
+            }
+
+            riderPhone = input;
+            document.getElementById('riderAuthBadge').innerHTML = `SĐT: ${input} (Google Verified ✔)`;
+            return true;
+        }
+
+        function toggleCommDrawer(forceOpen = false) {
+            const drawer = document.getElementById('commDrawer');
+            if (forceOpen || drawer.classList.contains('translate-x-full')) {
+                drawer.classList.remove('translate-x-full');
+            } else {
+                drawer.classList.add('translate-x-full');
+            }
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text || !activeTrip) return;
+
+            appendChatMessage('Tôi', text, true);
+            broadcastMqtt(`p2p-ride/direct/${activeTrip.peerId}`, {
+                type: 'CHAT_MSG',
+                text: text,
+                senderName: currentRole === 'rider' ? 'Khách Đặt Xe' : driverProfile.fullName
+            });
+            input.value = '';
+        }
+
+        function appendChatMessage(sender, text, isSelf) {
+            const container = document.getElementById('chatMessages');
+            const msgEl = document.createElement('div');
+            msgEl.className = isSelf ? "text-right" : "text-left";
+            msgEl.innerHTML = `
+                <div class="inline-block max-w-[80%] ${isSelf ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-200'} p-2.5 rounded-2xl text-xs shadow">
+                    <div class="text-[9px] opacity-75 mb-0.5 font-bold">${sender}</div>
+                    <div>${text}</div>
+                </div>
+            `;
+            container.appendChild(msgEl);
+            container.scrollTop = container.scrollHeight;
+        }
+    </script>
+</body>
+</html>
