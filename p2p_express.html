@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Admin KYC & Logistics Hub 🛡️📦</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#00B14F',
+                            600: '#009643',
+                            dark: '#0B0F17',
+                            card: '#161F30'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- MQTT.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+
+    <!-- SheetJS CDN (Xuất File Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0B0F17;
+            color: #F3F4F6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        .glass-panel {
+            background: rgba(22, 31, 48, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-brand-dark min-h-screen flex flex-col selection:bg-emerald-500">
+
+    <!-- 1. HEADER QUẢN TRỊ VIÊN -->
+    <header class="h-16 glass-panel border-b border-gray-800 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black text-base shadow-lg shadow-emerald-900/40">
+                🛡️
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white flex items-center gap-2">
+                    P2P Central Command <span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">ADMIN MASTER</span>
+                </h1>
+                <p class="text-[11px] text-gray-400">Kiểm duyệt KYC, Điều phối Vận đơn & Giám sát An toàn</p>
+            </div>
+        </div>
+
+        <!-- Trạng thái kết nối MQTT đa luồng & Menu chuyển tab -->
+        <div class="flex items-center gap-3">
+            <div id="mqttBadge" class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-900/80 border border-gray-800 text-[11px] font-mono text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>P2P Cluster: 3/3 Online</span>
+            </div>
+
+            <!-- Nút điều hướng Tab chính -->
+            <div class="flex bg-gray-900 p-1 rounded-2xl border border-gray-800">
+                <button id="tabBtnKyc" onclick="switchAdminTab('kyc')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition bg-emerald-600 text-white shadow">
+                    <i data-lucide="user-check" class="w-4 h-4"></i>
+                    <span>Xét Duyệt KYC</span>
+                </button>
+                <button id="tabBtnLogistics" onclick="switchAdminTab('logistics')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                    <span>Vận Đơn Liên Tỉnh</span>
+                </button>
+                <button id="tabBtnSuspension" onclick="switchAdminTab('suspension')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white">
+                    <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                    <span>Xử Phạt Tài Xế</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. THỐNG KÊ TỔNG QUAN (KPI CARDS) -->
+    <div class="max-w-7xl mx-auto w-full p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div class="glass-panel p-4 rounded-2xl border border-gray-800">
+            <span class="text-xs text-gray-400 font-medium block">Hồ sơ chờ duyệt (KYC)</span>
+            <div id="kpiPendingKyc" class="text-2xl font-black text-amber-400 mt-1">0</div>
+        </div>
+        <div class="glass-panel p-4 rounded-2xl border border-gray-800">
+            <span class="text-xs text-gray-400 font-medium block">Tài xế đang hoạt động</span>
+            <div id="kpiActiveDrivers" class="text-2xl font-black text-emerald-400 mt-1">0</div>
+        </div>
+        <div class="glass-panel p-4 rounded-2xl border border-gray-800">
+            <span class="text-xs text-gray-400 font-medium block">Tài xế bị khóa (Đình chỉ)</span>
+            <div id="kpiBannedDrivers" class="text-2xl font-black text-rose-500 mt-1">0</div>
+        </div>
+        <div class="glass-panel p-4 rounded-2xl border border-gray-800">
+            <span class="text-xs text-gray-400 font-medium block">Tổng vận đơn liên tỉnh</span>
+            <div id="kpiTotalShipments" class="text-2xl font-black text-blue-400 mt-1">0</div>
+        </div>
+    </div>
+
+    <!-- 3. KHU VỰC NỘI DUNG CHÍNH (DYNAMIC TABS) -->
+    <main class="max-w-7xl mx-auto w-full flex-1 px-4 sm:px-6 pb-12">
+
+        <!-- TAB 1: DANH SÁCH DUYỆT HỒ SƠ KYC -->
+        <section id="tabContentKyc" class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i data-lucide="file-check-2" class="w-5 h-5 text-emerald-400"></i>
+                        Hồ Sơ Tài Xế Đang Chờ Phê Duyệt
+                    </h2>
+                    <p class="text-xs text-gray-400">Kiểm tra tính hợp lệ của CCCD, Giấy phép lái xe và Cà-vẹt phương tiện</p>
+                </div>
+                <button onclick="reloadKycList()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 rounded-xl border border-gray-700 flex items-center gap-1.5 transition">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Tải lại
+                </button>
+            </div>
+
+            <div id="kycQueueList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Injected via JavaScript -->
+            </div>
+        </section>
+
+        <!-- TAB 2: VẬN ĐƠN HÀNG HÓA LIÊN TỈNH -->
+        <section id="tabContentLogistics" class="hidden space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i data-lucide="package-search" class="w-5 h-5 text-blue-400"></i>
+                        Hệ Thống Vận Đơn Ký Gửi Liên Tỉnh
+                    </h2>
+                    <p class="text-xs text-gray-400">Tạo vận đơn, tra cứu lộ trình và cập nhật 6 mốc trạng thái vận chuyển</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="openCreateWaybillModal()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-blue-600/30">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Tạo Vận Đơn Mới
+                    </button>
+                    <button onclick="exportWaybillsToExcel()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/30">
+                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Xuất Excel (.xlsx)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Danh sách Vận đơn -->
+            <div id="waybillsContainer" class="space-y-4">
+                <!-- Injected via JavaScript -->
+            </div>
+        </section>
+
+        <!-- TAB 3: GIÁM SÁT & ĐÌNH CHỈ TÀI XẾ (BAN / SUSPEND) -->
+        <section id="tabContentSuspension" class="hidden space-y-4">
+            <div>
+                <h2 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="user-x" class="w-5 h-5 text-rose-500"></i>
+                    Quản Lý Kỷ Luật & Khóa Tài Khoản Tài Xế
+                </h2>
+                <p class="text-xs text-gray-400">Đình chỉ hoạt động và cưỡng chế đăng xuất tức thì đối với tài xế có hành vi vi phạm</p>
+            </div>
+
+            <div id="driverModerationList" class="space-y-3">
+                <!-- Injected via JavaScript -->
+            </div>
+        </section>
+    </main>
+
+    <!-- ========================================================== -->
+    <!-- CÁC HỘP THOẠI MODAL PHỤ TRỢ                                -->
+    <!-- ========================================================== -->
+
+    <!-- MODAL 1: BỘ XEM ẢNH GIẤY TỜ PHÓNG TO (ZOOM VIEWER) -->
+    <div id="docViewerModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-4 rounded-3xl max-w-2xl w-full flex flex-col space-y-3 border border-gray-700 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                <h3 id="docViewerTitle" class="text-xs font-bold text-white uppercase flex items-center gap-2">
+                    <i data-lucide="zoom-in" class="w-4 h-4 text-emerald-400"></i> Soi Chi Tiết Giấy Tờ
+                </h3>
+                <button onclick="closeDocViewer()" class="text-gray-400 hover:text-white p-1 rounded-lg"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Vùng hiển thị ảnh có thể Zoom -->
+            <div class="w-full h-80 bg-black rounded-2xl overflow-hidden flex items-center justify-center relative border border-gray-800">
+                <img id="docZoomImage" src="" class="max-h-full max-w-full object-contain transition-transform duration-200" style="transform: scale(1);">
+            </div>
+
+            <!-- Thanh điều khiển Zoom -->
+            <div class="flex items-center justify-between text-xs px-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400">Độ phóng đại:</span>
+                    <button onclick="adjustZoom(-0.25)" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg font-mono font-bold">-</button>
+                    <span id="zoomLevelText" class="font-mono text-emerald-400 font-bold w-12 text-center">100%</span>
+                    <button onclick="adjustZoom(0.25)" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg font-mono font-bold">+</button>
+                    <button onclick="resetZoom()" class="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-[10px] rounded-lg text-gray-300">Chuẩn</button>
+                </div>
+                <span class="text-[11px] text-gray-500">Dùng để soi vân cước, mộc đỏ và số phôi</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: TỪ CHỐI KYC KÈM LÝ DO -->
+    <div id="rejectKycModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-5 rounded-3xl max-w-sm w-full space-y-3 border border-red-500/40 shadow-2xl">
+            <h4 class="text-xs font-bold text-red-400 uppercase flex items-center gap-1.5">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i> Từ Chối Phê Duyệt Hồ Sơ
+            </h4>
+            <div>
+                <label class="block text-[11px] text-gray-400 mb-1">Nhập lý do từ chối (Gửi thông báo về ứng dụng tài xế):</label>
+                <textarea id="txtRejectReason" rows="3" placeholder="Ví dụ: Ảnh CCCD bị chói sáng, vui lòng chụp lại rõ nét..." class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-red-500"></textarea>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button onclick="closeRejectKycModal()" class="flex-1 py-2 bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 rounded-xl">Hủy</button>
+                <button onclick="confirmRejectKyc()" class="flex-1 py-2 bg-red-600 hover:bg-red-500 text-xs font-bold text-white rounded-xl">Gửi Từ Chối</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: ĐÌNH CHỈ KHÓA TÀI KHOẢN TÀI XẾ (BAN / SUSPEND) -->
+    <div id="suspendDriverModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-5 rounded-3xl max-w-sm w-full space-y-3 border border-rose-600/50 shadow-2xl">
+            <h4 class="text-xs font-bold text-rose-500 uppercase flex items-center gap-1.5">
+                <i data-lucide="shield-alert" class="w-4 h-4"></i> Khóa Tài Khoản Tài Xế
+            </h4>
+            <div>
+                <label class="block text-[11px] text-gray-400 mb-1">Thời hạn xử phạt:</label>
+                <select id="selectBanDuration" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2 text-xs text-white focus:outline-none">
+                    <option value="3">Đình chỉ 3 Ngày</option>
+                    <option value="7">Đình chỉ 7 Ngày</option>
+                    <option value="9999">Khóa Vĩnh Viễn (Cấm vĩnh viễn)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] text-gray-400 mb-1">Lý do kỷ luật:</label>
+                <textarea id="txtBanReason" rows="2" placeholder="Ví dụ: Khách phản ánh thu sai giá thỏa thuận..." class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-rose-500"></textarea>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button onclick="closeSuspendDriverModal()" class="flex-1 py-2 bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 rounded-xl">Hủy</button>
+                <button onclick="confirmSuspendDriver()" class="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white rounded-xl">Khóa & Đăng Xuất Ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: TẠO VẬN ĐƠN KÝ GỬI LIÊN TỈNH MỚI -->
+    <div id="createWaybillModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-5 rounded-3xl max-w-lg w-full space-y-4 border border-blue-500/40 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                <h3 class="text-xs font-bold text-blue-400 uppercase flex items-center gap-1.5">
+                    <i data-lucide="package-plus" class="w-4 h-4"></i> Tạo Vận Đơn Ký Gửi Hàng Hóa Liên Tỉnh
+                </h3>
+                <button onclick="closeCreateWaybillModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <!-- Người gửi & Người nhận -->
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="space-y-2 p-3 bg-gray-900/60 rounded-2xl border border-gray-800">
+                    <span class="font-bold text-emerald-400 block border-b border-gray-800 pb-1">NGƯỜI GỬI</span>
+                    <input id="wbSenderName" type="text" placeholder="Họ tên người gửi" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none">
+                    <input id="wbSenderPhone" type="tel" placeholder="SĐT người gửi (10 số)" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none font-mono">
+                    <select id="wbSenderProvince" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none">
+                        <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
+                        <option value="Hà Nội">Hà Nội</option>
+                        <option value="Đà Nẵng">Đà Nẵng</option>
+                        <option value="Cần Thơ">Cần Thơ</option>
+                        <option value="Hải Phòng">Hải Phòng</option>
+                    </select>
+                </div>
+
+                <div class="space-y-2 p-3 bg-gray-900/60 rounded-2xl border border-gray-800">
+                    <span class="font-bold text-blue-400 block border-b border-gray-800 pb-1">NGƯỜI NHẬN</span>
+                    <input id="wbReceiverName" type="text" placeholder="Họ tên người nhận" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none">
+                    <input id="wbReceiverPhone" type="tel" placeholder="SĐT người nhận (10 số)" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none font-mono">
+                    <select id="wbReceiverProvince" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none">
+                        <option value="Hà Nội">Hà Nội</option>
+                        <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
+                        <option value="Đà Nẵng">Đà Nẵng</option>
+                        <option value="Cần Thơ">Cần Thơ</option>
+                        <option value="Hải Phòng">Hải Phòng</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Chi tiết kiện hàng -->
+            <div class="space-y-2 p-3 bg-gray-900/60 rounded-2xl border border-gray-800 text-xs">
+                <span class="font-bold text-amber-400 block border-b border-gray-800 pb-1">THÔNG TIN BƯU KIỆN</span>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-0.5">Loại hàng:</label>
+                        <select id="wbCargoType" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none">
+                            <option value="Hàng Tiêu Chuẩn">Hàng Tiêu Chuẩn</option>
+                            <option value="Hàng Dễ Vỡ">Dễ Vỡ (Thủy tinh, gốm)</option>
+                            <option value="Chất Lỏng / Mỹ Phẩm">Chất Lỏng / Hóa mỹ phẩm</option>
+                            <option value="Điện Tử / Giá Trị Cao">Đồ Điện Tử</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-0.5">Khối lượng (Kg):</label>
+                        <input id="wbWeight" type="number" step="0.5" value="2.5" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-white outline-none font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-0.5">Tiền thu hộ COD (VNĐ):</label>
+                        <input id="wbCodAmount" type="number" value="0" class="w-full bg-gray-800 p-2 rounded-xl border border-gray-700 text-emerald-400 font-bold outline-none font-mono">
+                    </div>
+                </div>
+
+                <!-- Chụp / Chọn ảnh gói hàng trước khi gửi -->
+                <div class="pt-2 flex items-center gap-3">
+                    <input type="file" id="wbImageInput" accept="image/*" onchange="handleWaybillImage(this)" class="hidden">
+                    <button type="button" onclick="document.getElementById('wbImageInput').click()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl border border-gray-700 flex items-center gap-1.5 text-xs">
+                        <i data-lucide="camera" class="w-3.5 h-3.5 text-blue-400"></i> Ảnh kiện hàng
+                    </button>
+                    <img id="wbImagePreview" src="" class="hidden w-12 h-12 object-cover rounded-xl border border-blue-500">
+                    <span id="wbImageStatus" class="text-[10px] text-gray-500">Chụp gói hàng để lưu bằng chứng đối soát</span>
+                </div>
+            </div>
+
+            <button onclick="submitNewWaybill()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white rounded-xl transition shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+                <i data-lucide="check-circle" class="w-4 h-4"></i> Phát Hành Vận Đơn & Sinh Mã QR Tra Cứu
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================================== -->
+    <!-- LOGIC JAVASCRIPT HỆ THỐNG                                  -->
+    <!-- ========================================================== -->
+    <script>
+        // CẤU HÌNH API ĐỐI SOÁT & THÔNG BÁO TỰ ĐỘNG
+        const FORMSPREE_URL = "https://formspree.io/f/mykqapbg";
+        const TELEGRAM_TOKEN = "7737222853:AAG6cR5H-x59W8rM7m_V0m1fLwPqR9sTuVo".trim();
+        const TELEGRAM_CHAT_ID = "6123456789".trim();
+        const ZALO_BOT_TOKEN = "3537527468781415150:ggvoFzSIVzjnfsmOCcJRdwRQXZkDygelYoKmRjaaziyGKUcknzCSVgemsQRTAjtq".trim();
+
+        const BROKER_LIST = [
+            "wss://broker.emqx.io:8084/mqtt",
+            "wss://broker.hivemq.com:8884/mqtt",
+            "wss://test.mosquitto.org:8081"
+        ];
+        const TOPIC_CHANNEL = "p2p_move_send_vn/v8";
+
+        let currentZoomScale = 1;
+        let selectedDriverForAction = null;
+        let waybillPhotoBase64 = null;
+        let mqttClients = [];
+
+        // 1. TẢI DỮ LIỆU TỪ BỘ NHỚ LOCALDB
+        let kycDrivers = JSON.parse(localStorage.getItem('p2p_kyc_drivers')) || [
+            {
+                id: "drv_901",
+                name: "Trần Văn Minh",
+                phone: "0912345678",
+                plate: "59-X1 234.56",
+                model: "Honda Wave Alpha Trắng",
+                cccd: "079088112233",
+                status: "PENDING", // PENDING | APPROVED | REJECTED | SUSPENDED
+                docs: {
+                    portrait: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=60",
+                    cccdFront: "https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?w=500&auto=format&fit=crop&q=60",
+                    license: "https://images.unsplash.com/photo-1544717305-2782549b5136?w=500&auto=format&fit=crop&q=60"
+                },
+                totalTrips: 142,
+                reportsCount: 0,
+                rating: 4.9
+            },
+            {
+                id: "drv_902",
+                name: "Lê Hoàng Quân",
+                phone: "0987654321",
+                plate: "59-K2 888.99",
+                model: "Yamaha Exciter 150 Đen Nhám",
+                cccd: "079090998877",
+                status: "APPROVED",
+                docs: {
+                    portrait: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=60",
+                    cccdFront: "https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?w=500&auto=format&fit=crop&q=60",
+                    license: "https://images.unsplash.com/photo-1544717305-2782549b5136?w=500&auto=format&fit=crop&q=60"
+                },
+                totalTrips: 88,
+                reportsCount: 3, // Bị khách report
+                rating: 4.2
+            }
+        ];
+
+        let waybills = JSON.parse(localStorage.getItem('p2p_waybills')) || [
+            {
+                id: "VN-LOG-2026-8801",
+                createdAt: "21/09/2026, 09:30",
+                sender: { name: "Nguyễn Thị Thu", phone: "0909112233", province: "TP. Hồ Chí Minh" },
+                receiver: { name: "Phạm Quốc Bảo", phone: "0918445566", province: "Hà Nội" },
+                cargoType: "Hàng Dễ Vỡ",
+                weight: 3.5,
+                codAmount: 1500000,
+                statusIndex: 2, // 0: Gom hàng, 1: Kho đi, 2: Đang chuyển, 3: Kho đích, 4: Giao hàng, 5: Thành công
+                photo: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=500&auto=format&fit=crop&q=60"
+            }
+        ];
+
+        window.onload = () => {
+            lucide.createIcons();
+            initMultiBrokerMQTT();
+            updateKpiCounts();
+            renderKycQueue();
+            renderWaybillsList();
+            renderModerationList();
+        };
+
+        // 2. KẾT NỐI MQTT
+        function initMultiBrokerMQTT() {
+            BROKER_LIST.forEach((url, idx) => {
+                try {
+                    const client = mqtt.connect(url, {
+                        clientId: `p2p_admin_${Math.random().toString(16).substr(2, 6)}`,
+                        clean: true
+                    });
+                    client.on('connect', () => {
+                        client.subscribe(TOPIC_CHANNEL);
+                    });
+                    mqttClients.push(client);
+                } catch(e){}
+            });
+        }
+
+        function broadcastAdminMQTT(payload) {
+            payload.sender = "ADMIN_HUB";
+            payload.timestamp = Date.now();
+            const str = JSON.stringify(payload);
+            mqttClients.forEach(c => { if(c?.connected) c.publish(TOPIC_CHANNEL, str); });
+        }
+
+        // 3. ĐIỀU HƯỚNG TAB
+        function switchAdminTab(tab) {
+            const tabs = ['kyc', 'logistics', 'suspension'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const content = document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (t === tab) {
+                    btn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition bg-emerald-600 text-white shadow";
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white";
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        function updateKpiCounts() {
+            const pending = kycDrivers.filter(d => d.status === 'PENDING').length;
+            const active = kycDrivers.filter(d => d.status === 'APPROVED').length;
+            const banned = kycDrivers.filter(d => d.status === 'SUSPENDED').length;
+
+            document.getElementById('kpiPendingKyc').textContent = pending;
+            document.getElementById('kpiActiveDrivers').textContent = active;
+            document.getElementById('kpiBannedDrivers').textContent = banned;
+            document.getElementById('kpiTotalShipments').textContent = waybills.length;
+        }
+
+        // ==========================================================
+        // 4. QUẢN LÝ PHÊ DUYỆT KYC & XỬ LÝ ẢNH ZOOM
+        // ==========================================================
+        function renderKycQueue() {
+            const container = document.getElementById('kycQueueList');
+            const pending = kycDrivers.filter(d => d.status === 'PENDING');
+
+            if (pending.length === 0) {
+                container.innerHTML = '<div class="col-span-2 text-center py-12 text-gray-500 text-xs">Hiện không có hồ sơ tài xế nào đang chờ phê duyệt.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            pending.forEach(d => {
+                const card = document.createElement('div');
+                card.className = "glass-panel p-4 rounded-3xl border border-gray-800 space-y-3";
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="font-bold text-sm text-white">${d.name}</h4>
+                            <p class="text-[11px] text-emerald-400 font-mono font-bold">${d.plate} • ${d.model}</p>
+                            <p class="text-[10px] text-gray-400 font-mono">SĐT: ${d.phone} | CCCD: ${d.cccd}</p>
+                        </div>
+                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            Chờ Kiểm Tra
+                        </span>
+                    </div>
+
+                    <!-- Danh sách ảnh giấy tờ -->
+                    <div class="grid grid-cols-3 gap-2 pt-1 border-t border-gray-800">
+                        <div onclick="openDocZoom('${d.docs.portrait}', 'Ảnh Chân Dung')" class="cursor-pointer group relative rounded-xl overflow-hidden bg-black aspect-video border border-gray-700">
+                            <img src="${d.docs.portrait}" class="w-full h-full object-cover group-hover:scale-105 transition">
+                            <span class="absolute bottom-1 left-1 bg-black/70 text-[9px] px-1.5 py-0.5 rounded text-white">Chân dung</span>
+                        </div>
+                        <div onclick="openDocZoom('${d.docs.cccdFront}', 'Mặt Trước CCCD')" class="cursor-pointer group relative rounded-xl overflow-hidden bg-black aspect-video border border-gray-700">
+                            <img src="${d.docs.cccdFront}" class="w-full h-full object-cover group-hover:scale-105 transition">
+                            <span class="absolute bottom-1 left-1 bg-black/70 text-[9px] px-1.5 py-0.5 rounded text-white">Mặt trước CCCD</span>
+                        </div>
+                        <div onclick="openDocZoom('${d.docs.license}', 'Bằng Lái Xe')" class="cursor-pointer group relative rounded-xl overflow-hidden bg-black aspect-video border border-gray-700">
+                            <img src="${d.docs.license}" class="w-full h-full object-cover group-hover:scale-105 transition">
+                            <span class="absolute bottom-1 left-1 bg-black/70 text-[9px] px-1.5 py-0.5 rounded text-white">Bằng lái xe</span>
+                        </div>
+                    </div>
+
+                    <!-- Nút Duyệt / Từ chối -->
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="openRejectKycModal('${d.id}')" class="flex-1 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-800/50 rounded-xl text-xs font-bold transition">
+                            Từ Chối Hồ Sơ
+                        </button>
+                        <button onclick="approveKycDriver('${d.id}')" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/30">
+                            Phê Duyệt Ngay ✔
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function reloadKycList() {
+            renderKycQueue();
+            updateKpiCounts();
+        }
+
+        // Zoom giấy tờ
+        function openDocZoom(url, title) {
+            currentZoomScale = 1;
+            document.getElementById('docZoomImage').src = url;
+            document.getElementById('docZoomImage').style.transform = `scale(1)`;
+            document.getElementById('zoomLevelText').textContent = `100%`;
+            document.getElementById('docViewerTitle').innerHTML = `<i data-lucide="zoom-in" class="w-4 h-4 text-emerald-400"></i> ${title}`;
+            document.getElementById('docViewerModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeDocViewer() { document.getElementById('docViewerModal').classList.add('hidden'); }
+
+        function adjustZoom(delta) {
+            currentZoomScale = Math.min(Math.max(1, currentZoomScale + delta), 3);
+            document.getElementById('docZoomImage').style.transform = `scale(${currentZoomScale})`;
+            document.getElementById('zoomLevelText').textContent = `${Math.round(currentZoomScale * 100)}%`;
+        }
+
+        function resetZoom() {
+            currentZoomScale = 1;
+            document.getElementById('docZoomImage').style.transform = `scale(1)`;
+            document.getElementById('zoomLevelText').textContent = `100%`;
+        }
+
+        function approveKycDriver(driverId) {
+            const driver = kycDrivers.find(d => d.id === driverId);
+            if (!driver) return;
+
+            driver.status = "APPROVED";
+            localStorage.setItem('p2p_kyc_drivers', JSON.stringify(kycDrivers));
+
+            // Phát lệnh MQTT cho ứng dụng tài xế biết để mở khóa nhận cuốc
+            broadcastAdminMQTT({
+                type: 'KYC_STATUS_UPDATE',
+                driverId: driver.id,
+                status: 'APPROVED',
+                message: 'Hồ sơ của bạn đã được Admin phê duyệt thành công! Bạn có thể Bật Nhận Cuốc ngay bây giờ.'
+            });
+
+            alert(`Đã phê duyệt tài xế ${driver.name} (${driver.plate}) thành công!`);
+            reloadKycList();
+            renderModerationList();
+        }
+
+        function openRejectKycModal(driverId) {
+            selectedDriverForAction = driverId;
+            document.getElementById('rejectKycModal').classList.remove('hidden');
+        }
+
+        function closeRejectKycModal() {
+            selectedDriverForAction = null;
+            document.getElementById('rejectKycModal').classList.add('hidden');
+        }
+
+        function confirmRejectKyc() {
+            const reason = document.getElementById('txtRejectReason').value.trim();
+            if (!reason) { alert("Vui lòng nhập lý do từ chối!"); return; }
+
+            const driver = kycDrivers.find(d => d.id === selectedDriverForAction);
+            if (driver) {
+                driver.status = "REJECTED";
+                driver.rejectReason = reason;
+                localStorage.setItem('p2p_kyc_drivers', JSON.stringify(kycDrivers));
+
+                // Bắn thông báo về tài xế qua MQTT
+                broadcastAdminMQTT({
+                    type: 'KYC_STATUS_UPDATE',
+                    driverId: driver.id,
+                    status: 'REJECTED',
+                    reason: reason
+                });
+
+                alert(`Đã gửi lý do từ chối cho tài xế ${driver.name}!`);
+            }
+
+            closeRejectKycModal();
+            reloadKycList();
+            renderModerationList();
+        }
+
+        // ==========================================================
+        // 5. GIÁM SÁT & ĐÌNH CHỈ KHÓA TÀI KHOẢN (REAL-TIME BAN)
+        // ==========================================================
+        function renderModerationList() {
+            const container = document.getElementById('driverModerationList');
+            container.innerHTML = '';
+
+            kycDrivers.forEach(d => {
+                const isBanned = d.status === 'SUSPENDED';
+                const card = document.createElement('div');
+                card.className = "glass-panel p-3.5 rounded-2xl border border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3";
+                card.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${d.docs.portrait}" class="w-10 h-10 rounded-full object-cover border ${isBanned ? 'border-red-500' : 'border-emerald-500'}">
+                        <div>
+                            <div class="font-bold text-xs text-white flex items-center gap-2">
+                                <span>${d.name}</span>
+                                <span class="text-[10px] px-2 py-0.2 rounded font-mono font-bold ${isBanned ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}">
+                                    ${isBanned ? 'BỊ ĐÌNH CHỈ' : 'HOẠT ĐỘNG'}
+                                </span>
+                            </div>
+                            <div class="text-[11px] text-gray-400 font-mono">${d.plate} • Đã chạy: <b>${d.totalTrips}</b> cuốc • ⭐ ${d.rating}</div>
+                            ${d.reportsCount > 0 ? `<div class="text-[10px] text-amber-400 font-semibold">⚠️ Bị khách khiếu nại: ${d.reportsCount} lần</div>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        ${isBanned ? `
+                            <button onclick="unbanDriver('${d.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition">
+                                Mở Khóa Tài Khoản
+                            </button>
+                        ` : `
+                            <button onclick="openSuspendModal('${d.id}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-rose-600/30 flex items-center gap-1">
+                                <i data-lucide="ban" class="w-3.5 h-3.5"></i> Đình Chỉ Ngay
+                            </button>
+                        `}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function openSuspendModal(driverId) {
+            selectedDriverForAction = driverId;
+            document.getElementById('suspendDriverModal').classList.remove('hidden');
+        }
+
+        function closeSuspendDriverModal() {
+            selectedDriverForAction = null;
+            document.getElementById('suspendDriverModal').classList.add('hidden');
+        }
+
+        function confirmSuspendDriver() {
+            const days = document.getElementById('selectBanDuration').value;
+            const reason = document.getElementById('txtBanReason').value.trim() || "Vi phạm quy định an toàn hệ thống";
+
+            const driver = kycDrivers.find(d => d.id === selectedDriverForAction);
+            if (driver) {
+                driver.status = "SUSPENDED";
+                driver.banDays = days;
+                driver.banReason = reason;
+                localStorage.setItem('p2p_kyc_drivers', JSON.stringify(kycDrivers));
+
+                // PHÁT LỆNH ÉP ĐĂNG XUẤT TỨC THÌ (FORCE_LOGOUT VIA MQTT)
+                broadcastAdminMQTT({
+                    type: 'FORCE_LOGOUT_DRIVER',
+                    targetDriverId: driver.id,
+                    banDurationDays: days,
+                    reason: reason
+                });
+
+                alert(`Đã đình chỉ tài xế ${driver.name}! Hệ thống đã phát lệnh cưỡng chế đăng xuất ngay lập tức.`);
+            }
+
+            closeSuspendDriverModal();
+            renderModerationList();
+            updateKpiCounts();
+        }
+
+        function unbanDriver(driverId) {
+            const driver = kycDrivers.find(d => d.id === driverId);
+            if (driver) {
+                driver.status = "APPROVED";
+                delete driver.banDays;
+                delete driver.banReason;
+                localStorage.setItem('p2p_kyc_drivers', JSON.stringify(kycDrivers));
+
+                broadcastAdminMQTT({
+                    type: 'UNBAN_DRIVER',
+                    targetDriverId: driver.id,
+                    message: "Tài khoản của bạn đã được mở khóa! Bạn có thể tiếp tục nhận cuốc."
+                });
+
+                alert(`Đã mở khóa tài khoản cho ${driver.name}!`);
+            }
+            renderModerationList();
+            updateKpiCounts();
+        }
+
+        // ==========================================================
+        // 6. QUẢN LÝ VẬN ĐƠN HÀNG HÓA LIÊN TỈNH & TRACKING
+        // ==========================================================
+        const LOGISTICS_STAGES = [
+            "Đã gom hàng",
+            "Đang lưu kho tỉnh đi",
+            "Đang vận chuyển liên tỉnh",
+            "Đã đến kho tỉnh đích",
+            "Shipper đang giao",
+            "Giao hàng thành công"
+        ];
+
+        function renderWaybillsList() {
+            const container = document.getElementById('waybillsContainer');
+            if (waybills.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-gray-500 text-xs">Chưa có vận đơn liên tỉnh nào được tạo.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            waybills.forEach(wb => {
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=TRACK-${wb.id}`;
+                const card = document.createElement('div');
+                card.className = "glass-panel p-4 rounded-3xl border border-gray-800 space-y-3";
+                card.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-800 pb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-black text-sm text-blue-400 font-mono tracking-wider">${wb.id}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">${wb.cargoType}</span>
+                        </div>
+                        <span class="text-[11px] text-gray-400">Khởi tạo: ${wb.createdAt}</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                            <span class="text-[10px] text-gray-500 font-bold block">TỪ: ${wb.sender.province}</span>
+                            <div class="font-bold text-white">${wb.sender.name} (${wb.sender.phone})</div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-500 font-bold block">ĐẾN: ${wb.receiver.province}</span>
+                            <div class="font-bold text-white">${wb.receiver.name} (${wb.receiver.phone})</div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-500 font-bold block">CHI TIẾT:</span>
+                            <div class="text-gray-300">Nặng: <b>${wb.weight} kg</b> | Thu COD: <b class="text-emerald-400">${wb.codAmount.toLocaleString('vi-VN')} đ</b></div>
+                        </div>
+                    </div>
+
+                    <!-- Tiến trình mốc lộ trình 6 bước -->
+                    <div class="py-2">
+                        <div class="flex items-center justify-between text-[10px] font-bold text-gray-400 mb-1">
+                            <span>Tiến độ: <b class="text-blue-400">${LOGISTICS_STAGES[wb.statusIndex]}</b></span>
+                            <span>${wb.statusIndex + 1}/6 Mốc</span>
+                        </div>
+                        <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+                            <div class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full transition-all duration-300" style="width: ${((wb.statusIndex + 1) / 6) * 100}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Nút thao tác & Mã QR In nhãn -->
+                    <div class="pt-2 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <img src="${qrUrl}" class="w-10 h-10 rounded-lg bg-white p-0.5 border border-gray-600">
+                            <span class="text-[10px] text-gray-400">Quét QR tra cứu hành trình trực tiếp</span>
+                        </div>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            ${wb.statusIndex < 5 ? `
+                                <button onclick="advanceWaybillStage('${wb.id}')" class="flex-1 sm:flex-none px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow flex items-center justify-center gap-1">
+                                    <i data-lucide="step-forward" class="w-3.5 h-3.5"></i> Chuyển Mốc Kế Tiếp
+                                </button>
+                            ` : `
+                                <span class="text-xs font-bold text-emerald-400">✓ Đã Giao Hoàn Tất</span>
+                            `}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function openCreateWaybillModal() { document.getElementById('createWaybillModal').classList.remove('hidden'); }
+        function closeCreateWaybillModal() { document.getElementById('createWaybillModal').classList.add('hidden'); }
+
+        function handleWaybillImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                waybillPhotoBase64 = e.target.result;
+                const prev = document.getElementById('wbImagePreview');
+                prev.src = waybillPhotoBase64;
+                prev.classList.remove('hidden');
+                document.getElementById('wbImageStatus').textContent = "Đã chọn ảnh kiện hàng ✓";
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function submitNewWaybill() {
+            const senderName = document.getElementById('wbSenderName').value.trim();
+            const senderPhone = document.getElementById('wbSenderPhone').value.trim();
+            const senderProvince = document.getElementById('wbSenderProvince').value;
+            const receiverName = document.getElementById('wbReceiverName').value.trim();
+            const receiverPhone = document.getElementById('wbReceiverPhone').value.trim();
+            const receiverProvince = document.getElementById('wbReceiverProvince').value;
+            const cargoType = document.getElementById('wbCargoType').value;
+            const weight = parseFloat(document.getElementById('wbWeight').value) || 1;
+            const codAmount = parseInt(document.getElementById('wbCodAmount').value) || 0;
+
+            if (!senderName || !senderPhone || !receiverName || !receiverPhone) {
+                alert("Vui lòng điền đầy đủ họ tên và SĐT của cả người gửi và người nhận!");
+                return;
+            }
+
+            const newId = `VN-LOG-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+            const newWaybill = {
+                id: newId,
+                createdAt: new Date().toLocaleString('vi-VN'),
+                sender: { name: senderName, phone: senderPhone, province: senderProvince },
+                receiver: { name: receiverName, phone: receiverPhone, province: receiverProvince },
+                cargoType,
+                weight,
+                codAmount,
+                statusIndex: 0, // Bắt đầu ở "Đã gom hàng"
+                photo: waybillPhotoBase64
+            };
+
+            waybills.unshift(newWaybill);
+            localStorage.setItem('p2p_waybills', JSON.stringify(waybills));
+
+            // Bắn tin nhắn qua Telegram & Zalo Bot
+            sendWaybillNotification(newWaybill, "TAO_VAN_DON_MOI");
+
+            alert(`Phát hành vận đơn ${newId} thành công!`);
+            closeCreateWaybillModal();
+            renderWaybillsList();
+            updateKpiCounts();
+        }
+
+        function advanceWaybillStage(waybillId) {
+            const wb = waybills.find(w => w.id === waybillId);
+            if (!wb || wb.statusIndex >= 5) return;
+
+            wb.statusIndex++;
+            localStorage.setItem('p2p_waybills', JSON.stringify(waybills));
+
+            // Tự động gửi thông báo tiến độ về Telegram và Zalo Bot
+            sendWaybillNotification(wb, LOGISTICS_STAGES[wb.statusIndex]);
+
+            renderWaybillsList();
+        }
+
+        // Tự động bắn thông báo Vận đơn tới Telegram & Zalo Bot
+        async function sendWaybillNotification(wb, stageTitle) {
+            const timeStr = new Date().toLocaleString('vi-VN');
+
+            // 1. Gửi Telegram Bot
+            const teleMsg = `
+📦 <b>[CẬP NHẬT VẬN ĐƠN LIÊN TỈNH]</b>
+🆔 <b>Mã bưu kiện:</b> <code>${wb.id}</code>
+⏱ <b>Mốc thời gian:</b> ${timeStr}
+🚀 <b>Trạng thái mới:</b> <b>${stageTitle}</b>
+----------------------------
+👤 <b>Người gửi:</b> ${wb.sender.name} (${wb.sender.phone}) - ${wb.sender.province}
+🏁 <b>Người nhận:</b> ${wb.receiver.name} (${wb.receiver.phone}) - ${wb.receiver.province}
+⚖ <b>Trọng lượng:</b> ${wb.weight} kg (${wb.cargoType})
+💵 <b>Thu hộ COD:</b> ${wb.codAmount.toLocaleString('vi-VN')} VNĐ
+            `.trim();
+
+            try {
+                fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: teleMsg, parse_mode: 'HTML' })
+                }).catch(err => console.warn('Lỗi Telegram:', err));
+            } catch(e){}
+
+            // 2. Gửi Zalo Bot
+            try {
+                const zaloText = `[VẬN ĐƠN LIÊN TỈNH] Mã: ${wb.id}\n` +
+                                 `Trạng thái: ${stageTitle}\n` +
+                                 `Tuyến: ${wb.sender.province} ➔ ${wb.receiver.province}\n` +
+                                 `Người nhận: ${wb.receiver.name} (${wb.receiver.phone})\n` +
+                                 `COD: ${wb.codAmount.toLocaleString('vi-VN')} VND`;
+
+                fetch('https://bot.openapi.zalo.me/v1/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'token': ZALO_BOT_TOKEN },
+                    body: JSON.stringify({ recipient: { user_id: wb.receiver.phone }, message: { text: zaloText } })
+                }).catch(err => console.warn('Lỗi Zalo Bot:', err));
+            } catch(e){}
+        }
+
+        // Xuất File Excel Vận đơn
+        function exportWaybillsToExcel() {
+            if (waybills.length === 0) { alert("Chưa có vận đơn để xuất!"); return; }
+            const exportData = waybills.map((w, idx) => ({
+                STT: idx + 1,
+                MaVanDon: w.id,
+                NgayTao: w.createdAt,
+                NguoiGui: `${w.sender.name} (${w.sender.phone})`,
+                TinhDi: w.sender.province,
+                NguoiNhan: `${w.receiver.name} (${w.receiver.phone})`,
+                TinhDen: w.receiver.province,
+                LoaiHang: w.cargoType,
+                KhoiLuongKg: w.weight,
+                ThuHoCodVND: w.codAmount,
+                TrangThai: LOGISTICS_STAGES[w.statusIndex]
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "VanDonLienTinh");
+            XLSX.writeFile(wb, `P2P_VanDonLienTinh_${Date.now()}.xlsx`);
+        }
+    </script>
+</body>
+</html>
