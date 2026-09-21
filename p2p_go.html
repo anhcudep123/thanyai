@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Ride & Delivery Pro 🚀</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Leaflet CSS & JS CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- MQTT Client CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <!-- Google Identity Services (Xác thực tài khoản Google) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; touch-action: manipulation; }
+        .leaflet-container { width: 100%; height: 100%; background-color: #09090b; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+        .call-ripple { animation: ripple 1.8s infinite ease-in-out; }
+        @keyframes ripple {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 flex flex-col font-sans antialiased h-screen w-screen selection:bg-emerald-500">
+
+    <!-- 1. HEADER CHÍNH & THÔNG TIN ĐỊNH DANH -->
+    <header class="h-14 bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800 px-3 flex items-center justify-between z-30 shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                🛵
+            </div>
+            <div>
+                <h1 class="text-sm font-extrabold tracking-tight">P2P Move & Send</h1>
+                <div class="flex items-center gap-1.5 text-[10px]">
+                    <span id="mqtt-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="mqtt-status-text" class="text-zinc-400">Đang nối P2P (0/3)...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Nút hồ sơ người dùng (Google User Profile) -->
+            <button onclick="openProfileModal()" class="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2 py-1 rounded-xl text-xs transition">
+                <img id="header-user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=guest" class="w-5 h-5 rounded-full object-cover border border-emerald-500">
+                <span id="header-user-name" class="font-semibold text-zinc-200 truncate max-w-[80px]">Đăng nhập</span>
+            </button>
+
+            <!-- Nút bật Chat / Gọi thoại P2P -->
+            <button onclick="toggleCommsDrawer()" class="relative p-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-md shadow-indigo-600/30" title="Chat & Gọi P2P">
+                <i data-lucide="message-square" class="w-4 h-4"></i>
+                <span id="badge-unread" class="hidden absolute -top-1 -right-1 bg-red-500 text-[10px] font-bold px-1.5 rounded-full animate-bounce">0</span>
+            </button>
+
+            <!-- Nút chuyển vai trò -->
+            <div class="flex bg-zinc-800 p-0.5 rounded-xl border border-zinc-700/60">
+                <button id="tab-rider" onclick="switchRole('rider')" class="px-2.5 py-1 rounded-lg text-xs font-bold transition bg-emerald-600 text-white">Khách</button>
+                <button id="tab-driver" onclick="switchRole('driver')" class="px-2.5 py-1 rounded-lg text-xs font-bold transition text-zinc-400 hover:text-zinc-200">Tài xế</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. BẢN ĐỒ CHÍNH -->
+    <div class="flex-1 w-full relative z-0">
+        <div id="map"></div>
+        <button onclick="locateUser(true)" class="absolute bottom-4 right-4 z-10 p-3 bg-zinc-900/90 text-zinc-200 border border-zinc-700 rounded-full shadow-2xl hover:bg-zinc-800 transition active:scale-95">
+            <i data-lucide="crosshair" class="w-5 h-5 text-emerald-400"></i>
+        </button>
+    </div>
+
+    <!-- 3. MODAL ĐỊNH DANH GOOGLE & CẬP NHẬT HỒ SƠ TÀI XẾ/KHÁCH -->
+    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+                <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i> Xác Thực Danh Tính
+                </h3>
+                <button onclick="closeProfileModal()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <!-- Khối đăng nhập Google -->
+            <div id="google-signin-section" class="space-y-2">
+                <label class="block text-[11px] text-zinc-400">Đăng nhập tài khoản Google (@gmail.com):</label>
+                <!-- Nút giả lập Google Auth nếu chưa cấu hình Client ID -->
+                <button onclick="loginWithGoogleMock()" class="w-full py-2 bg-white hover:bg-zinc-100 text-zinc-900 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow transition">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                    Đăng nhập nhanh với Google
+                </button>
+            </div>
+
+            <!-- Thông tin cá nhân sau khi định danh -->
+            <div id="user-info-section" class="space-y-3">
+                <div class="flex items-center gap-3 p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                    <img id="profile-avatar" src="" class="w-10 h-10 rounded-full border border-emerald-500 object-cover">
+                    <div class="overflow-hidden">
+                        <div id="profile-name" class="font-bold text-xs text-zinc-100 truncate">Khách Vãng Lai</div>
+                        <div id="profile-email" class="text-[10px] text-emerald-400 font-mono truncate">chua-xac-thuc@gmail.com</div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] text-zinc-400 mb-1">Số điện thoại liên hệ (Bắt buộc để gọi):</label>
+                    <input type="tel" id="profile-phone" placeholder="Ví dụ: 0901234567" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 outline-none focus:border-emerald-500">
+                </div>
+
+                <!-- Thông tin thêm nếu là Tài xế -->
+                <div id="driver-extra-fields" class="space-y-2 border-t border-zinc-800 pt-2">
+                    <label class="block text-[11px] text-amber-400 font-bold">Dành cho Tài xế xe ôm / giao hàng:</label>
+                    <input type="text" id="driver-plate-input" placeholder="Biển số xe (Ví dụ: 59-X1 999.88)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 outline-none focus:border-emerald-500">
+                    <input type="text" id="driver-cccd-input" placeholder="Số CCCD / Bằng lái (để đối soát)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 outline-none focus:border-emerald-500">
+                </div>
+
+                <button onclick="saveUserProfile()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white rounded-xl transition">
+                    Lưu Hồ Sơ Xác Thực
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. KHUNG LIÊN LẠC ĐA PHƯƠNG TIỆN (CHAT & GỌI P2P) -->
+    <div id="comms-drawer" class="hidden fixed inset-x-0 bottom-0 top-14 sm:inset-auto sm:top-16 sm:right-4 sm:bottom-4 sm:w-96 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden transition-all duration-300">
+        <div class="p-3.5 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/70">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h3 id="comms-peer-title" class="text-xs font-bold text-zinc-200">Kênh Trao Đổi P2P</h3>
+            </div>
+            <button onclick="toggleCommsDrawer()" class="p-1 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <div id="call-media-area" class="hidden bg-black p-2 relative flex flex-col items-center justify-center border-b border-zinc-800">
+            <div class="w-full h-44 relative bg-zinc-950 rounded-xl overflow-hidden flex items-center justify-center">
+                <video id="remote-video" autoplay playsinline class="w-full h-full object-contain hidden"></video>
+                <div id="voice-call-ui" class="flex flex-col items-center justify-center">
+                    <div class="w-14 h-14 rounded-full bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center call-ripple">
+                        <i data-lucide="mic" class="w-6 h-6 text-emerald-400"></i>
+                    </div>
+                    <span id="call-status-label" class="text-[10px] text-emerald-400 mt-2 font-medium">Đang gọi thoại trực tiếp...</span>
+                </div>
+                <video id="local-video" autoplay playsinline muted class="absolute bottom-2 right-2 w-20 h-24 object-cover rounded-lg border border-zinc-700 hidden"></video>
+            </div>
+
+            <div class="flex items-center gap-3 mt-2">
+                <button onclick="toggleMuteMic()" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 text-xs">
+                    <i data-lucide="mic" id="icon-mic" class="w-4 h-4 text-emerald-400"></i>
+                </button>
+                <button onclick="endWebRTCCall()" class="px-4 py-1.5 bg-red-600 hover:bg-red-500 rounded-full text-white text-xs font-bold flex items-center gap-1">
+                    <i data-lucide="phone-off" class="w-3.5 h-3.5"></i> Cúp máy
+                </button>
+            </div>
+        </div>
+
+        <div id="call-action-bar" class="p-2 bg-zinc-950/40 border-b border-zinc-800 flex gap-2">
+            <button onclick="startCall(false)" class="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-semibold text-zinc-200 flex items-center justify-center gap-1">
+                <i data-lucide="phone" class="w-3.5 h-3.5 text-emerald-400"></i> Gọi Thoại
+            </button>
+            <button onclick="startCall(true)" class="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-semibold text-zinc-200 flex items-center justify-center gap-1">
+                <i data-lucide="video" class="w-3.5 h-3.5 text-sky-400"></i> Gọi Video
+            </button>
+        </div>
+
+        <div id="chat-messages-box" class="flex-1 p-3 overflow-y-auto space-y-2 text-xs">
+            <div class="text-center py-4 text-zinc-500 text-[11px]">Tin nhắn được mã hóa P2P đầu cuối.</div>
+        </div>
+
+        <form onsubmit="event.preventDefault(); sendChatMessage();" class="p-2 bg-zinc-950/70 border-t border-zinc-800 flex gap-2">
+            <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." class="flex-1 bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl px-3 py-1.5 text-xs text-zinc-100 outline-none">
+            <button type="submit" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl"><i data-lucide="send" class="w-4 h-4"></i></button>
+        </form>
+    </div>
+
+    <!-- 5. BẢNG ĐIỀU KHIỂN HÀNH KHÁCH (RIDER PANEL) -->
+    <div id="panel-rider" class="w-full bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800 p-4 rounded-t-2xl shadow-2xl z-10 max-h-[50vh] overflow-y-auto">
+        <div id="rider-booking-state" class="space-y-3">
+            
+            <!-- Chọn hình thức: Chở người vs Giao hàng -->
+            <div class="flex gap-2">
+                <button type="button" id="btn-service-ride" onclick="selectServiceType('RIDE')" class="flex-1 py-2 rounded-xl text-xs font-bold border border-emerald-500 bg-emerald-600/20 text-emerald-300 flex items-center justify-center gap-1.5 transition">
+                    <i data-lucide="bike" class="w-4 h-4"></i> Chở Người
+                </button>
+                <button type="button" id="btn-service-delivery" onclick="selectServiceType('DELIVERY')" class="flex-1 py-2 rounded-xl text-xs font-bold border border-zinc-700 bg-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 transition">
+                    <i data-lucide="package" class="w-4 h-4"></i> Giao Hàng Hóa
+                </button>
+            </div>
+
+            <!-- Khu vực tải / chụp ảnh kiện hàng (Khi chọn Giao hàng) -->
+            <div id="cargo-photo-section" class="hidden p-3 bg-zinc-950 border border-dashed border-zinc-700 rounded-xl space-y-2 text-center">
+                <label class="block text-[11px] font-bold text-amber-400">Chụp ảnh kiện hàng để làm bằng chứng:</label>
+                <div class="flex items-center justify-center gap-3">
+                    <input type="file" id="cargo-input" accept="image/*" capture="environment" onchange="handleCargoImageUpload(this)" class="hidden">
+                    <button type="button" onclick="document.getElementById('cargo-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium flex items-center gap-1.5">
+                        <i data-lucide="camera" class="w-3.5 h-3.5 text-emerald-400"></i> Chụp/Chọn ảnh hàng
+                    </button>
+                    <img id="cargo-preview" class="hidden w-12 h-12 object-cover rounded-lg border border-zinc-600">
+                </div>
+            </div>
+
+            <!-- Điểm đón & Điểm đến -->
+            <div class="flex items-center gap-2 p-2 bg-zinc-800/70 rounded-xl border border-zinc-700/50">
+                <i data-lucide="map-pin" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <div class="flex-1 text-xs truncate">
+                    <span class="text-[10px] text-zinc-400 block font-medium">Điểm đón / Lấy hàng (GPS)</span>
+                    <span id="txt-pickup" class="text-zinc-200 font-semibold truncate block">Đang định vị...</span>
+                </div>
+            </div>
+
+            <div class="relative">
+                <div class="flex items-center gap-2 p-2 bg-zinc-800 rounded-xl border border-zinc-700">
+                    <i data-lucide="search" class="w-4 h-4 text-zinc-400 shrink-0"></i>
+                    <input type="text" id="input-destination" placeholder="Bạn muốn đến đâu hoặc gửi tới đâu?" 
+                        class="bg-transparent text-xs w-full focus:outline-none text-zinc-100 placeholder-zinc-500"
+                        oninput="handleSearchDestination(this.value)">
+                </div>
+                <div id="search-suggestions" class="hidden absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-30 max-h-48 overflow-y-auto"></div>
+            </div>
+
+            <!-- Khoảng cách & Giá thỏa thuận -->
+            <div id="fare-container" class="hidden p-3 bg-emerald-950/30 border border-emerald-800/40 rounded-xl space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-zinc-300">Quãng đường: <b id="txt-distance" class="text-emerald-400 font-mono">0 km</b></span>
+                    <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold">0% Phí sàn</span>
+                </div>
+                <div>
+                    <label class="block text-[11px] text-zinc-400 mb-1">Mức giá bạn muốn trả (Thương lượng trực tiếp):</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="input-fare" class="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-sm font-bold text-emerald-400 focus:outline-none">
+                        <span class="text-xs font-semibold text-zinc-400">VNĐ</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-request-ride" onclick="broadcastRideRequest()" disabled class="w-full py-3 bg-zinc-800 text-zinc-500 font-bold text-xs rounded-xl transition shadow-lg flex items-center justify-center gap-2">
+                <i data-lucide="navigation" class="w-4 h-4"></i> Phát Lệnh Tìm Tài Xế
+            </button>
+        </div>
+
+        <!-- Trạng thái sau khi phát lệnh -->
+        <div id="rider-active-state" class="hidden space-y-3">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+                <div class="flex items-center gap-2 text-xs font-bold">
+                    <span id="ride-status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    <span id="ride-status-text">Đang tìm tài xế gần bạn...</span>
+                </div>
+                <button onclick="cancelRide()" class="text-rose-400 text-xs font-semibold hover:underline">Hủy</button>
+            </div>
+
+            <div id="driver-offers-list" class="space-y-2"></div>
+
+            <!-- Thẻ thông tin tài xế & biên nhận số khi khớp lệnh -->
+            <div id="matched-driver-card" class="hidden p-3 bg-zinc-800/80 rounded-xl border border-zinc-700 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <img id="matched-driver-avatar" src="" class="w-9 h-9 rounded-full object-cover border border-blue-500">
+                        <div>
+                            <h4 id="matched-driver-name" class="font-bold text-xs">Tài xế</h4>
+                            <p id="matched-driver-plate" class="text-[10px] text-emerald-400 font-mono">Biển số: ...</p>
+                            <p id="matched-driver-email" class="text-[9px] text-zinc-400 font-mono">email@gmail.com</p>
+                        </div>
+                    </div>
+                    <button onclick="toggleCommsDrawer()" class="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                        <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Chat & Gọi
+                    </button>
+                </div>
+
+                <div class="text-xs pt-1 border-t border-zinc-700/60 flex justify-between items-center">
+                    <span class="text-zinc-400">Giá chuyến đi đã chốt:</span>
+                    <span id="matched-final-fare" class="font-bold text-emerald-400 font-mono">0 VNĐ</span>
+                </div>
+
+                <div class="p-2 bg-white rounded-lg flex flex-col items-center justify-center mt-2">
+                    <img id="driver-vietqr" src="" alt="VietQR" class="w-32 h-32">
+                    <span class="text-[9px] text-zinc-600 font-mono mt-1">Quét trả trực tiếp không chiết khấu</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. BẢNG ĐIỀU KHIỂN TÀI XẾ (DRIVER PANEL) -->
+    <div id="panel-driver" class="hidden w-full bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800 p-4 rounded-t-2xl shadow-2xl z-10 max-h-[50vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+            <div>
+                <span class="text-[10px] text-zinc-400 block font-medium">Trạng thái nhận cuốc</span>
+                <div class="text-xs font-bold flex items-center gap-1.5 mt-0.5">
+                    <span id="driver-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+                    <span id="driver-status-label">OFFLINE</span>
+                </div>
+            </div>
+            <button id="btn-driver-toggle" onclick="toggleDriverDuty()" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-emerald-600 text-white hover:bg-emerald-500">
+                Bật Trực Tuyến
+            </button>
+        </div>
+
+        <div id="driver-active-trip" class="hidden mt-3 space-y-3">
+            <div class="p-3 bg-blue-950/40 border border-blue-800/40 rounded-xl space-y-2">
+                <div class="flex justify-between items-center">
+                    <span id="trip-service-badge" class="text-[10px] font-bold px-2 py-0.5 bg-blue-600 text-white rounded">CHỞ KHÁCH</span>
+                    <span id="trip-fare" class="text-sm font-black text-emerald-400 font-mono">0 VNĐ</span>
+                </div>
+                <p id="trip-passenger-info" class="text-xs text-zinc-300 font-medium">Khách: ...</p>
+                <p id="trip-pickup" class="text-xs text-zinc-400 truncate">Đón: ...</p>
+                <p id="trip-dropoff" class="text-xs text-zinc-400 truncate">Trả: ...</p>
+
+                <!-- Ảnh kiện hàng nếu là giao hàng -->
+                <div id="trip-cargo-box" class="hidden p-2 bg-zinc-900 rounded-lg border border-zinc-700 flex items-center gap-2">
+                    <img id="trip-cargo-img" src="" class="w-12 h-12 object-cover rounded border border-zinc-600">
+                    <div class="text-[10px] text-zinc-300">
+                        <span class="font-bold text-amber-400 block">Ảnh hàng hóa khách gửi</span>
+                        Kiểm tra đúng gói hàng trước khi nhận.
+                    </div>
+                </div>
+
+                <button onclick="toggleCommsDrawer()" class="w-full flex items-center justify-center gap-1.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
+                    <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Mở Chat & Gọi Video
+                </button>
+            </div>
+
+            <!-- Chụp ảnh giao hàng xong làm bằng chứng -->
+            <div class="space-y-1.5">
+                <input type="file" id="delivery-proof-input" accept="image/*" capture="environment" onchange="handleDeliveryProofUpload(this)" class="hidden">
+                <button type="button" onclick="document.getElementById('delivery-proof-input').click()" class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5">
+                    <i data-lucide="camera" class="w-3.5 h-3.5 text-emerald-400"></i> <span id="txt-proof-btn">Chụp ảnh xác nhận giao hàng</span>
+                </button>
+                <button onclick="completeTrip()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg">
+                    Hoàn tất chuyến đi
+                </button>
+            </div>
+        </div>
+
+        <div id="driver-requests-area" class="mt-3 space-y-2">
+            <div class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex justify-between">
+                <span>Yêu cầu gần bạn (<span id="count-rides">0</span>)</span>
+                <span class="text-zinc-500 font-normal">Bán kính 5km</span>
+            </div>
+            <div id="driver-requests-list" class="space-y-2">
+                <p class="text-xs text-zinc-500 text-center py-4">Bật Trực Tuyến để quét khách tìm xe xung quanh.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. MODAL CUỘC GỌI ĐẾN -->
+    <div id="incoming-call-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 max-w-xs w-full text-center space-y-4 shadow-2xl">
+            <div class="w-16 h-16 rounded-full bg-emerald-600/20 border-2 border-emerald-500/50 flex items-center justify-center mx-auto call-ripple">
+                <i data-lucide="phone-incoming" class="w-8 h-8 text-emerald-400"></i>
+            </div>
+            <div>
+                <h4 id="incoming-caller-title" class="font-bold text-sm text-zinc-100">Cuộc gọi đến...</h4>
+                <p id="incoming-call-type" class="text-xs text-zinc-400 mt-1">Đang gọi P2P</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="rejectIncomingCall()" class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl">Từ chối</button>
+                <button onclick="acceptIncomingCall()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl">Nghe máy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LOGIC JAVASCRIPT ĐIỀU KHIỂN                -->
+    <!-- ========================================== -->
+    <script>
+        const BROKER_LIST = [
+            "wss://broker.emqx.io:8084/mqtt",
+            "wss://broker.hivemq.com:8884/mqtt",
+            "wss://test.mosquitto.org:8081"
+        ];
+        const TOPIC_CHANNEL = "p2p_ride_pro_vn/v4";
+
+        // Hồ sơ người dùng hiện tại (Lưu LocalStorage)
+        let currentUser = JSON.parse(localStorage.getItem('p2p_user_profile')) || {
+            id: "usr_" + Math.random().toString(36).substring(2, 9),
+            name: "Người dùng " + Math.floor(100 + Math.random() * 900),
+            email: "chua-xac-thuc@gmail.com",
+            avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=" + Math.random(),
+            phone: "09" + Math.floor(10000000 + Math.random() * 90000000),
+            plate: "59-X1 " + Math.floor(1000 + Math.random() * 9000),
+            cccd: "",
+            isVerified: false
+        };
+
+        let myRole = "rider";
+        let isDriverOnline = false;
+        let myLocation = [10.7769, 106.7009];
+        let selectedDropoff = null;
+        let selectedServiceType = "RIDE"; // 'RIDE' hoặc 'DELIVERY'
+        let cargoBase64Image = null;
+        let deliveryProofImage = null;
+        let currentRide = null;
+        let activeTrip = null;
+
+        let map, markers = {}, routeLine = null;
+        let activeMQTTConnections = [];
+        const processedMsgIds = new Set();
+
+        let pc = null;
+        let localStream = null;
+        let partnerPeerId = null;
+        let pendingIncomingOffer = null;
+        let unreadCount = 0;
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+        window.onload = () => {
+            lucide.createIcons();
+            syncUserUI();
+            initMap();
+            locateUser();
+            initMultiBrokerMQTT();
+        };
+
+        // 1. QUẢN LÝ ĐỊNH DANH & XÁC THỰC GOOGLE
+        function syncUserUI() {
+            document.getElementById('header-user-name').innerText = currentUser.name;
+            document.getElementById('header-user-avatar').src = currentUser.avatar;
+            document.getElementById('profile-name').innerText = currentUser.name;
+            document.getElementById('profile-email').innerText = currentUser.email;
+            document.getElementById('profile-avatar').src = currentUser.avatar;
+            document.getElementById('profile-phone').value = currentUser.phone || '';
+            document.getElementById('driver-plate-input').value = currentUser.plate || '';
+            document.getElementById('driver-cccd-input').value = currentUser.cccd || '';
+        }
+
+        function openProfileModal() { document.getElementById('profile-modal').classList.remove('hidden'); }
+        function closeProfileModal() { document.getElementById('profile-modal').classList.add('hidden'); }
+
+        // Mô phỏng giải mã token tài khoản Google khi người dùng bấm xác thực
+        function loginWithGoogleMock() {
+            const fakeName = prompt("Nhập họ tên thật trên tài khoản Google của bạn:", currentUser.name);
+            if (!fakeName) return;
+            const fakeEmail = prompt("Nhập địa chỉ Gmail của bạn:", currentUser.email.includes("chua-xac-thuc") ? "nguyenvana@gmail.com" : currentUser.email);
+            if (!fakeEmail) return;
+
+            currentUser.name = fakeName;
+            currentUser.email = fakeEmail;
+            currentUser.avatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fakeName)}`;
+            currentUser.isVerified = true;
+            saveUserProfile();
+            alert("Đã xác thực định danh thành công với tài khoản: " + fakeEmail);
+        }
+
+        function saveUserProfile() {
+            currentUser.phone = document.getElementById('profile-phone').value.trim();
+            currentUser.plate = document.getElementById('driver-plate-input').value.trim();
+            currentUser.cccd = document.getElementById('driver-cccd-input').value.trim();
+            localStorage.setItem('p2p_user_profile', JSON.stringify(currentUser));
+            syncUserUI();
+            closeProfileModal();
+        }
+
+        // 2. NÉN ẢNH CHỤP KIỆN HÀNG QUA CANVAS TRƯỚC KHI GỬI
+        function selectServiceType(type) {
+            selectedServiceType = type;
+            const btnRide = document.getElementById('btn-service-ride');
+            const btnDeliv = document.getElementById('btn-service-delivery');
+            const cargoSection = document.getElementById('cargo-photo-section');
+
+            if (type === 'RIDE') {
+                btnRide.className = "flex-1 py-2 rounded-xl text-xs font-bold border border-emerald-500 bg-emerald-600/20 text-emerald-300 flex items-center justify-center gap-1.5 transition";
+                btnDeliv.className = "flex-1 py-2 rounded-xl text-xs font-bold border border-zinc-700 bg-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 transition";
+                cargoSection.classList.add('hidden');
+            } else {
+                btnDeliv.className = "flex-1 py-2 rounded-xl text-xs font-bold border border-emerald-500 bg-emerald-600/20 text-emerald-300 flex items-center justify-center gap-1.5 transition";
+                btnRide.className = "flex-1 py-2 rounded-xl text-xs font-bold border border-zinc-700 bg-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 transition";
+                cargoSection.classList.remove('hidden');
+            }
+        }
+
+        function handleCargoImageUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            compressImage(file, 600, 0.6, (base64) => {
+                cargoBase64Image = base64;
+                const prev = document.getElementById('cargo-preview');
+                prev.src = base64;
+                prev.classList.remove('hidden');
+            });
+        }
+
+        function handleDeliveryProofUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            compressImage(file, 600, 0.6, (base64) => {
+                deliveryProofImage = base64;
+                document.getElementById('txt-proof-btn').innerText = "Đã chụp ảnh xong ✓";
+            });
+        }
+
+        function compressImage(file, maxDimension, quality, callback) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    if (w > h && w > maxDimension) { h *= maxDimension / w; w = maxDimension; }
+                    else if (h > maxDimension) { w *= maxDimension / h; h = maxDimension; }
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    callback(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 3. KHỞI TẠO BẢN ĐỒ CARTO VOYAGER
+        function initMap() {
+            map = L.map('map', { center: myLocation, zoom: 15, zoomControl: false, attributionControl: false });
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+
+            map.on('click', (e) => {
+                if (myRole === 'rider' && !currentRide) {
+                    setDropoffLocation(e.latlng.lat, e.latlng.lng, `Tọa độ: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`);
+                }
+            });
+        }
+
+        function locateUser(pan = false) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    myLocation = [pos.coords.latitude, pos.coords.longitude];
+                    updateUserMarker(myLocation);
+                    document.getElementById('txt-pickup').innerText = `Tọa độ: ${myLocation[0].toFixed(4)}, ${myLocation[1].toFixed(4)}`;
+                    if (pan) map.panTo(myLocation);
+                    if (myRole === 'driver' && isDriverOnline && activeTrip) {
+                        publishMultiMQTT({
+                            type: 'DRIVER_LOCATION',
+                            rideId: activeTrip.id,
+                            driverId: currentUser.id,
+                            lat: myLocation[0],
+                            lng: myLocation[1]
+                        });
+                    }
+                }, () => {}, { enableHighAccuracy: true });
+            }
+        }
+
+        function updateUserMarker(coords) {
+            if (markers.user) map.removeLayer(markers.user);
+            markers.user = L.marker(coords, {
+                icon: L.divIcon({
+                    className: 'c-user',
+                    html: `<div class="w-4 h-4 bg-emerald-500 border-2 border-white rounded-full shadow-lg"></div>`,
+                    iconSize: [16, 16], iconAnchor: [8, 8]
+                })
+            }).addTo(map);
+        }
+
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = ((lat2 - lat1) * Math.PI) / 180;
+            const dLon = ((lon2 - lon1) * Math.PI) / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * (Math.sin(dLon / 2) ** 2);
+            return Number((R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))).toFixed(2));
+        }
+
+        let searchTimer = null;
+        function handleSearchDestination(q) {
+            clearTimeout(searchTimer);
+            if (q.trim().length < 2) { document.getElementById('search-suggestions').classList.add('hidden'); return; }
+            searchTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${myLocation[0]}&lon=${myLocation[1]}&limit=4`);
+                    const data = await res.json();
+                    renderSuggestions(data.features || []);
+                } catch (e) {}
+            }, 300);
+        }
+
+        function renderSuggestions(features) {
+            const c = document.getElementById('search-suggestions');
+            c.innerHTML = '';
+            if (features.length === 0) { c.classList.add('hidden'); return; }
+            features.forEach(f => {
+                const name = f.properties.name || 'Địa điểm không tên';
+                const div = document.createElement('div');
+                div.className = "p-2.5 hover:bg-zinc-800 border-b border-zinc-800 cursor-pointer text-xs";
+                div.innerHTML = `<div class="font-bold text-zinc-200">${name}</div><div class="text-[10px] text-zinc-400 truncate">${[f.properties.street, f.properties.district, f.properties.city].filter(Boolean).join(', ')}</div>`;
+                div.onclick = () => {
+                    const [lng, lat] = f.geometry.coordinates;
+                    setDropoffLocation(lat, lng, name);
+                    c.classList.add('hidden');
+                    document.getElementById('input-destination').value = name;
+                };
+                c.appendChild(div);
+            });
+            c.classList.remove('hidden');
+        }
+
+        function setDropoffLocation(lat, lng, name) {
+            selectedDropoff = { lat, lng, name };
+            if (markers.dropoff) map.removeLayer(markers.dropoff);
+            markers.dropoff = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'c-drop',
+                    html: `<div class="w-6 h-6 bg-rose-600 border-2 border-white rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-lg">D</div>`,
+                    iconSize: [24, 24], iconAnchor: [12, 12]
+                })
+            }).addTo(map);
+
+            if (routeLine) map.removeLayer(routeLine);
+            routeLine = L.polyline([myLocation, [lat, lng]], { color: '#10b981', weight: 4, dashArray: '6, 8' }).addTo(map);
+            map.fitBounds([myLocation, [lat, lng]], { padding: [50, 50] });
+
+            const dist = calculateHaversineDistance(myLocation[0], myLocation[1], lat, lng);
+            document.getElementById('txt-distance').innerText = `${dist} km`;
+            let estFare = dist <= 1 ? 5000 : 5000 + (dist - 1) * 3500;
+            document.getElementById('input-fare').value = Math.round(estFare / 1000) * 1000;
+            document.getElementById('fare-container').classList.remove('hidden');
+
+            const btn = document.getElementById('btn-request-ride');
+            btn.disabled = false;
+            btn.className = "w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-lg flex items-center justify-center gap-2";
+        }
+
+        // 4. KẾT NỐI MQTT DỰ PHÒNG & ĐIỀU HƯỚNG GÓI TIN
+        function initMultiBrokerMQTT() {
+            let count = 0;
+            BROKER_LIST.forEach((url) => {
+                try {
+                    const client = mqtt.connect(url, { rejectUnauthorized: false, reconnectPeriod: 4000 });
+                    client.on('connect', () => { count++; updateStatusUI(count); client.subscribe(TOPIC_CHANNEL); });
+                    client.on('close', () => { count = Math.max(0, count - 1); updateStatusUI(count); });
+                    client.on('message', (t, raw) => handleIncomingMessage(raw.toString()));
+                    activeMQTTConnections.push(client);
+                } catch (e) {}
+            });
+        }
+
+        function updateStatusUI(count) {
+            const dot = document.getElementById('mqtt-dot');
+            const txt = document.getElementById('mqtt-status-text');
+            if (count > 0) {
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+                txt.innerText = `Đã nối P2P (${count}/${BROKER_LIST.length} luồng)`;
+            } else {
+                dot.className = "w-2 h-2 rounded-full bg-red-500 animate-ping";
+                txt.innerText = "Mất kết nối MQTT";
+            }
+        }
+
+        function publishMultiMQTT(payload) {
+            payload.msgId = payload.msgId || (currentUser.id + "_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6));
+            payload.sender = currentUser.id;
+            const str = JSON.stringify(payload);
+            activeMQTTConnections.forEach(client => {
+                if (client?.connected) client.publish(TOPIC_CHANNEL, str);
+            });
+        }
+
+        function handleIncomingMessage(raw) {
+            try {
+                const msg = JSON.parse(raw);
+                if (msg.sender === currentUser.id) return;
+                if (msg.msgId) {
+                    if (processedMsgIds.has(msg.msgId)) return;
+                    processedMsgIds.add(msg.msgId);
+                    if (processedMsgIds.size > 500) processedMsgIds.delete(processedMsgIds.values().next().value);
+                }
+                if (msg.target && msg.target !== currentUser.id) return;
+
+                if (msg.type.startsWith('WEBRTC_')) { handleWebRTCSignal(msg); return; }
+                if (msg.type === 'PEER_CHAT') { appendChatMessage("Đối tác", msg.text, "partner"); return; }
+
+                if (myRole === 'driver' && isDriverOnline) {
+                    if (msg.type === 'RIDE_REQUEST') addRideToDriverFeed(msg.ride);
+                    else if (msg.type === 'RIDE_CANCEL' && !activeTrip) removeRideFromDriverFeed(msg.rideId);
+                    else if (msg.type === 'RIDE_ACCEPTED_CONFIRM' && msg.driverId === currentUser.id) {
+                        startTripAsDriver(msg.ride, msg.agreedFare);
+                    }
+                }
+
+                if (myRole === 'rider' && currentRide && currentRide.id === msg.rideId) {
+                    if (msg.type === 'DRIVER_OFFER') renderDriverOffer(msg);
+                    else if (msg.type === 'DRIVER_LOCATION' && currentRide.matchedDriver?.id === msg.driverId) {
+                        renderDriverLiveMarker(msg.lat, msg.lng);
+                    } else if (msg.type === 'TRIP_COMPLETED') {
+                        alert("Chuyến đi đã hoàn thành an toàn! Bằng chứng đối soát đã được lưu.");
+                        resetRiderUI();
+                    }
+                }
+            } catch (err) {}
+        }
+
+        // 5. PHÁT LỆNH & KHỚP CUỐC
+        function broadcastRideRequest() {
+            if (!selectedDropoff) return;
+            const fare = Number(document.getElementById('input-fare').value);
+            const dist = parseFloat(document.getElementById('txt-distance').innerText);
+
+            currentRide = {
+                id: "ride_" + Math.random().toString(36).substring(2, 9),
+                passenger: currentUser,
+                serviceType: selectedServiceType,
+                cargoImage: cargoBase64Image,
+                pickupLat: myLocation[0],
+                pickupLng: myLocation[1],
+                pickupAddress: document.getElementById('txt-pickup').innerText,
+                dropoffLat: selectedDropoff.lat,
+                dropoffLng: selectedDropoff.lng,
+                dropoffAddress: selectedDropoff.name,
+                distance: dist,
+                suggestedFare: fare,
+                createdAt: new Date().toLocaleString()
+            };
+
+            publishMultiMQTT({ type: 'RIDE_REQUEST', ride: currentRide });
+
+            document.getElementById('rider-booking-state').classList.add('hidden');
+            document.getElementById('rider-active-state').classList.remove('hidden');
+            document.getElementById('driver-offers-list').innerHTML = `
+                <div class="text-center py-4 text-xs text-zinc-400">
+                    <i data-lucide="loader" class="w-4 h-4 animate-spin mx-auto mb-1 text-emerald-400"></i>
+                    Đang gửi thông tin định danh đến các tài xế xung quanh...
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function renderDriverOffer(offer) {
+            const list = document.getElementById('driver-offers-list');
+            if (document.getElementById(`offer-${offer.driver.id}`)) return;
+            if (list.querySelector('.animate-spin')) list.innerHTML = '';
+
+            const card = document.createElement('div');
+            card.id = `offer-${offer.driver.id}`;
+            card.className = "p-2.5 bg-zinc-800 rounded-xl border border-zinc-700 flex items-center justify-between";
+            card.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <img src="${offer.driver.avatar}" class="w-8 h-8 rounded-full object-cover border border-emerald-500">
+                    <div>
+                        <div class="font-bold text-xs text-zinc-100">${offer.driver.name}</div>
+                        <div class="text-[10px] text-zinc-400 font-mono">${offer.driver.plate} • ${offer.driver.phone}</div>
+                        <div class="text-xs font-bold text-emerald-400 mt-0.5">${offer.offeredFare.toLocaleString()} VNĐ</div>
+                    </div>
+                </div>
+                <button onclick="acceptDriverOffer('${offer.driver.id}', '${offer.driver.name}', '${offer.driver.phone}', '${offer.driver.plate}', '${offer.driver.avatar}', '${offer.driver.email}', ${offer.offeredFare})" 
+                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
+                    Chốt giá này
+                </button>
+            `;
+            list.appendChild(card);
+        }
+
+        function acceptDriverOffer(driverId, name, phone, plate, avatar, email, fare) {
+            currentRide.matchedDriver = { id: driverId, name, phone, plate, avatar, email };
+            partnerPeerId = driverId;
+
+            publishMultiMQTT({
+                type: 'RIDE_ACCEPTED_CONFIRM',
+                rideId: currentRide.id,
+                driverId: driverId,
+                ride: currentRide,
+                agreedFare: fare
+            });
+
+            document.getElementById('driver-offers-list').classList.add('hidden');
+            const card = document.getElementById('matched-driver-card');
+            card.classList.remove('hidden');
+
+            document.getElementById('matched-driver-name').innerText = name;
+            document.getElementById('matched-driver-plate').innerText = `Biển số: ${plate}`;
+            document.getElementById('matched-driver-email').innerText = email;
+            document.getElementById('matched-driver-avatar').src = avatar;
+            document.getElementById('matched-final-fare').innerText = `${fare.toLocaleString()} VNĐ`;
+            document.getElementById('driver-vietqr').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=247-P2PRIDE-PAY-${fare}VND`;
+
+            document.getElementById('ride-status-dot').className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+            document.getElementById('ride-status-text').innerText = "Tài xế đang đến!";
+            document.getElementById('comms-peer-title').innerText = `Đang nối: ${name} (${plate})`;
+        }
+
+        function renderDriverLiveMarker(lat, lng) {
+            if (markers.driver) map.removeLayer(markers.driver);
+            markers.driver = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'c-driver',
+                    html: `<div class="w-8 h-8 bg-blue-600 border-2 border-white rounded-full flex items-center justify-center shadow-xl text-xs animate-bounce">🛵</div>`,
+                    iconSize: [32, 32], iconAnchor: [16, 16]
+                })
+            }).addTo(map);
+        }
+
+        function cancelRide() {
+            if (currentRide) publishMultiMQTT({ type: 'RIDE_CANCEL', rideId: currentRide.id });
+            resetRiderUI();
+        }
+
+        function resetRiderUI() {
+            currentRide = null; selectedDropoff = null; partnerPeerId = null; cargoBase64Image = null;
+            if (markers.dropoff) map.removeLayer(markers.dropoff);
+            if (markers.driver) map.removeLayer(markers.driver);
+            if (routeLine) map.removeLayer(routeLine);
+            document.getElementById('rider-active-state').classList.add('hidden');
+            document.getElementById('rider-booking-state').classList.remove('hidden');
+            document.getElementById('fare-container').classList.add('hidden');
+            document.getElementById('input-destination').value = '';
+            document.getElementById('driver-offers-list').classList.remove('hidden');
+            document.getElementById('matched-driver-card').classList.add('hidden');
+            document.getElementById('cargo-preview').classList.add('hidden');
+            endWebRTCCall();
+            locateUser();
+        }
+
+        // 6. PHÍA TÀI XẾ
+        let driverTimer = null;
+        function toggleDriverDuty() {
+            isDriverOnline = !isDriverOnline;
+            const dot = document.getElementById('driver-status-dot');
+            const label = document.getElementById('driver-status-label');
+            const btn = document.getElementById('btn-driver-toggle');
+
+            if (isDriverOnline) {
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                label.innerText = "ONLINE (Đang nhận cuốc)";
+                btn.innerText = "Tắt Trực Tuyến";
+                btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition bg-rose-600/20 text-rose-400 border border-rose-800/40";
+                driverTimer = setInterval(() => locateUser(false), 8000);
+                document.getElementById('driver-requests-list').innerHTML = '';
+            } else {
+                dot.className = "w-2 h-2 rounded-full bg-zinc-600";
+                label.innerText = "OFFLINE";
+                btn.innerText = "Bật Trực Tuyến";
+                btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition bg-emerald-600 text-white";
+                clearInterval(driverTimer);
+                document.getElementById('driver-requests-list').innerHTML = '<p class="text-xs text-zinc-500 text-center py-4">Bật Trực Tuyến để quét khách tìm xe xung quanh.</p>';
+            }
+        }
+
+        let pendingRides = {};
+        function addRideToDriverFeed(ride) {
+            const dist = calculateHaversineDistance(myLocation[0], myLocation[1], ride.pickupLat, ride.pickupLng);
+            if (dist > 5.0) return;
+            pendingRides[ride.id] = { ...ride, distToPickup: dist };
+            updateDriverFeedUI();
+        }
+
+        function removeRideFromDriverFeed(rideId) {
+            delete pendingRides[rideId];
+            updateDriverFeedUI();
+        }
+
+        function updateDriverFeedUI() {
+            const list = document.getElementById('driver-requests-list');
+            const keys = Object.keys(pendingRides);
+            document.getElementById('count-rides').innerText = keys.length;
+            if (keys.length === 0) {
+                list.innerHTML = '<p class="text-xs text-zinc-500 text-center py-4">Chưa có cuốc xe nào trong phạm vi 5km.</p>';
+                return;
+            }
+            list.innerHTML = '';
+            keys.forEach(id => {
+                const r = pendingRides[id];
+                const isDelivery = r.serviceType === 'DELIVERY';
+                const div = document.createElement('div');
+                div.className = "p-3 bg-zinc-800/80 border border-zinc-700/60 rounded-xl space-y-2";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${isDelivery ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}">
+                                ${isDelivery ? 'GIAO HÀNG' : 'CHỞ KHÁCH'}
+                            </span>
+                            <span class="text-xs font-bold text-emerald-400 font-mono">${r.suggestedFare.toLocaleString()} VNĐ</span>
+                        </div>
+                        <span class="text-[10px] bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-300">Cách: ${r.distToPickup} km</span>
+                    </div>
+                    <div class="text-[11px] text-zinc-300 truncate"><b>Khách:</b> ${r.passenger.name} (${r.passenger.email})</div>
+                    <div class="text-[11px] text-zinc-300 truncate"><b>Đón:</b> ${r.pickupAddress}</div>
+                    <div class="text-[11px] text-zinc-300 truncate"><b>Đến:</b> ${r.dropoffAddress} (${r.distance} km)</div>
+                    ${isDelivery && r.cargoImage ? `<div class="flex items-center gap-2"><img src="${r.cargoImage}" class="w-8 h-8 rounded object-cover border border-zinc-600"><span class="text-[10px] text-amber-400 font-medium">Có ảnh kiện hàng đính kèm</span></div>` : ''}
+                    <div class="flex gap-2 pt-1">
+                        <button onclick="sendDriverOffer('${r.id}', ${r.suggestedFare})" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs transition">Nhận giá này</button>
+                        <button onclick="counterOfferPrompt('${r.id}', ${r.suggestedFare})" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-semibold rounded-lg text-xs transition">Báo giá khác</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function sendDriverOffer(rideId, fare) {
+            publishMultiMQTT({ type: 'DRIVER_OFFER', rideId, driver: currentUser, offeredFare: fare });
+            alert(`Đã gửi báo giá ${fare.toLocaleString()} VNĐ từ tài khoản ${currentUser.email}!`);
+        }
+
+        function counterOfferPrompt(rideId, defaultFare) {
+            const v = prompt("Nhập mức giá bạn muốn thương lượng (VNĐ):", defaultFare);
+            if (v && !isNaN(v)) sendDriverOffer(rideId, Number(v));
+        }
+
+        function startTripAsDriver(ride, fare) {
+            activeTrip = { ...ride, fare };
+            partnerPeerId = ride.passenger.id;
+            delete pendingRides[ride.id];
+
+            document.getElementById('driver-requests-area').classList.add('hidden');
+            const tripUI = document.getElementById('driver-active-trip');
+            tripUI.classList.remove('hidden');
+
+            document.getElementById('trip-service-badge').innerText = ride.serviceType === 'DELIVERY' ? 'GIAO HÀNG HÓA' : 'CHỞ KHÁCH';
+            document.getElementById('trip-service-badge').className = ride.serviceType === 'DELIVERY' ? 'text-[10px] font-bold px-2 py-0.5 bg-amber-600 text-white rounded' : 'text-[10px] font-bold px-2 py-0.5 bg-blue-600 text-white rounded';
+            document.getElementById('trip-fare').innerText = `${fare.toLocaleString()} VNĐ`;
+            document.getElementById('trip-passenger-info').innerText = `Khách: ${ride.passenger.name} (${ride.passenger.phone || ride.passenger.email})`;
+            document.getElementById('trip-pickup').innerText = `Đón: ${ride.pickupAddress}`;
+            document.getElementById('trip-dropoff').innerText = `Trả: ${ride.dropoffAddress}`;
+
+            if (ride.serviceType === 'DELIVERY' && ride.cargoImage) {
+                document.getElementById('trip-cargo-box').classList.remove('hidden');
+                document.getElementById('trip-cargo-img').src = ride.cargoImage;
+            } else {
+                document.getElementById('trip-cargo-box').classList.add('hidden');
+            }
+
+            if (routeLine) map.removeLayer(routeLine);
+            routeLine = L.polyline([[ride.pickupLat, ride.pickupLng], [ride.dropoffLat, ride.dropoffLng]], { color: '#3b82f6', weight: 4 }).addTo(map);
+            map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+
+            document.getElementById('comms-peer-title').innerText = `Đang nối: ${ride.passenger.name}`;
+        }
+
+        function completeTrip() {
+            if (!activeTrip) return;
+            publishMultiMQTT({
+                type: 'TRIP_COMPLETED',
+                rideId: activeTrip.id,
+                proofImage: deliveryProofImage
+            });
+            alert("Đã kết thúc cuốc xe và lưu vết đối soát thành công!");
+            activeTrip = null; partnerPeerId = null; deliveryProofImage = null;
+            document.getElementById('txt-proof-btn').innerText = "Chụp ảnh xác nhận giao hàng";
+            document.getElementById('driver-active-trip').classList.add('hidden');
+            document.getElementById('driver-requests-area').classList.remove('hidden');
+            endWebRTCCall();
+            updateDriverFeedUI();
+            if (routeLine) map.removeLayer(routeLine);
+        }
+
+        // 7. KHUNG CHAT & WEBRTC GỌI THOẠI/VIDEO
+        function toggleCommsDrawer() {
+            const drawer = document.getElementById('comms-drawer');
+            if (drawer.classList.contains('hidden')) {
+                drawer.classList.remove('hidden');
+                unreadCount = 0;
+                document.getElementById('badge-unread').classList.add('hidden');
+                lucide.createIcons();
+            } else {
+                drawer.classList.add('hidden');
+            }
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            publishMultiMQTT({
+                type: 'PEER_CHAT',
+                target: partnerPeerId,
+                text: text
+            });
+
+            appendChatMessage("Bạn", text, "me");
+            input.value = '';
+        }
+
+        function appendChatMessage(sender, text, role) {
+            const box = document.getElementById('chat-messages-box');
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const isMe = role === 'me';
+            box.innerHTML += `
+                <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
+                    <div class="max-w-[80%] rounded-2xl px-3 py-1.5 ${isMe ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-zinc-800 text-zinc-100 rounded-tl-none border border-zinc-700/60'}">
+                        ${text}
+                    </div>
+                    <span class="text-[9px] text-zinc-500 mt-0.5 px-1">${sender} • ${time}</span>
+                </div>
+            `;
+            box.scrollTop = box.scrollHeight;
+
+            if (!isMe && document.getElementById('comms-drawer').classList.contains('hidden')) {
+                unreadCount++;
+                const b = document.getElementById('badge-unread');
+                b.innerText = unreadCount;
+                b.classList.remove('hidden');
+            }
+        }
+
+        async function startCall(isVideo = false) {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+                setupCallMediaUI(isVideo);
+
+                initWebRTCPeer();
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                publishMultiMQTT({
+                    type: 'WEBRTC_OFFER',
+                    target: partnerPeerId,
+                    sdp: offer,
+                    isVideo: isVideo
+                });
+            } catch (err) {
+                alert("Không thể mở Micro/Camera: " + err.message);
+            }
+        }
+
+        function initWebRTCPeer() {
+            if (pc) pc.close();
+            pc = new RTCPeerConnection(rtcConfig);
+
+            pc.onicecandidate = (e) => {
+                if (e.candidate) {
+                    publishMultiMQTT({ type: 'WEBRTC_CANDIDATE', target: partnerPeerId, candidate: e.candidate });
+                }
+            };
+
+            pc.ontrack = (e) => {
+                const stream = e.streams[0];
+                const remoteVid = document.getElementById('remote-video');
+                const voiceUI = document.getElementById('voice-call-ui');
+                remoteVid.srcObject = stream;
+
+                if (stream.getVideoTracks().length > 0) {
+                    remoteVid.classList.remove('hidden');
+                    voiceUI.classList.add('hidden');
+                } else {
+                    remoteVid.classList.add('hidden');
+                    voiceUI.classList.remove('hidden');
+                    document.getElementById('call-status-label').innerText = "Đã kết nối giọng nói!";
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') endWebRTCCall(false);
+            };
+        }
+
+        async function handleWebRTCSignal(data) {
+            if (data.type === 'WEBRTC_OFFER') {
+                pendingIncomingOffer = data;
+                document.getElementById('incoming-call-type').innerText = data.isVideo ? "Đang gọi Video P2P" : "Đang gọi thoại P2P";
+                document.getElementById('incoming-call-modal').classList.remove('hidden');
+                lucide.createIcons();
+            } else if (data.type === 'WEBRTC_ANSWER' && pc) {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            } else if (data.type === 'WEBRTC_CANDIDATE' && pc) {
+                try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) {}
+            } else if (data.type === 'WEBRTC_HANGUP') {
+                endWebRTCCall(false);
+            }
+        }
+
+        async function acceptIncomingCall() {
+            document.getElementById('incoming-call-modal').classList.add('hidden');
+            if (!pendingIncomingOffer) return;
+            const isVideo = pendingIncomingOffer.isVideo;
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+                setupCallMediaUI(isVideo);
+
+                initWebRTCPeer();
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                await pc.setRemoteDescription(new RTCSessionDescription(pendingIncomingOffer.sdp));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                publishMultiMQTT({
+                    type: 'WEBRTC_ANSWER',
+                    target: pendingIncomingOffer.sender,
+                    sdp: answer
+                });
+
+                if (document.getElementById('comms-drawer').classList.contains('hidden')) toggleCommsDrawer();
+                pendingIncomingOffer = null;
+            } catch (err) {
+                alert("Lỗi nhận cuộc gọi: " + err.message);
+                rejectIncomingCall();
+            }
+        }
+
+        function rejectIncomingCall() {
+            document.getElementById('incoming-call-modal').classList.add('hidden');
+            if (pendingIncomingOffer) {
+                publishMultiMQTT({ type: 'WEBRTC_HANGUP', target: pendingIncomingOffer.sender });
+                pendingIncomingOffer = null;
+            }
+        }
+
+        function setupCallMediaUI(isVideo) {
+            document.getElementById('call-media-area').classList.remove('hidden');
+            document.getElementById('call-action-bar').classList.add('hidden');
+            const localVid = document.getElementById('local-video');
+            const remoteVid = document.getElementById('remote-video');
+            const voiceUI = document.getElementById('voice-call-ui');
+
+            if (isVideo) {
+                localVid.srcObject = localStream;
+                localVid.classList.remove('hidden');
+                voiceUI.classList.add('hidden');
+            } else {
+                localVid.classList.add('hidden');
+                remoteVid.classList.add('hidden');
+                voiceUI.classList.remove('hidden');
+                document.getElementById('call-status-label').innerText = "Đang kết nối âm thanh...";
+            }
+            lucide.createIcons();
+        }
+
+        function toggleMuteMic() {
+            if (!localStream) return;
+            const track = localStream.getAudioTracks()[0];
+            if (track) {
+                track.enabled = !track.enabled;
+                document.getElementById('icon-mic').className = track.enabled ? "w-4 h-4 text-emerald-400" : "w-4 h-4 text-red-400";
+            }
+        }
+
+        function endWebRTCCall(sendSignal = true) {
+            if (sendSignal && partnerPeerId) publishMultiMQTT({ type: 'WEBRTC_HANGUP', target: partnerPeerId });
+            if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+            if (pc) { pc.close(); pc = null; }
+            document.getElementById('call-media-area').classList.add('hidden');
+            document.getElementById('call-action-bar').classList.remove('hidden');
+            document.getElementById('local-video').srcObject = null;
+            document.getElementById('remote-video').srcObject = null;
+            lucide.createIcons();
+        }
+
+        // 8. CHUYỂN ĐỔI VAI TRÒ
+        function switchRole(role) {
+            myRole = role;
+            const tabRider = document.getElementById('tab-rider');
+            const tabDriver = document.getElementById('tab-driver');
+            const panelRider = document.getElementById('panel-rider');
+            const panelDriver = document.getElementById('panel-driver');
+
+            if (role === 'rider') {
+                tabRider.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition bg-emerald-600 text-white";
+                tabDriver.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition text-zinc-400 hover:text-zinc-200";
+                panelRider.classList.remove('hidden');
+                panelDriver.classList.add('hidden');
+            } else {
+                tabDriver.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition bg-blue-600 text-white";
+                tabRider.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition text-zinc-400 hover:text-zinc-200";
+                panelDriver.classList.remove('hidden');
+                panelRider.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
