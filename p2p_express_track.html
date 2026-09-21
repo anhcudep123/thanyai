@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tra Cứu Hành Trình Đơn Hàng P2P 📦</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#00B14F',
+                            600: '#009643',
+                            dark: '#0B0F17',
+                            card: '#161F30'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- MQTT.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+
+    <style>
+        body, html {
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0B0F17;
+            color: #F3F4F6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        .glass-panel {
+            background: rgba(22, 31, 48, 0.94);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .pulse-active {
+            box-shadow: 0 0 0 0 rgba(0, 177, 79, 0.6);
+            animation: pulse-ring 2s infinite cubic-bezier(0.66, 0, 0, 1);
+        }
+        @keyframes pulse-ring {
+            to { box-shadow: 0 0 0 14px rgba(0, 177, 79, 0); }
+        }
+    </style>
+</head>
+<body class="bg-brand-dark min-h-screen flex flex-col selection:bg-emerald-500">
+
+    <!-- 1. HEADER CHÍNH -->
+    <header class="h-16 glass-panel border-b border-gray-800 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-emerald-900/40">
+                📦
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
+                    P2P Express Tracking <span class="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded-full font-bold">WEBRTC SYNC</span>
+                </h1>
+                <p class="text-[11px] text-gray-400">Đồng bộ P2P trực tiếp từ kho máy chủ Admin</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Trạng thái kết nối P2P DataChannel -->
+            <div id="p2pSyncStatus" class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-900/90 border border-gray-800 text-[11px] font-mono text-amber-400">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                <span id="p2pStatusLabel">Đang nối P2P...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. THANH TÌM KIẾM MÃ VẬN ĐƠN -->
+    <div class="max-w-2xl mx-auto w-full px-4 pt-6 pb-2">
+        <div class="glass-panel p-2 rounded-2xl border border-gray-800 flex items-center gap-2 shadow-2xl">
+            <div class="pl-2 text-gray-400">
+                <i data-lucide="search" class="w-4 h-4"></i>
+            </div>
+            <input id="inputSearchCode" type="text" placeholder="Nhập Mã Vận Đơn (VD: VN-LOG-2026-8801)..." 
+                onkeydown="if(event.key==='Enter') searchWaybillManual()" 
+                class="flex-1 bg-transparent text-xs sm:text-sm text-white focus:outline-none uppercase font-mono font-bold placeholder-gray-500">
+            <button onclick="searchWaybillManual()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow">
+                Tra Cứu
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. KHU VỰC HIỂN THỊ KẾT QUẢ -->
+    <main class="max-w-2xl mx-auto w-full flex-1 px-4 py-4 space-y-4">
+
+        <!-- THÔNG BÁO ĐANG ĐỒNG BỘ P2P -->
+        <div id="syncLoadingBox" class="glass-panel p-8 rounded-3xl text-center space-y-3 border border-gray-800">
+            <div class="w-12 h-12 rounded-full bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto animate-spin">
+                <i data-lucide="refresh-cw" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-sm font-bold text-white">Đang đồng bộ dữ liệu P2P từ Hub Quản trị...</h3>
+            <p id="syncDetailText" class="text-xs text-gray-400 max-w-sm mx-auto">Vui lòng đảm bảo máy Admin đang mở trình duyệt để chuyển gói dữ liệu sang thiết bị của bạn.</p>
+        </div>
+
+        <!-- THÔNG BÁO KHÔNG TÌM THẤY ĐƠN -->
+        <div id="notFoundBox" class="hidden glass-panel p-8 rounded-3xl text-center space-y-3 border border-gray-800">
+            <div class="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center mx-auto text-gray-400">
+                <i data-lucide="package-x" class="w-7 h-7"></i>
+            </div>
+            <h3 class="text-sm font-bold text-white">Chưa tìm thấy dữ liệu bưu kiện</h3>
+            <p class="text-xs text-gray-400 max-w-sm mx-auto">Kiểm tra lại mã hoặc đợi Admin mở ứng dụng để đồng bộ luồng P2P.</p>
+        </div>
+
+        <!-- THẺ HIỂN THỊ HÀNH TRÌNH BƯU KIỆN (KHI ĐÃ ĐỒNG BỘ XONG) -->
+        <div id="trackingResultBox" class="hidden space-y-4">
+            
+            <div class="glass-panel p-5 rounded-3xl border border-emerald-500/30 shadow-2xl space-y-3">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <div>
+                        <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">MÃ VẬN ĐƠN</span>
+                        <div id="wbDisplayId" class="text-base sm:text-lg font-black text-emerald-400 font-mono tracking-wider">...</div>
+                    </div>
+                    <div class="text-right">
+                        <span id="wbCurrentStageBadge" class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            Đang cập nhật...
+                        </span>
+                        <div id="wbCreatedTime" class="text-[10px] text-gray-400 mt-1">Khởi tạo: ...</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs bg-gray-900/60 p-3 rounded-2xl border border-gray-800">
+                    <div>
+                        <span class="text-[10px] text-gray-500 font-bold block flex items-center gap-1">
+                            <i data-lucide="map-pin" class="w-3 h-3 text-emerald-500"></i> NƠI GỬI
+                        </span>
+                        <div id="wbSenderProvince" class="font-bold text-white text-sm mt-0.5">...</div>
+                        <div id="wbSenderName" class="text-[11px] text-gray-400 mt-0.5">...</div>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-gray-500 font-bold block flex items-center gap-1">
+                            <i data-lucide="flag" class="w-3 h-3 text-red-500"></i> NƠI NHẬN
+                        </span>
+                        <div id="wbReceiverProvince" class="font-bold text-white text-sm mt-0.5">...</div>
+                        <div id="wbReceiverName" class="text-[11px] text-gray-400 mt-0.5">...</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-emerald-950/30 p-3 rounded-2xl border border-emerald-800/40 text-xs">
+                    <div>
+                        <span class="text-[10px] text-gray-400 block">Số tiền cần thanh toán (Thu hộ COD):</span>
+                        <div id="wbCodAmount" class="text-base font-black text-emerald-400 font-mono mt-0.5">0 VNĐ</div>
+                    </div>
+                    <div class="text-right">
+                        <span id="wbCargoType" class="text-[10px] font-bold text-gray-300 block">Hàng Hóa</span>
+                        <span id="wbWeight" class="text-[11px] text-gray-400">Khối lượng: 0 kg</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NHẬT KÝ LỘ TRÌNH 6 MỐC -->
+            <div class="glass-panel p-5 rounded-3xl border border-gray-800 space-y-4">
+                <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2 border-b border-gray-800 pb-3">
+                    <i data-lucide="git-commit" class="w-4 h-4 text-emerald-400"></i>
+                    Nhật Ký Hành Trình Bưu Kiện (Thời Gian Thực)
+                </h3>
+                <div id="timelineContainer" class="space-y-4 pl-2"></div>
+            </div>
+
+            <!-- ẢNH GÓI HÀNG ĐỐI SOÁT TRUYỀN QUA WEBRTC -->
+            <div id="cargoPhotoSection" class="glass-panel p-4 rounded-3xl border border-gray-800 space-y-2">
+                <span class="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                    <i data-lucide="camera" class="w-4 h-4 text-blue-400"></i>
+                    Ảnh Chụp Kiện Hàng Lúc Gửi (Đối soát nguyên vẹn)
+                </span>
+                <div class="w-full h-44 bg-black rounded-2xl overflow-hidden border border-gray-700 flex items-center justify-center">
+                    <img id="wbCargoImg" src="" class="w-full h-full object-contain">
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer class="p-4 text-center text-[11px] text-gray-600 border-t border-gray-800/80 mt-auto">
+        Đồng bộ trực tiếp P2P WebRTC & MQTT Mesh Network • Không lưu trữ qua Server trung gian
+    </footer>
+
+    <!-- ========================================================== -->
+    <!-- LOGIC WEBRTC P2P SYNC + MQTT CLIENT                        -->
+    <!-- ========================================================== -->
+    <script>
+        const BROKER_LIST = [
+            "wss://broker.emqx.io:8084/mqtt",
+            "wss://broker.hivemq.com:8884/mqtt",
+            "wss://test.mosquitto.org:8081"
+        ];
+        const TOPIC_CHANNEL = "p2p_move_send_vn/v8";
+
+        const LOGISTICS_STAGES = [
+            { title: "Đã gom hàng", desc: "Bưu tá đã tiếp nhận kiện hàng từ người gửi." },
+            { title: "Đang lưu kho tỉnh đi", desc: "Kiện hàng đã nhập kho xuất phát và đóng gói kiểm định." },
+            { title: "Đang vận chuyển liên tỉnh", desc: "Hàng đang trên xe tải trung chuyển đường dài giữa các tỉnh." },
+            { title: "Đã đến kho tỉnh đích", desc: "Hàng đã tới kho phân loại tại tỉnh nhận, sẵn sàng chia tuyến." },
+            { title: "Shipper đang giao", desc: "Nhân viên giao hàng đang mang kiện hàng đến địa chỉ của bạn." },
+            { title: "Giao hàng thành công", desc: "Người nhận đã nhận hàng và hoàn tất thu hộ COD." }
+        ];
+
+        const myClientId = "tracker_" + Math.random().toString(36).substr(2, 9);
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+        
+        let pc = null;
+        let dataChannel = null;
+        let mqttClients = [];
+        let currentTrackingId = "";
+        let localWaybills = JSON.parse(localStorage.getItem('p2p_waybills')) || [];
+        let currentWaybill = null;
+
+        window.onload = () => {
+            lucide.createIcons();
+            initMultiBrokerMQTT();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            currentTrackingId = (urlParams.get('id') || urlParams.get('track') || "VN-LOG-2026-8801").toUpperCase().trim();
+            document.getElementById('inputSearchCode').value = currentTrackingId;
+
+            // Kiểm tra xem LocalStorage máy này đã có chưa
+            const existing = localWaybills.find(w => w.id === currentTrackingId);
+            if (existing) {
+                displayWaybillData(existing);
+            } else {
+                // Chưa có: Bắt đầu phát tín hiệu tìm kiếm và đồng bộ P2P từ Admin
+                requestSyncFromAdmin(currentTrackingId);
+            }
+        };
+
+        // 1. KẾT NỐI MQTT
+        function initMultiBrokerMQTT() {
+            BROKER_LIST.forEach((url, idx) => {
+                try {
+                    const client = mqtt.connect(url, {
+                        clientId: `client_${myClientId}_${idx}`,
+                        clean: true
+                    });
+
+                    client.on('connect', () => {
+                        client.subscribe(TOPIC_CHANNEL);
+                        client.subscribe(`p2p-sync/direct/${myClientId}`);
+                    });
+
+                    client.on('message', (t, raw) => handleMqttSignal(raw.toString()));
+                    mqttClients.push(client);
+                } catch (e) {}
+            });
+        }
+
+        function publishSignal(payload) {
+            payload.sender = myClientId;
+            payload.timestamp = Date.now();
+            const str = JSON.stringify(payload);
+            mqttClients.forEach(c => { if(c?.connected) c.publish(TOPIC_CHANNEL, str); });
+        }
+
+        // 2. PHÁT LỆNH YÊU CẦU MÁY ADMIN ĐỒNG BỘ ĐƠN HÀNG
+        function requestSyncFromAdmin(waybillId) {
+            document.getElementById('syncLoadingBox').classList.remove('hidden');
+            document.getElementById('trackingResultBox').classList.add('hidden');
+            document.getElementById('notFoundBox').classList.add('hidden');
+            document.getElementById('p2pStatusLabel').textContent = "Đang tìm máy Admin...";
+
+            publishSignal({
+                type: 'REQ_SYNC_WAYBILL',
+                targetWaybillId: waybillId,
+                requesterId: myClientId
+            });
+
+            // Sau 8 giây nếu không máy Admin nào online
+            setTimeout(() => {
+                if (!currentWaybill) {
+                    document.getElementById('syncLoadingBox').classList.add('hidden');
+                    document.getElementById('notFoundBox').classList.remove('hidden');
+                    document.getElementById('p2pStatusLabel').textContent = "Admin Offline";
+                    document.getElementById('p2pSyncStatus').className = "flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-900/90 border border-gray-800 text-[11px] font-mono text-red-400";
+                }
+            }, 8000);
+        }
+
+        // 3. XỬ LÝ TÍN HIỆU SIGNALING TỪ ADMIN
+        async function handleMqttSignal(rawStr) {
+            try {
+                const data = JSON.parse(rawStr);
+                if (data.sender === myClientId) return;
+
+                // Admin trả lời qua kênh Signaling riêng hoặc kênh chung
+                if (data.target === myClientId) {
+                    if (data.type === 'WEBRTC_OFFER_SYNC') {
+                        // Admin bắt tay WebRTC để gửi DataChannel
+                        await handleWebRtcOfferFromAdmin(data);
+                    } else if (data.type === 'WEBRTC_CANDIDATE_SYNC' && pc) {
+                        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e){}
+                    } else if (data.type === 'DIRECT_SYNC_FALLBACK') {
+                        // Nhận dữ liệu dự phòng trực tiếp qua MQTT
+                        onReceiveSyncedWaybill(data.waybillData);
+                    }
+                }
+
+                // Nhận thông báo Admin cập nhật mốc đơn hàng thời gian thực
+                if (data.type === 'WAYBILL_STAGE_UPDATED' && currentWaybill && data.waybillId === currentWaybill.id) {
+                    currentWaybill.statusIndex = data.newStatusIndex;
+                    displayWaybillData(currentWaybill);
+                }
+            } catch (e) {}
+        }
+
+        // 4. THIẾT LẬP WEBRTC DATACHANNEL PHÍA KHÁCH (PEER-TO-PEER)
+        async function handleWebRtcOfferFromAdmin(offerData) {
+            document.getElementById('p2pStatusLabel').textContent = "Bắt tay WebRTC...";
+            if (pc) pc.close();
+            pc = new RTCPeerConnection(rtcConfig);
+
+            pc.onicecandidate = (e) => {
+                if (e.candidate) {
+                    publishSignal({
+                        type: 'WEBRTC_CANDIDATE_SYNC',
+                        target: offerData.sender,
+                        candidate: e.candidate
+                    });
+                }
+            };
+
+            pc.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                dataChannel.onopen = () => {
+                    document.getElementById('p2pStatusLabel').textContent = "P2P Đã Kết Nối ✔";
+                    document.getElementById('p2pSyncStatus').className = "flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-[11px] font-mono text-emerald-400";
+                };
+                dataChannel.onmessage = (e) => {
+                    // Nhận toàn bộ gói dữ liệu đơn hàng từ máy Admin
+                    const syncedObj = JSON.parse(e.data);
+                    onReceiveSyncedWaybill(syncedObj);
+                };
+            };
+
+            await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            publishSignal({
+                type: 'WEBRTC_ANSWER_SYNC',
+                target: offerData.sender,
+                sdp: answer
+            });
+        }
+
+        // Khi nhận được dữ liệu hoàn chỉnh từ Admin
+        function onReceiveSyncedWaybill(wbData) {
+            currentWaybill = wbData;
+            
+            // Lưu ngay vào localStorage của máy khách để lần sau mở lại xem được ngay
+            localWaybills = localWaybills.filter(w => w.id !== wbData.id);
+            localWaybills.unshift(wbData);
+            localStorage.setItem('p2p_waybills', JSON.stringify(localWaybills));
+
+            displayWaybillData(wbData);
+        }
+
+        function displayWaybillData(wb) {
+            currentWaybill = wb;
+            document.getElementById('syncLoadingBox').classList.add('hidden');
+            document.getElementById('notFoundBox').classList.add('hidden');
+            document.getElementById('trackingResultBox').classList.remove('hidden');
+
+            document.getElementById('wbDisplayId').textContent = wb.id;
+            document.getElementById('wbCreatedTime').textContent = `Khởi tạo: ${wb.createdAt}`;
+            document.getElementById('wbCurrentStageBadge').textContent = LOGISTICS_STAGES[wb.statusIndex].title;
+            
+            document.getElementById('wbSenderProvince').textContent = wb.sender.province;
+            document.getElementById('wbSenderName').textContent = `${wb.sender.name} (${wb.sender.phone.slice(0,4)}***)`;
+            
+            document.getElementById('wbReceiverProvince').textContent = wb.receiver.province;
+            document.getElementById('wbReceiverName').textContent = `${wb.receiver.name} (${wb.receiver.phone.slice(0,4)}***)`;
+
+            document.getElementById('wbCodAmount').textContent = `${wb.codAmount.toLocaleString('vi-VN')} VNĐ`;
+            document.getElementById('wbCargoType').textContent = wb.cargoType;
+            document.getElementById('wbWeight').textContent = `Khối lượng: ${wb.weight} kg`;
+
+            if (wb.photo) {
+                document.getElementById('cargoPhotoSection').classList.remove('hidden');
+                document.getElementById('wbCargoImg').src = wb.photo;
+            } else {
+                document.getElementById('cargoPhotoSection').classList.add('hidden');
+            }
+
+            renderTimeline(wb.statusIndex);
+            lucide.createIcons();
+        }
+
+        function renderTimeline(currentIndex) {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+
+            LOGISTICS_STAGES.forEach((stage, idx) => {
+                const isPassed = idx < currentIndex;
+                const isCurrent = idx === currentIndex;
+
+                const stepDiv = document.createElement('div');
+                stepDiv.className = "flex items-start gap-3 relative";
+
+                const lineHtml = idx < LOGISTICS_STAGES.length - 1 ? 
+                    `<div class="absolute left-3.5 top-7 bottom-0 w-0.5 ${isPassed ? 'bg-emerald-500' : 'bg-gray-800'} -z-0"></div>` : '';
+
+                let iconCircleHtml = '';
+                if (isPassed) {
+                    iconCircleHtml = `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shrink-0 z-10">✓</div>`;
+                } else if (isCurrent) {
+                    iconCircleHtml = `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shrink-0 z-10 pulse-active">🚚</div>`;
+                } else {
+                    iconCircleHtml = `<div class="w-7 h-7 rounded-full bg-gray-800 border border-gray-700 text-gray-500 flex items-center justify-center text-xs font-bold shrink-0 z-10">${idx + 1}</div>`;
+                }
+
+                stepDiv.innerHTML = `
+                    ${lineHtml}
+                    ${iconCircleHtml}
+                    <div class="pb-5">
+                        <div class="text-xs font-bold ${isCurrent ? 'text-emerald-400 font-extrabold text-sm' : (isPassed ? 'text-white' : 'text-gray-500')}">
+                            ${stage.title} ${isCurrent ? '<span class="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-300 ml-1">Hiện tại</span>' : ''}
+                        </div>
+                        <p class="text-[11px] ${isCurrent ? 'text-gray-300 mt-0.5' : 'text-gray-500'}">${stage.desc}</p>
+                    </div>
+                `;
+
+                container.appendChild(stepDiv);
+            });
+        }
+
+        function searchWaybillManual() {
+            const code = document.getElementById('inputSearchCode').value.trim().toUpperCase();
+            if (!code) { alert("Vui lòng nhập Mã Vận Đơn!"); return; }
+            currentTrackingId = code;
+            
+            // Tìm trong máy trước, nếu không có thì bắn yêu cầu P2P sang Admin
+            const existing = localWaybills.find(w => w.id === code);
+            if (existing) {
+                displayWaybillData(existing);
+            } else {
+                requestSyncFromAdmin(code);
+            }
+        }
+    </script>
+</body>
+</html>

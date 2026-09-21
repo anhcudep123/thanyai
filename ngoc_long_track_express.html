@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="toclong80@gmail.com">
+    <title>NGỌC LONG P2P // TRA CỨU HÀNH TRÌNH ĐƠN HÀNG</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { matrix: '#00FF00', dark: '#050508', panel: '#0a0a0f', danger: '#FF0000', warning: '#FFBB00' },
+                    fontFamily: { mono: ['"Courier New"', 'Courier', 'monospace'] }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons, QR Code & MQTT Client -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+
+    <style>
+        body { background-color: #050508; color: #00FF00; font-family: 'Courier New', Courier, monospace; min-height: 100vh; }
+        .glow-border { border: 1px solid #00FF00; box-shadow: 0 0 12px rgba(0, 255, 0, 0.15); }
+        .glow-text { text-shadow: 0 0 6px rgba(0, 255, 0, 0.6); }
+        
+        input, button { background: #000; color: #00FF00; outline: none; border: 1px solid #00FF00; transition: all 0.2s; }
+        input:focus { box-shadow: 0 0 8px rgba(0,255,0,0.5); }
+        button:hover { background: #002200; box-shadow: 0 0 10px rgba(0,255,0,0.4); }
+
+        .step-active { background-color: #00FF00; color: #000; font-weight: bold; border-color: #00FF00; }
+        .step-inactive { background-color: #000; color: #555; border-color: #222; }
+    </style>
+</head>
+<body class="flex flex-col justify-between p-4 md:p-8">
+
+    <!-- HEADER -->
+    <header class="max-w-4xl w-full mx-auto border-b border-matrix pb-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-2 border border-matrix bg-panel">
+                <i data-lucide="package-search" class="w-8 h-8 text-matrix animate-pulse"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold glow-text">NGỌC LONG EXPRESS</h1>
+                <p class="text-xs text-matrix/70">HỆ THỐNG TRA CỨU VẬN ĐƠN P2P WAN SYNC</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <span id="sync-status-dot" class="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse"></span>
+            <span id="sync-status-text" class="text-yellow-500 font-bold">ĐANG NỐI MẠNG P2P...</span>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="max-w-4xl w-full mx-auto space-y-6 flex-1">
+
+        <!-- SEARCH BAR -->
+        <div class="glow-border bg-panel p-4 md:p-6 space-y-3">
+            <label class="block text-xs font-bold text-matrix">NHẬP MÃ TRA CỨU VẬN ĐƠN:</label>
+            <form onsubmit="event.preventDefault(); handleSearch();" class="flex gap-2">
+                <input type="text" id="search-input" placeholder="Ví dụ: NL-2026-8821..." class="flex-1 p-2.5 text-sm uppercase font-mono font-bold">
+                <button type="submit" class="px-6 py-2.5 font-bold text-xs uppercase bg-matrix text-black hover:bg-matrix/80 flex items-center gap-2">
+                    <i data-lucide="search" class="w-4 h-4"></i> TRA CỨU P2P
+                </button>
+            </form>
+        </div>
+
+        <!-- MÀN HÌNH CHỜ -->
+        <div id="state-empty" class="glow-border bg-panel p-8 text-center space-y-3">
+            <i data-lucide="radar" class="w-12 h-12 text-matrix/40 mx-auto animate-spin duration-[4000ms]"></i>
+            <p class="text-xs text-matrix/60">Vui lòng nhập Mã Vận Đơn để truy vấn dữ liệu từ Máy Quản Lý qua mạng P2P/MQTT.</p>
+        </div>
+
+        <!-- THÔNG BÁO DANG TẢI / KHÔNG TÌM THẤY -->
+        <div id="state-loading" class="hidden glow-border bg-panel p-8 text-center space-y-3">
+            <i data-lucide="refresh-cw" class="w-10 h-10 text-matrix mx-auto animate-spin"></i>
+            <p class="text-xs text-matrix font-bold">ĐANG TRUY VẤN DỮ LIỆU TỪ MÁY CHỦ QUẢN LÝ P2P...</p>
+        </div>
+
+        <div id="state-not-found" class="hidden glow-border bg-panel p-8 text-center space-y-3 border-danger">
+            <i data-lucide="alert-triangle" class="w-12 h-12 text-danger mx-auto"></i>
+            <h3 class="text-sm font-bold text-danger">KHÔNG TÌM THẤY MÃ VẬN ĐƠN NÀY</h3>
+            <p class="text-xs text-gray-400">Đã gửi yêu cầu P2P nhưng không nhận được phản hồi từ Máy Quản Lý. Vui lòng kiểm tra lại Mã Tra Cứu hoặc đảm bảo Máy Quản Lý (`index.html`) đang bật.</p>
+        </div>
+
+        <!-- KHU VỰC HIỂN THỊ KẾT QUẢ -->
+        <div id="state-result" class="hidden space-y-6">
+
+            <div class="glow-border bg-panel p-4 md:p-6 space-y-4">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-matrix/40 pb-4">
+                    <div>
+                        <span class="text-[10px] bg-matrix text-black font-bold px-2 py-0.5 uppercase">MÃ ĐƠN HÀNG</span>
+                        <h2 class="text-2xl font-bold text-matrix mt-1" id="res-id">NL-2026-0000</h2>
+                        <p class="text-xs text-gray-300 mt-0.5" id="res-route">TP.HCM ➔ Đà Nẵng</p>
+                    </div>
+                    <div>
+                        <canvas id="res-qr" class="border border-matrix p-1 bg-white"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div class="border border-matrix/30 p-3 space-y-1 bg-black/50">
+                        <span class="text-matrix font-bold block border-b border-matrix/30 pb-1">👤 BÊN GỬI HÀNG</span>
+                        <div><b>Họ tên/SĐT:</b> <span id="res-sender">---</span></div>
+                        <div><b>Tỉnh/Thành:</b> <span id="res-sender-prov">---</span></div>
+                    </div>
+                    <div class="border border-matrix/30 p-3 space-y-1 bg-black/50">
+                        <span class="text-matrix font-bold block border-b border-matrix/30 pb-1">📦 BÊN NHẬN HÀNG</span>
+                        <div><b>Họ tên/SĐT:</b> <span id="res-receiver">---</span></div>
+                        <div><b>Tỉnh/Thành:</b> <span id="res-receiver-prov">---</span></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs border-t border-matrix/30 pt-3">
+                    <div><b>Loại hàng:</b> <span id="res-type" class="text-warning">---</span></div>
+                    <div><b>Trọng lượng:</b> <span id="res-weight">---</span></div>
+                    <div><b>Khai giá:</b> <span id="res-value">---</span></div>
+                    <div><b>Thanh toán:</b> <span id="res-payment" class="text-matrix font-bold">---</span></div>
+                </div>
+            </div>
+
+            <!-- SƠ ĐỒ LỘ TRÌNH -->
+            <div class="glow-border bg-panel p-4 md:p-6 space-y-4">
+                <h3 class="text-xs font-bold text-matrix flex items-center gap-2">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i> LỘ TRÌNH VẬN CHUYỂN THỜI GIAN THỰC
+                </h3>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="milestones-container"></div>
+            </div>
+
+            <!-- BẰNG CHỨNG HÀNG HÓA -->
+            <div class="glow-border bg-panel p-4 md:p-6 space-y-3">
+                <h3 class="text-xs font-bold text-matrix flex items-center gap-2">
+                    <i data-lucide="camera" class="w-4 h-4"></i> BẰNG CHỨNG HÀNG HÓA TRƯỚC KHI GIAO
+                </h3>
+                <div id="photo-box" class="border border-matrix/40 p-2 bg-black flex justify-center items-center min-h-[160px]">
+                    <img id="res-photo" src="" class="max-h-64 object-contain border border-matrix hidden" alt="Ảnh bằng chứng hàng hóa">
+                    <span id="res-no-photo" class="text-xs text-gray-500">Không có ảnh bằng chứng được tải lên.</span>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="max-w-4xl w-full mx-auto mt-8 border-t border-matrix/40 pt-4 text-center text-[10px] text-matrix/70 uppercase font-mono">
+        Hệ thống Tra cứu Vận đơn P2P WAN // Tác giả: <a href="mailto:toclong80@gmail.com" class="underline hover:text-matrix">toclong80@gmail.com</a>
+    </footer>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        lucide.createIcons();
+
+        const MILESTONES = [
+            { step: 1, name: "Đã gom hàng", icon: "package-check" },
+            { step: 2, name: "Đang lưu kho tỉnh đi", icon: "warehouse" },
+            { step: 3, name: "Đang vận chuyển liên tỉnh", icon: "truck" },
+            { step: 4, name: "Đã đến kho tỉnh đích", icon: "building-2" },
+            { step: 5, name: "Shipper đang giao", icon: "bike" },
+            { step: 6, name: "Giao hàng thành công", icon: "check-circle-2" }
+        ];
+
+        let mqttClient = null;
+        const clientId = "CLIENT_TRK_" + Math.random().toString(16).substring(2, 8).toUpperCase();
+        const replyTopic = `nl_matrix/waybill_responses/${clientId}`;
+        let queryTimeoutTimer = null;
+
+        window.onload = () => {
+            initMQTTTracker();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const trackId = urlParams.get('id');
+            if (trackId) {
+                document.getElementById('search-input').value = trackId;
+            }
+        };
+
+        // --- KHỞI TẠO TÍN HIỆU MQTT CLIENT DÀNH CHO MÁY TRA CỨU ---
+        function initMQTTTracker() {
+            const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
+            try {
+                mqttClient = mqtt.connect(brokerUrl, { rejectUnauthorized: false });
+
+                mqttClient.on('connect', () => {
+                    document.getElementById('sync-status-dot').className = "w-2.5 h-2.5 rounded-full bg-matrix shadow-[0_0_8px_#00FF00]";
+                    document.getElementById('sync-status-text').className = "text-matrix font-bold";
+                    document.getElementById('sync-status-text').innerText = "P2P NETWORK READY";
+
+                    // Đăng ký nhận phản hồi riêng cho thiết bị này
+                    mqttClient.subscribe(replyTopic);
+
+                    // Tự động tìm kiếm nếu URL có sẵn tham số 'id'
+                    const trackId = document.getElementById('search-input').value.trim();
+                    if (trackId) handleSearch();
+                });
+
+                mqttClient.on('message', (topic, message) => {
+                    if (topic === replyTopic) {
+                        try {
+                            const data = JSON.parse(message.toString());
+                            if (data.type === 'RESPONSE_WAYBILL' && data.waybill) {
+                                clearTimeout(queryTimeoutTimer);
+                                // Lưu bản sao vào bộ nhớ local máy khách
+                                saveLocalWaybill(data.waybill);
+                                // Hiển thị thông tin
+                                renderWaybillUI(data.waybill);
+                            }
+                        } catch (e) { console.error("Lỗi đọc dữ liệu P2P:", e); }
+                    }
+                });
+
+                mqttClient.on('offline', () => {
+                    document.getElementById('sync-status-dot').className = "w-2.5 h-2.5 rounded-full bg-danger animate-pulse";
+                    document.getElementById('sync-status-text').className = "text-danger font-bold";
+                    document.getElementById('sync-status-text').innerText = "P2P DISCONNECTED";
+                });
+            } catch (err) { console.error("Lỗi khởi tạo MQTT:", err); }
+        }
+
+        function handleSearch() {
+            const trackId = document.getElementById('search-input').value.trim().toUpperCase();
+            if (!trackId) return;
+
+            // 1. Kiểm tra trong localStorage cục bộ trước
+            const localWaybills = JSON.parse(localStorage.getItem('nl_waybills')) || [];
+            const localFound = localWaybills.find(w => w.id.toUpperCase() === trackId);
+
+            if (localFound) {
+                renderWaybillUI(localFound);
+            } else {
+                // Hiển thị màn hình chờ tải
+                showState('loading');
+            }
+
+            // 2. Phát tín hiệu truy vấn dữ liệu P2P tới Máy Quản Lý (index.html)
+            if (mqttClient && mqttClient.connected) {
+                const requestPayload = {
+                    type: 'QUERY_WAYBILL',
+                    waybillId: trackId,
+                    replyTopic: replyTopic
+                };
+                mqttClient.publish("nl_matrix/waybill_requests", JSON.stringify(requestPayload));
+
+                // Nếu sau 4 giây không nhận được phản hồi P2P và không có bản lưu local
+                clearTimeout(queryTimeoutTimer);
+                queryTimeoutTimer = setTimeout(() => {
+                    if (!localFound && document.getElementById('state-result').classList.contains('hidden')) {
+                        showState('not-found');
+                    }
+                }, 4000);
+            } else if (!localFound) {
+                showState('not-found');
+            }
+        }
+
+        function saveLocalWaybill(wb) {
+            let waybills = JSON.parse(localStorage.getItem('nl_waybills')) || [];
+            const idx = waybills.findIndex(w => w.id === wb.id);
+            if (idx >= 0) waybills[idx] = wb;
+            else waybills.unshift(wb);
+            localStorage.setItem('nl_waybills', JSON.stringify(waybills));
+        }
+
+        function showState(stateName) {
+            document.getElementById('state-empty').classList.add('hidden');
+            document.getElementById('state-loading').classList.add('hidden');
+            document.getElementById('state-not-found').classList.add('hidden');
+            document.getElementById('state-result').classList.add('hidden');
+
+            if (stateName === 'loading') document.getElementById('state-loading').classList.remove('hidden');
+            else if (stateName === 'not-found') document.getElementById('state-not-found').classList.remove('hidden');
+            else if (stateName === 'result') document.getElementById('state-result').classList.remove('hidden');
+            else document.getElementById('state-empty').classList.remove('hidden');
+        }
+
+        function renderWaybillUI(wb) {
+            showState('result');
+
+            document.getElementById('res-id').innerText = wb.id;
+            document.getElementById('res-route').innerText = `${wb.senderProv} ➔ ${wb.receiverProv}`;
+            document.getElementById('res-sender').innerText = wb.sender;
+            document.getElementById('res-sender-prov').innerText = wb.senderProv;
+            document.getElementById('res-receiver').innerText = wb.receiver;
+            document.getElementById('res-receiver-prov').innerText = wb.receiverProv;
+            document.getElementById('res-type').innerText = wb.type;
+            document.getElementById('res-weight').innerText = `${wb.weight} kg`;
+            document.getElementById('res-value').innerText = `${parseInt(wb.value).toLocaleString()} VNĐ`;
+            document.getElementById('res-payment').innerText = wb.payment === 'COD' ? 'Thu hộ COD' : 'Trả trước';
+
+            new QRious({
+                element: document.getElementById('res-qr'),
+                value: window.location.origin + window.location.pathname + '?id=' + wb.id,
+                size: 90
+            });
+
+            const imgEl = document.getElementById('res-photo');
+            const noPhotoEl = document.getElementById('res-no-photo');
+            if (wb.photo && wb.photo.startsWith('data:image')) {
+                imgEl.src = wb.photo;
+                imgEl.classList.remove('hidden');
+                noPhotoEl.classList.add('hidden');
+            } else {
+                imgEl.classList.add('hidden');
+                noPhotoEl.classList.remove('hidden');
+            }
+
+            renderMilestones(wb.status);
+        }
+
+        function renderMilestones(currentStatus) {
+            const container = document.getElementById('milestones-container');
+            container.innerHTML = "";
+            const currentIdx = MILESTONES.findIndex(m => m.name === currentStatus);
+
+            MILESTONES.forEach((m, idx) => {
+                const isPassed = idx <= currentIdx;
+                const isCurrent = idx === currentIdx;
+
+                const cardClass = isPassed 
+                    ? (isCurrent ? "border-matrix bg-matrix/20 text-matrix font-bold glow-border" : "border-matrix/60 bg-black/80 text-matrix/80")
+                    : "border-gray-800 bg-black/40 text-gray-600";
+
+                const iconColor = isPassed ? "text-matrix" : "text-gray-600";
+
+                const html = `
+                    <div class="border p-3 flex items-center gap-3 ${cardClass}">
+                        <div class="p-2 border border-current rounded">
+                            <i data-lucide="${m.icon}" class="w-5 h-5 ${iconColor}"></i>
+                        </div>
+                        <div class="text-xs">
+                            <div class="text-[10px] opacity-70">BƯỚC ${m.step}</div>
+                            <div class="font-bold">${m.name}</div>
+                            ${isCurrent ? '<span class="text-[9px] bg-matrix text-black px-1 font-bold">HIỆN TẠI</span>' : ''}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
