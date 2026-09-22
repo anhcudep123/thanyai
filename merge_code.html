@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Code Bundler - Gom Mã Nguồn Dự Án</title>
+    <style>
+        /* 1. THIẾT LẬP GIAO DIỆN CHUNG */
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #16a34a;
+            --success-hover: #15803d;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 950px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* 2. PHONG CÁCH TIÊU ĐỀ VÀ THẺ KHUNG (CARDS) */
+        header {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        header h1 {
+            font-size: 22px;
+            color: #1e293b;
+        }
+
+        header p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 3. KHU VỰC CHỌN VÀ THẢ THƯ MỤC */
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            background: #f1f5f9;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+
+        .dropzone p {
+            font-size: 14px;
+            font-weight: 500;
+            color: #475569;
+        }
+
+        .dropzone span {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: block;
+            margin-top: 4px;
+        }
+
+        /* 4. CẤU HÌNH BỘ LỌC (FORM INPUTS) */
+        .form-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 12px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            width: 150px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            flex-shrink: 0;
+        }
+
+        .form-group input {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            border-color: var(--primary);
+        }
+
+        /* 5. BẢNG HIỂN THỊ DANH SÁCH TỆP */
+        .table-container {
+            max-height: 260px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        tr:hover {
+            background-color: #f1f5f9;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .empty-row {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 24px;
+        }
+
+        /* 6. BẢNG ĐIỀU KHIỂN DƯỚI CÙNG & NÚT BẤM */
+        .footer-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .stats-badge {
+            font-size: 13px;
+            color: #334155;
+            background: #f1f5f9;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #ffffff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #ffffff;
+        }
+
+        .btn-success:hover {
+            background: var(--success-hover);
+        }
+
+        button:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Tiêu đề trang -->
+    <header>
+        <h1>⚡ Gemini Code Bundler Web</h1>
+        <p>Công cụ đóng gói toàn bộ mã nguồn dự án thành một ngữ cảnh Markdown chuẩn cho AI</p>
+    </header>
+
+    <!-- Khung 1: Chọn thư mục dự án -->
+    <section class="card">
+        <div class="card-title">📁 1. Chọn Thư Mục Dự Án</div>
+        <!-- Input ẩn hỗ trợ chọn thư mục -->
+        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+        
+        <div class="dropzone" id="dropzone">
+            <p>📂 Nhấp vào đây để chọn thư mục dự án (hoặc Kéo & Thả thư mục vào đây)</p>
+            <span id="selectedDirLabel">Chưa có thư mục nào được chọn</span>
+        </div>
+    </section>
+
+    <!-- Khung 2: Cấu hình bộ lọc -->
+    <section class="card">
+        <div class="card-title">⚙️ 2. Cấu hình & Bộ Lọc</div>
+        
+        <div class="form-group">
+            <label for="extFilter">Đuôi file cần gom:</label>
+            <input type="text" id="extFilter" value=".py, .cpp, .h, .ino, .html, .css, .js, .json, .sql">
+        </div>
+
+        <div class="form-group">
+            <label for="ignoreFilter">Bỏ qua thư mục:</label>
+            <input type="text" id="ignoreFilter" value=".git, __pycache__, node_modules, venv, .pio, build, dist, .vscode">
+        </div>
+
+        <div class="form-group">
+            <label for="promptHeader">Lời nhắc (Prompt):</label>
+            <input type="text" id="promptHeader" value="Dưới đây là toàn bộ mã nguồn của dự án. Hãy phân tích cấu trúc và hỗ trợ tôi phát triển:">
+        </div>
+    </section>
+
+    <!-- Khung 3: Danh sách tệp đã quét -->
+    <section class="card">
+        <div class="card-title">📋 3. Danh Sách Tệp Đã Quét Hợp Lệ</div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Đường dẫn tệp tin tương đối</th>
+                        <th class="text-right" style="width: 120px;">Dung lượng (KB)</th>
+                        <th class="text-right" style="width: 100px;">Số dòng</th>
+                    </tr>
+                </thead>
+                <tbody id="fileTableBody">
+                    <tr>
+                        <td colspan="3" class="empty-row">Chưa có dữ liệu. Vui lòng chọn thư mục dự án phía trên.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Khung 4: Thống kê & Nút hành động -->
+    <div class="footer-bar">
+        <div class="stats-badge" id="statsBadge">
+            Trạng thái: Sẵn sàng | Tệp: 0 | Dòng: 0 | Ước tính Tokens: ~0
+        </div>
+        <div class="button-group">
+            <button class="btn-success" id="btnCopy" disabled>📋 Sao chép Clipboard</button>
+            <button class="btn-primary" id="btnDownload" disabled>💾 Tải tệp .txt</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- KHỞI TẠO BIẾN TRẠNG THÁI TOÀN CỤC ---
+    let projectFiles = []; // Danh sách chứa các tệp hợp lệ: { relPath, size, lines, text, ext }
+    let projectName = "My_Project";
+
+    // Các phần tử giao diện DOM
+    const folderInput = document.getElementById('folderInput');
+    const dropzone = document.getElementById('dropzone');
+    const selectedDirLabel = document.getElementById('selectedDirLabel');
+    const extFilter = document.getElementById('extFilter');
+    const ignoreFilter = document.getElementById('ignoreFilter');
+    const promptHeader = document.getElementById('promptHeader');
+    const fileTableBody = document.getElementById('fileTableBody');
+    const statsBadge = document.getElementById('statsBadge');
+    const btnCopy = document.getElementById('btnCopy');
+    const btnDownload = document.getElementById('btnDownload');
+
+    // --- SỰ KIỆN CHỌN VÀ KÉO THẢ THƯ MỤC ---
+    dropzone.addEventListener('click', () => folderInput.click());
+
+    folderInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            processSelectedFiles(Array.from(e.target.files));
+        }
+    });
+
+    // Xử lý hiệu ứng Drag & Drop
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            processSelectedFiles(Array.from(e.dataTransfer.files));
+        }
+    });
+
+    // Khi người dùng thay đổi bộ lọc đuôi file hoặc thư mục loại trừ, tự cập nhật lại
+    extFilter.addEventListener('input', () => {
+        if (folderInput.files.length > 0) processSelectedFiles(Array.from(folderInput.files));
+    });
+    ignoreFilter.addEventListener('input', () => {
+        if (folderInput.files.length > 0) processSelectedFiles(Array.from(folderInput.files));
+    });
+
+    // --- HÀM XỬ LÝ QUÉT VÀ ĐỌC FILE ---
+    async function processSelectedFiles(rawFileList) {
+        // Lấy danh sách phần mở rộng hợp lệ
+        const validExtensions = extFilter.value.split(',')
+            .map(ext => ext.trim().toLowerCase())
+            .filter(ext => ext !== '');
+
+        // Lấy danh sách các thư mục cần bỏ qua
+        const ignoredDirs = ignoreFilter.value.split(',')
+            .map(dir => dir.trim().toLowerCase())
+            .filter(dir => dir !== '');
+
+        projectFiles = [];
+        fileTableBody.innerHTML = `<tr><td colspan="3" class="empty-row">Đang đọc và phân tích các tệp mã nguồn...</td></tr>`;
+
+        let totalLines = 0;
+        let totalChars = 0;
+
+        for (const file of rawFileList) {
+            // Lấy đường dẫn tương đối (webkitRelativePath) hoặc tên file nếu kéo trực tiếp
+            const relPath = file.webkitRelativePath || file.name;
+            const pathParts = relPath.split('/');
+
+            // Lấy tên thư mục gốc làm tên dự án
+            if (pathParts.length > 1) {
+                projectName = pathParts[0];
+            }
+
+            // 1. Kiểm tra xem file có nằm trong thư mục bị loại trừ không
+            const isIgnored = pathParts.some(part => ignoredDirs.includes(part.toLowerCase()));
+            if (isIgnored) continue;
+
+            // 2. Kiểm tra phần mở rộng (đuôi file)
+            const dotIndex = file.name.lastIndexOf('.');
+            const ext = dotIndex !== -1 ? file.name.slice(dotIndex).toLowerCase() : '';
+            if (!validExtensions.includes(ext)) continue;
+
+            // 3. Đọc nội dung văn bản của file
+            try {
+                const textContent = await file.text();
+                const linesCount = textContent.length > 0 ? textContent.split('\n').length : 0;
+                
+                totalLines += linesCount;
+                totalChars += textContent.length;
+
+                projectFiles.push({
+                    relPath: relPath,
+                    size: file.size,
+                    lines: linesCount,
+                    text: textContent,
+                    ext: ext
+                });
+            } catch (err) {
+                console.error("Lỗi khi đọc file:", relPath, err);
+            }
+        }
+
+        // Cập nhật thông tin hiển thị lên giao diện
+        selectedDirLabel.innerText = `Dự án: ${projectName} (Đã phát hiện ${projectFiles.length} tệp phù hợp)`;
+        renderTable();
+        updateStats(totalLines, totalChars);
+    }
+
+    // --- HIỂN THỊ DANH SÁCH TỆP LÊN BẢNG ---
+    function renderTable() {
+        if (projectFiles.length === 0) {
+            fileTableBody.innerHTML = `<tr><td colspan="3" class="empty-row">Không tìm thấy tệp mã nguồn nào khớp với bộ lọc!</td></tr>`;
+            btnCopy.disabled = true;
+            btnDownload.disabled = true;
+            return;
+        }
+
+        let html = '';
+        projectFiles.forEach(item => {
+            const sizeKB = (item.size / 1024).toFixed(1);
+            html += `
+                <tr>
+                    <td>${escapeHtml(item.relPath)}</td>
+                    <td class="text-right">${sizeKB}</td>
+                    <td class="text-right">${item.lines.toLocaleString()}</td>
+                </tr>
+            `;
+        });
+
+        fileTableBody.innerHTML = html;
+        btnCopy.disabled = false;
+        btnDownload.disabled = false;
+    }
+
+    // --- CẬP NHẬT THỐNG KÊ TOKEN ---
+    function updateStats(totalLines, totalChars) {
+        // Tỷ lệ ước tính: Trung bình 4 ký tự tương đương 1 Token đối với văn bản code
+        const estTokens = Math.floor(totalChars / 4);
+        statsBadge.innerText = `Đã tìm thấy: ${projectFiles.length} tệp | Tổng số dòng: ${totalLines.toLocaleString()} | Ước tính Tokens: ~${estTokens.toLocaleString()}`;
+    }
+
+    // --- TẠO SƠ ĐỒ CÂY THƯ MỤC DẠNG ASCII ---
+    function generateAsciiTree(paths) {
+        const root = {};
+        paths.forEach(path => {
+            const parts = path.split('/');
+            let current = root;
+            parts.forEach(part => {
+                current[part] = current[part] || {};
+                current = current[part];
+            });
+        });
+
+        const lines = ["📁 CẤU TRÚC THƯ MỤC DỰ ÁN:"];
+
+        function buildLines(node, prefix = "") {
+            const keys = Object.keys(node);
+            keys.forEach((key, index) => {
+                const isLast = index === keys.length - 1;
+                const connector = isLast ? "└── " : "├── ";
+                lines.push(prefix + connector + key);
+                if (Object.keys(node[key]).length > 0) {
+                    const childPrefix = prefix + (isLast ? "    " : "│   ");
+                    buildLines(node[key], childPrefix);
+                }
+            });
+        }
+
+        buildLines(root);
+        return lines.join("\n");
+    }
+
+    // --- GỘP NỘI DUNG ĐỊNH DẠNG CHUẨN MARKDOWN CHO GEMINI ---
+    function buildBundleContent() {
+        const prompt = promptHeader.value.trim();
+        const treeAscii = generateAsciiTree(projectFiles.map(f => f.relPath));
+
+        const langMap = {
+            '.py': 'python', '.cpp': 'cpp', '.h': 'cpp', '.ino': 'cpp',
+            '.html': 'html', '.css': 'css', '.js': 'javascript',
+            '.json': 'json', '.sql': 'sql', '.ts': 'typescript'
+        };
+
+        const parts = [];
+
+        // 1. Lời nhắc ban đầu
+        if (prompt) {
+            parts.push(prompt + "\n\n");
+        }
+
+        // 2. Header dự án và Cây thư mục
+        parts.push("=".repeat(80) + "\n");
+        parts.push(`DỰ ÁN: ${projectName}\n`);
+        parts.push("=".repeat(80) + "\n\n");
+        parts.push(treeAscii);
+        parts.push("\n\n" + "=".repeat(80) + "\n");
+        parts.push("CHI TIẾT MÃ NGUỒN CÁC TỆP\n");
+        parts.push("=".repeat(80) + "\n\n");
+
+        // 3. Nối từng tệp vào khối Code Block
+        projectFiles.forEach(file => {
+            const lang = langMap[file.ext] || '';
+            parts.push(`--- START_FILE: ${file.relPath} ---\n`);
+            parts.push("```" + lang + "\n");
+            parts.push(file.text);
+            parts.push("\n```\n");
+            parts.push(`--- END_FILE: ${file.relPath} ---\n\n`);
+        });
+
+        return parts.join("");
+    }
+
+    // --- XỬ LÝ SAO CHÉP VÀO CLIPBOARD ---
+    btnCopy.addEventListener('click', async () => {
+        const fullContent = buildBundleContent();
+        try {
+            await navigator.clipboard.writeText(fullContent);
+            alert("🎉 Đã sao chép toàn bộ mã nguồn vào Clipboard! Bây giờ bạn chỉ cần ấn Ctrl + V vào ô chat của Gemini.");
+        } catch (err) {
+            alert("Lỗi khi sao chép: " + err);
+        }
+    });
+
+    // --- XỬ LÝ TẢI VỀ TỆP TEXT ---
+    btnDownload.addEventListener('click', () => {
+        const fullContent = buildBundleContent();
+        const blob = new Blob([fullContent], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${projectName}_SOURCE_BUNDLE.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    // Hàm tiện ích chống lỗi hiển thị ký tự đặc biệt trên HTML
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+</script>
+
+</body>
+</html>

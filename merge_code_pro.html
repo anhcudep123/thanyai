@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Enterprise Code Merger & Token Counter v2.0</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f9fafb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --border: #e5e7eb;
+            --success-bg: #ecfdf5;
+            --success-text: #065f46;
+            --success-border: #a7f3d0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 750px;
+            width: 100%;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border);
+        }
+        h2 {
+            margin-top: 0;
+            color: #111827;
+            font-size: 24px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 12px;
+        }
+        p {
+            color: #4b5563;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 15px;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+        .btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .success { 
+            background-color: var(--success-bg); 
+            color: var(--success-text); 
+            border: 1px solid var(--success-border); 
+        }
+        .error { 
+            background-color: #fef2f2; 
+            color: #991b1b; 
+            border: 1px solid #fca5a5; 
+        }
+        
+        /* Bảng điều khiển hiển thị chỉ số Token */
+        .token-dashboard {
+            margin-top: 20px;
+            display: none; /* Ban đầu ẩn, chỉ hiển thị sau khi quét xong */
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .metric-card {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .metric-title { 
+            font-size: 12px; 
+            color: #6b7280; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+        }
+        .metric-value { 
+            font-size: 18px; 
+            font-weight: 700; 
+            color: #111827; 
+            margin-top: 5px; 
+        }
+        .info-tag {
+            background: #eff6ff; 
+            border: 1px solid #bfdbfe; 
+            color: #1e40af;
+            padding: 10px; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🛠️ AI Enterprise Code Merger & Token Counter</h2>
+    <p>Hệ thống tự động hóa gộp tệp mã nguồn và định lượng tài nguyên token dành cho nhân viên nội bộ công ty.</p>
+    
+    <div class="info-tag">
+        🔒 <strong>Bảo mật phân cấp:</strong> Ứng dụng chạy cục bộ (Sandbox) trên trình duyệt mạng LAN. Không trung chuyển bất kỳ dữ liệu mã nguồn nào của công ty ra ngoài Internet.
+    </div>
+    
+    <div class="form-group" style="margin-top: 25px;">
+        <label for="extensions">Định dạng đuôi file cần quét (phân tách bằng dấu phẩy):</label>
+        <input type="text" id="extensions" value=".cpp, .h, .ino, .html, .css, .js, .py, .json">
+    </div>
+
+    <button id="mergeBtn" class="btn">📂 Chọn thư mục dự án để quét & gộp file</button>
+
+    <!-- Bảng hiển thị chỉ số Token sau khi xử lý -->
+    <div id="tokenDashboard" class="token-dashboard">
+        <div class="metric-card">
+            <div class="metric-title">Tổng số tệp tin</div>
+            <div id="totalFiles" class="metric-value">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Ước tính Token</div>
+            <div id="estimatedTokens" class="metric-value">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Chi phí API tạm tính</div>
+            <div id="estimatedCost" class="metric-value">$0.00</div>
+        </div>
+    </div>
+
+    <div id="status"></div>
+</div>
+
+<script>
+    // 1. Ánh xạ các phần tử DOM giao diện
+    const mergeBtn = document.getElementById('mergeBtn');
+    const statusDiv = document.getElementById('status');
+    const extensionsInput = document.getElementById('extensions');
+    const tokenDashboard = document.getElementById('tokenDashboard');
+    const totalFilesDiv = document.getElementById('totalFiles');
+    const estimatedTokensDiv = document.getElementById('estimatedTokens');
+    const estimatedCostDiv = document.getElementById('estimatedCost');
+
+    // 2. Bảng quy đổi phần mở rộng sang tên ngôn ngữ chuẩn trong Markdown Block
+    const langMapping = {
+        'cpp': 'cpp', 'h': 'cpp', 'ino': 'cpp', 'html': 'html', 
+        'css': 'css', 'js': 'javascript', 'py': 'python', 'json': 'json'
+    };
+
+    // 3. Xử lý sự kiện nhấp nút quét và gộp file
+    mergeBtn.addEventListener('click', async () => {
+        // Kiểm tra xem trình duyệt có hỗ trợ File System Access API không
+        if (!window.showDirectoryPicker) {
+            showStatus('🚨 Trình duyệt không hỗ trợ File System Access API. Vui lòng sử dụng Google Chrome hoặc Microsoft Edge mới nhất!', 'error');
+            return;
+        }
+
+        // Tách chuỗi phần mở rộng người dùng cấu hình thành mảng danh sách
+        const allowedExts = extensionsInput.value
+            .split(',')
+            .map(ext => ext.trim().toLowerCase());
+
+        try {
+            // Mở hộp thoại hệ điều hành để người dùng cấp quyền truy cập thư mục
+            const dirHandle = await window.showDirectoryPicker();
+            mergeBtn.disabled = true;
+            tokenDashboard.style.display = 'none';
+            showStatus('⏳ Hệ thống đang quét cấu trúc thư mục đệ quy và băm dữ liệu...', 'success');
+
+            let outputText = `# TẬP HỢP TOÀN BỘ MÃ NGUỒN DỰ ÁN\n`;
+            outputText += `- Thư mục gốc hệ thống: ${dirHandle.name}\n`;
+            outputText += `- Phương pháp đóng gói: Browser FileSystem Access v2.0 Enterprise\n\n`;
+
+            let fileCount = 0;
+            let totalCharacters = 0;
+
+            // Hàm đệ quy duyệt qua từng tệp và thư mục con
+            async function scanDirectory(currentHandle, currentPath = '') {
+                for await (const entry of currentHandle.values()) {
+                    const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                    
+                    if (entry.kind === 'directory') {
+                        // Tiếp tục đệ quy vào thư mục con
+                        await scanDirectory(entry, relativePath);
+                    } else if (entry.kind === 'file') {
+                        // Trích xuất phần mở rộng của file
+                        const dotIndex = entry.name.lastIndexOf('.');
+                        const ext = dotIndex !== -1 ? entry.name.substring(dotIndex).toLowerCase() : '';
+                        
+                        if (allowedExts.includes(ext)) {
+                            fileCount++;
+                            const file = await entry.getFile();
+                            const content = await file.text();
+                            
+                            totalCharacters += content.length; // Cộng dồn số ký tự để ước tính Token
+
+                            const langKey = ext.replace('.', '');
+                            const lang = langMapping[langKey] || '';
+
+                            // Nối dữ liệu theo định dạng ngăn tách file chuẩn Markdown
+                            outputText += '---\nSTART_FILE: ' + relativePath + '\n---\n';
+                            outputText += '```' + lang + '\n';
+                            outputText += content;
+                            outputText += '\n```\n---\nEND_FILE: ' + relativePath + '\n---\n\n';
+                        }
+                    }
+                }
+            }
+
+            // Bắt đầu quét từ thư mục gốc được chọn
+            await scanDirectory(dirHandle);
+
+            // Kiểm tra trường hợp không tìm thấy tệp nào phù hợp
+            if (fileCount === 0) {
+                showStatus('⚠️ Không tìm thấy file mã nguồn nào tương thích với định dạng cấu hình!', 'error');
+                mergeBtn.disabled = false;
+                return;
+            }
+
+            // 4. Định lượng Token và chi phí ước tính
+            // Trung bình ~4 ký tự đối với mã nguồn/tiếng Anh tương đương 1 Token
+            const estimatedTokens = Math.ceil(totalCharacters / 4);
+            
+            // Đơn giá tạm tính: $1.25 trên mỗi 1 triệu tokens input
+            const estimatedCost = (estimatedTokens / 1000000) * 1.25;
+
+            // Cập nhật kết quả lên Dashboard
+            totalFilesDiv.innerText = fileCount;
+            estimatedTokensDiv.innerText = estimatedTokens.toLocaleString() + " tk";
+            estimatedCostDiv.innerText = "$" + estimatedCost.toFixed(4);
+            tokenDashboard.style.display = 'grid';
+
+            // 5. Tạo tệp và kích hoạt tự động tải về (Download)
+            const blob = new Blob([outputText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ALL_SOURCE_CODE.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showStatus(`🎉 Đóng gói thành công! Đã xử lý ${fileCount} file code. Tệp ALL_SOURCE_CODE.txt đã tự động tải về máy.`, 'success');
+            mergeBtn.disabled = false;
+
+        } catch (err) {
+            // Xử lý các trường hợp hủy hoặc lỗi ngoại lệ
+            if (err.name === 'AbortError') {
+                showStatus('❌ Người dùng đã hủy quyền truy cập thư mục.', 'error');
+            } else {
+                showStatus(`🚨 Lỗi hệ thống: ${err.message}`, 'error');
+            }
+            mergeBtn.disabled = false;
+        }
+    });
+
+    // 6. Hàm hiển thị hộp thông báo trạng thái
+    function showStatus(message, type) {
+        statusDiv.style.display = 'block';
+        statusDiv.className = type;
+        statusDiv.innerText = message;
+    }
+</script>
+
+</body>
+</html>
