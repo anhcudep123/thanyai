@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌐 STEALTH PORTAL - ĐỒNG TIỀN ĐẠI CHÚNG $EQUI</title>
+    <!-- FIX: URL PeerJS đúng -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- FIX: URL QR library đúng -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0f12;
+            --panel-bg: #161a22;
+            --text-color: #e2e8f0;
+            --accent-color: #00ffcc;
+            --admin-color: #ffaa00;
+            --alert-color: #ff3366;
+            --border-color: #242b35;
+        }
+        body { font-family: 'Courier New', Courier, monospace; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
+        header { border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        h1, h2, h3 { margin: 0; color: var(--accent-color); }
+        .status-bar { font-size: 14px; color: #8892b0; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-container { grid-template-columns: 1fr; } }
+        .panel { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; }
+        .chat-box { border: 1px solid var(--border-color); height: 180px; overflow-y: auto; padding: 10px; background-color: #090b0e; font-size: 14px; border-radius: 4px; }
+        .wallet-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+        input, button { background-color: #1b212c; border: 1px solid var(--border-color); color: var(--text-color); padding: 12px; font-family: inherit; border-radius: 4px; font-size: 14px; }
+        button { cursor: pointer; color: var(--bg-color); background-color: var(--accent-color); font-weight: bold; border: none; }
+        button.panic { background-color: var(--alert-color); color: white; width: 100%; margin-top: 15px; padding: 15px; font-size: 16px; }
+        .balance-badge { font-size: 32px; color: var(--accent-color); margin: 10px 0; font-weight: bold; }
+        .auth-screen { text-align: center; max-width: 500px; margin: 100px auto; padding: 30px; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px; }
+        #mainSystem { display: none; }
+        #qrReader { width: 100%; max-width: 350px; background: #000; border: 2px solid var(--accent-color); border-radius: 6px; margin: 10px auto; display: none; overflow: hidden; }
+    </style>
+</head>
+<body>
+
+    <div id="authScreen" class="auth-screen">
+        <h2>🔑 ĐỒNG TIỀN ĐẠI CHÚNG $EQUI</h2>
+        <p style="font-size: 13px; color: #8892b0; margin-bottom: 20px;">Hạ tầng phẳng một chạm. Nhập cụm từ ý thức để đồng bộ ví qua Internet.</p>
+        <input type="password" id="passphraseInput" placeholder="Nhập chuỗi ký tự bí mật..." style="width: 90%; display: block; margin: 0 auto 15px auto; text-align: center;">
+        <button onclick="unlockWalletRealTime()">KÍCH HOẠT VÍ DI ĐỘNG</button>
+    </div>
+
+    <div id="mainSystem">
+        <header>
+            <div>
+                <h1>🌐 STEALTH PORTAL v4.0</h1>
+                <div class="status-bar" style="word-break: break-all;">Địa chỉ Ví của bạn: <span style="color: var(--accent-color); font-weight: bold;" id="myPublicAddress">...</span></div>
+                <div class="status-bar" style="word-break: break-all;">Peer ID: <span style="color: var(--admin-color); font-weight: bold;" id="myPeerId">...</span></div>
+            </div>
+        </header>
+
+        <div class="panel">
+            <h2>🪙 Giao Dịch P2P Một Chạm (Chạm & Quét)</h2>
+            <div style="font-size: 13px; color: #8892b0;">Số dư Sổ cái:</div>
+            <div class="balance-badge"><span id="balanceAmount">0.00</span> $EQUI</div>
+
+            <div id="qrReader"></div>
+
+            <div class="wallet-actions">
+                <button onclick="startQRScanner()" style="background-color: var(--admin-color); color: #000; font-size: 16px;">📸 BẬT CAMERA QUÉT MÃ QR</button>
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <input type="text" id="targetNetworkConfig" placeholder="Peer ID người nhận (quét QR hoặc nhập tay)..." style="flex: 1;">
+                    <input type="number" id="sendAmount" placeholder="Số $EQUI..." style="max-width: 130px;">
+                </div>
+                <button onclick="executeTrueP2PTransfer()" style="padding: 15px; font-size: 16px;">💸 XÁC NHẬN CHUYỂN</button>
+                <button onclick="showMyQR()" style="background-color: var(--admin-color); color: #000;">📤 HIỆN MÃ QR CỦA TÔI</button>
+            </div>
+        </div>
+
+        <div class="grid-container">
+            <div class="panel">
+                <h2>📡 Nhật Ký Giao Dịch WAN</h2>
+                <div class="chat-box" id="chatBox"></div>
+            </div>
+            <div class="panel">
+                <h2>🛡️ Trung Tâm Bảo Vệ Sinh Học</h2>
+                <button class="panic" onclick="triggerPanicDestruct()">🚨 NÚT KHẨN CẤP: TIÊU HỦY TOÀN BỘ VÍ TRÊN RAM</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== TIỆN ÍCH =====
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = String(str ?? "");
+            return div.innerHTML;
+        }
+
+        function logToChat(msg, color = "#8892b0") {
+            const chatBox = document.getElementById('chatBox');
+            const div = document.createElement('div');
+            div.style.color = color;
+            div.innerHTML = msg;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // ===== TRẠNG THÁI =====
+        let peer = null;
+        let myAddress = "";
+        let myPeerId = "";
+        let currentBalance = 500.00;
+        let html5QrcodeScanner = null;
+
+        // ===== BĂM SHA-256 QUA WEB CRYPTO =====
+        async function sha256Hex(str) {
+            if (!window.crypto || !window.crypto.subtle) {
+                throw new Error("Web Crypto API không khả dụng. Chạy trên http://localhost hoặc https://");
+            }
+            const enc = new TextEncoder();
+            const buf = await crypto.subtle.digest("SHA-256", enc.encode(str));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // ===== MỞ KHÓA VÍ =====
+        async function unlockWalletRealTime() {
+            const passphrase = document.getElementById('passphraseInput').value.trim();
+            if (!passphrase) return;
+
+            try {
+                // Đúc địa chỉ ví từ SHA-256
+                const hash = await sha256Hex(passphrase);
+                myAddress = "0x" + hash.substring(0, 40).toUpperCase();
+                document.getElementById('myPublicAddress').innerText = myAddress;
+                document.getElementById('balanceAmount').innerText = currentBalance.toFixed(2);
+
+                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('mainSystem').style.display = 'block';
+
+                // Khởi tạo PeerJS
+                initPeer();
+            } catch (err) {
+                console.error(err);
+                alert("Lỗi: " + err.message);
+            }
+        }
+
+        // ===== PEERJS =====
+        function initPeer() {
+            if (typeof Peer === "undefined") {
+                logToChat("[LỖI] PeerJS chưa load. Kiểm tra CDN.", "#ff3366");
+                return;
+            }
+
+            peer = new Peer({
+                debug: 2,
+                config: {
+                    iceServers: [
+                        { urls: "stun:stun.l.google.com:19302" },
+                        { urls: "stun:stun1.l.google.com:19302" }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                myPeerId = id;
+                document.getElementById('myPeerId').innerText = id;
+                logToChat(`[HỆ THỐNG] Ví trực tuyến. Peer ID: <b>${escapeHtml(id)}</b>`, "#00ffcc");
+                logToChat(`[GỢI Ý] Người khác quét QR hoặc nhập Peer ID này để chuyển tiền cho bạn.`, "#8892b0");
+            });
+
+            peer.on('error', (err) => {
+                logToChat(`[LỖI P2P] ${escapeHtml(err.type)}: ${escapeHtml(err.message)}`, "#ff3366");
+                console.error(err);
+            });
+
+            peer.on('connection', (conn) => {
+                logToChat(`[KẾT NỐI] Peer [${escapeHtml(conn.peer.substring(0, 8))}...] đã liên kết.`, "#ffaa00");
+                conn.on('data', (data) => {
+                    let parsed;
+                    try {
+                        parsed = typeof data === "string" ? JSON.parse(data) : data;
+                    } catch (e) {
+                        console.error("Dữ liệu không hợp lệ:", data);
+                        return;
+                    }
+
+                    if (parsed.type === "P2P_TRANSFER") {
+                        const amt = parseFloat(parsed.payload.amount);
+                        if (!isNaN(amt) && amt > 0) {
+                            currentBalance += amt;
+                            document.getElementById('balanceAmount').innerText = currentBalance.toFixed(2);
+                            logToChat(`🪙 [NHẬN TIỀN] +${amt} $EQUI từ ${escapeHtml(String(parsed.payload.sender || "").substring(0, 10))}...`, "#00ffcc");
+                        }
+                    }
+                });
+
+                conn.on('close', () => {
+                    logToChat("[MẤT KẾT NỐI] Đối tác đã ngắt.", "#ff3366");
+                });
+            });
+        }
+
+        // ===== QR SCANNER =====
+        function startQRScanner() {
+            if (typeof Html5Qrcode === "undefined") {
+                alert("Thư viện QR chưa load. Kiểm tra kết nối mạng.");
+                return;
+            }
+
+            const qrTarget = document.getElementById('qrReader');
+            qrTarget.style.display = 'block';
+
+            html5QrcodeScanner = new Html5Qrcode("qrReader");
+
+            html5QrcodeScanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    // Khi quét thành công
+                    document.getElementById('targetNetworkConfig').value = decodedText;
+                    alert("🎯 ĐÃ NHẬN DIỆN PEER ID QUA QR!");
+                    html5QrcodeScanner.stop().then(() => {
+                        qrTarget.style.display = 'none';
+                    }).catch(err => console.error(err));
+                },
+                (errorMessage) => {
+                    // Bỏ qua khung hình trượt — không làm gì
+                }
+            ).catch(err => {
+                alert("Không thể truy cập Camera. Hãy cấp quyền camera.");
+                qrTarget.style.display = 'none';
+            });
+        }
+
+        // ===== HIỆN QR CỦA MÌNH =====
+        function showMyQR() {
+            if (!myPeerId) {
+                alert("Chưa có Peer ID. Chờ khởi tạo xong.");
+                return;
+            }
+            // Tạo QR code qua API online đơn giản
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(myPeerId)}`;
+            const w = window.open("", "_blank", "width=350,height=350");
+            w.document.write(`<html><body style="background:#0d0f12;color:#00ffcc;text-align:center;font-family:monospace;padding:20px;">
+                <h3>Peer ID của tôi</h3>
+                <img src="${qrUrl}" alt="QR">
+                <p style="word-break:break-all;font-size:12px;">${escapeHtml(myPeerId)}</p>
+            </body></html>`);
+        }
+
+        // ===== CHUYỂN TIỀN =====
+        async function executeTrueP2PTransfer() {
+            const targetPeerId = document.getElementById('targetNetworkConfig').value.trim();
+            const amount = parseFloat(document.getElementById('sendAmount').value);
+
+            if (!targetPeerId || isNaN(amount) || amount <= 0) {
+                alert("Lỗi: Chưa nhập Peer ID hoặc số tiền không hợp lệ.");
+                return;
+            }
+            if (currentBalance < amount) {
+                alert("Lỗi: Số dư ví không đủ.");
+                return;
+            }
+            if (!peer) {
+                alert("Lỗi: Peer chưa khởi tạo.");
+                return;
+            }
+
+            logToChat(`[CHUYỂN TIỀN] Đang kết nối tới ${escapeHtml(targetPeerId)}...`);
+
+            const txConn = peer.connect(targetPeerId);
+
+            txConn.on('open', () => {
+                txConn.send(JSON.stringify({
+                    type: "P2P_TRANSFER",
+                    payload: { sender: myAddress, amount: amount }
+                }));
+
+                currentBalance -= amount;
+                document.getElementById('balanceAmount').innerText = currentBalance.toFixed(2);
+
+                logToChat(`✅ [THÀNH CÔNG] Đã gửi ${amount} $EQUI tới ${escapeHtml(targetPeerId.substring(0, 10))}...`, "#00ffcc");
+
+                document.getElementById('targetNetworkConfig').value = "";
+                document.getElementById('sendAmount').value = "";
+
+                setTimeout(() => txConn.close(), 1000);
+            });
+
+            txConn.on('error', (err) => {
+                logToChat(`[LỖI CHUYỂN] ${escapeHtml(err.type)}: ${escapeHtml(err.message)}`, "#ff3366");
+            });
+        }
+
+        // ===== NÚT KHẨN CẤP =====
+        function triggerPanicDestruct() {
+            if (confirm("🚨 KHẨN CẤP: Tiêu hủy toàn bộ khóa ví khỏi bộ nhớ RAM?")) {
+                // FIX: thêm backtick
+                document.body.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100vh; background-color:black; color:#00ff00; font-size:24px; text-align:center; padding:20px;">[BẤT TỬ] RAM đã sạch dấu vết. Khôi phục lớp ngụy trang...</div>`;
+                // FIX: protocol https
+                setTimeout(() => { window.location.href = "https://www.google.com"; }, 1000);
+            }
+        }
+    </script>
+</body>
+</html>
