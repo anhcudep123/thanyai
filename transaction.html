@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌐 STEALTH PORTAL - VÙNG ĐẤT TỊNH ĐỘ SỐ</title>
+    <!-- FIX: URL PeerJS đúng -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0f12;
+            --panel-bg: #161a22;
+            --text-color: #e2e8f0;
+            --accent-color: #00ffcc;
+            --admin-color: #ffaa00;
+            --alert-color: #ff3366;
+            --border-color: #242b35;
+        }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1, h2, h3 { margin: 0; color: var(--accent-color); }
+        .status-bar { font-size: 14px; color: #8892b0; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-container { grid-template-columns: 1fr; } }
+        .panel { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; display: flex; flex-direction: column; }
+        .chat-box, .queue-box { border: 1px solid var(--border-color); height: 250px; overflow-y: auto; padding: 10px; background-color: #090b0e; margin-bottom: 10px; font-size: 14px; border-radius: 4px; }
+        .chat-input-area { display: flex; gap: 10px; }
+        input, button { background-color: #1b212c; border: 1px solid var(--border-color); color: var(--text-color); padding: 10px; font-family: inherit; border-radius: 4px; }
+        input { flex-grow: 1; }
+        button { cursor: pointer; color: var(--bg-color); background-color: var(--accent-color); font-weight: bold; border: none; }
+        button.panic { background-color: var(--alert-color); color: white; width: 100%; margin-top: 15px; padding: 15px; font-size: 16px; }
+        .market-item, .queue-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--border-color); }
+        .balance-badge { font-size: 24px; color: var(--accent-color); margin: 10px 0; }
+        #adminSection { margin-top: 30px; border: 2px dashed var(--admin-color); display: none; }
+        .connection-area { margin-bottom: 15px; background: #1f2633; padding: 10px; border-radius: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>🌐 STEALTH PORTAL v2.0</h1>
+            <div class="status-bar">Hạ tầng phẳng phi tập trung | <span style="color: var(--accent-color); font-weight: bold;">[KẾT NỐI INTERNET P2P THỰC TẾ]</span></div>
+        </div>
+        <div id="clock" style="color: var(--accent-color);">--:--:-- - 30/09/2026</div>
+    </header>
+
+    <div class="connection-area">
+        <div>🆔 Mã định danh Node của bạn: <b style="color: var(--accent-color);" id="myPeerId">Đang khởi tạo...</b></div>
+        <div style="margin-top: 8px; display: flex; gap: 10px;">
+            <input type="text" id="targetPeerId" placeholder="Nhập mã định danh Node của bạn bè...">
+            <button onclick="connectToPeer()" style="background-color: var(--admin-color);">KẾT NỐI NODE</button>
+        </div>
+    </div>
+
+    <div class="grid-container" id="citizenView">
+        <div class="panel">
+            <h2>📡 Kênh Liên Lạc Mesh Ngầm</h2>
+            <div class="chat-box" id="chatBox">
+                <div style="color: #8892b0;">[HỆ THỐNG] Đang mở cổng WebRTC P2P bảo mật...</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Nhập tin nhắn hoặc gõ mã Admin ngầm...">
+                <button onclick="handleSendButtonClick()">GỬI MESH</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>💱 Ví Tiền & Yêu Cầu Cứu Trợ</h2>
+            <div class="balance-badge"><span id="balanceAmount">1450.50</span> $EQUI</div>
+
+            <h3 style="margin-top:10px; color: #8892b0;">Gửi Yêu Cầu Đến Trạm Phân Phối Gần Nhất:</h3>
+            <div class="market-item">
+                <span>🍖 Thực phẩm hữu cơ sinh học (2500 Kcal)</span>
+                <button onclick="requestResource('Thực phẩm hữu cơ (2500 Kcal)', 10)">Yêu Cầu (10 $EQUI)</button>
+            </div>
+            <div class="market-item">
+                <span>🔌 Điện năng lượng mặt trời (5 kWh)</span>
+                <button onclick="requestResource('Điện mặt trời (5 kWh)', 5)">Yêu Cầu (5 $EQUI)</button>
+            </div>
+
+            <button class="panic" onclick="triggerPanicDestruct()">🚨 NÚT KHẨN CẤP: TIÊU HỦY DỮ LIỆU</button>
+        </div>
+    </div>
+
+    <div class="panel" id="adminSection">
+        <h2 style="color: var(--admin-color);">🛠️ HỆ THỐNG QUẢN TRỊ & ĐIỀU PHỐI HẠ TẦNG</h2>
+        <div class="queue-box" id="adminQueue"></div>
+    </div>
+
+    <script>
+        // ===== TIỆN ÍCH =====
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = String(str);
+            return div.innerHTML;
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];  // FIX: lấy [0]
+            document.getElementById('clock').innerText = `${timeStr} - 30/09/2026`;
+        }
+
+        // ===== CẤU HÌNH PBKDF2 =====
+        const PBKDF2_SALT = "AGI_Stealth_OS_Vong_Dat_Tinh_Do_Ngam_2026";
+        const PBKDF2_ITERATIONS = 100000;
+        // FIX: hash đúng đã test ở bước trước
+        const PBKDF2_TARGET_HASH = "14bbf01a3755a33687b6a12869ba29ca22b8c7eff92481426571619f567b1dd9";
+
+        async function deriveKey(password) {
+            if (!window.crypto || !window.crypto.subtle) {
+                throw new Error("Web Crypto API không khả dụng. Chạy trên https:// hoặc http://localhost.");
+            }
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
+            );
+            const bits = await crypto.subtle.deriveBits(
+                { name: "PBKDF2", salt: enc.encode(PBKDF2_SALT), iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+                keyMaterial, 256
+            );
+            return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        window.deriveKey = deriveKey;
+
+        // ===== PEERJS =====
+        let peer = null;
+        let conn = null;
+
+        function initPeer() {
+            if (typeof Peer === "undefined") {
+                console.error("PeerJS chưa load. Kiểm tra kết nối mạng hoặc URL CDN.");
+                return;
+            }
+
+            peer = new Peer({
+                debug: 2,
+                config: {
+                    iceServers: [
+                        // FIX: URL STUN đúng (không có dấu :// lặp)
+                        { urls: "stun:stun.l.google.com:19302" },
+                        { urls: "stun:stun1.l.google.com:19302" }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                document.getElementById('myPeerId').innerText = id;
+                const chatBox = document.getElementById('chatBox');
+                const div = document.createElement('div');
+                div.style.color = "#00ffcc";
+                div.textContent = `[HỆ THỐNG] Node của bạn đã trực tuyến. Mã ID: ${id}`;
+                chatBox.appendChild(div);
+            });
+
+            peer.on('error', (err) => {
+                console.error("PeerJS error:", err);
+                const chatBox = document.getElementById('chatBox');
+                const div = document.createElement('div');
+                div.style.color = "#ff3366";
+                div.textContent = `[LỖI P2P] ${err.type}: ${err.message}`;
+                chatBox.appendChild(div);
+            });
+
+            peer.on('connection', (incomingConn) => {
+                conn = incomingConn;
+                setupConnectionListeners();
+                const chatBox = document.getElementById('chatBox');
+                const div = document.createElement('div');
+                div.style.color = "#ffaa00";
+                div.textContent = `[KẾT NỐI] Node [${conn.peer.substring(0, 6)}...] đã liên kết với bạn.`;
+                chatBox.appendChild(div);
+            });
+        }
+
+        function connectToPeer() {
+            if (!peer) { alert("Peer chưa khởi tạo."); return; }
+            const targetId = document.getElementById('targetPeerId').value.trim();
+            if (!targetId) return;
+
+            const chatBox = document.getElementById('chatBox');
+            const div = document.createElement('div');
+            div.style.color = "#8892b0";
+            div.textContent = `[HỆ THỐNG] Đang kết nối tới Node: ${targetId}...`;
+            chatBox.appendChild(div);
+
+            conn = peer.connect(targetId);
+            setupConnectionListeners();
+        }
+
+        function setupConnectionListeners() {
+            if (!conn) return;
+
+            conn.on('open', () => {
+                const chatBox = document.getElementById('chatBox');
+                const div = document.createElement('div');
+                div.style.color = "#00ffcc";
+                div.textContent = "[THÀNH CÔNG] Đường truyền WebRTC P2P đã thiết lập!";
+                chatBox.appendChild(div);
+            });
+
+            conn.on('data', (data) => {
+                let parsed;
+                try {
+                    parsed = typeof data === "string" ? JSON.parse(data) : data;
+                } catch (e) {
+                    console.error("Dữ liệu không hợp lệ:", data);
+                    return;
+                }
+
+                const chatBox = document.getElementById('chatBox');
+
+                if (parsed.type === "CHAT") {
+                    const msgElement = document.createElement('div');
+                    msgElement.innerHTML = `<b style="color: var(--admin-color);">@ĐốiTác:</b> ${escapeHtml(parsed.payload)}`;
+                    chatBox.appendChild(msgElement);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+                // FIX: elif → else if
+                else if (parsed.type === "RELIEF_REQUEST") {
+                    const queue = document.getElementById('adminQueue');
+                    const requestId = "net_req_" + Date.now();
+                    const newRequest = document.createElement('div');
+                    newRequest.className = "queue-item";
+                    newRequest.id = requestId;
+                    newRequest.innerHTML = `
+                        <span style="font-size: 13px;">[INTERNET MESH] Cần: <b>${escapeHtml(parsed.payload.item)}</b> | ZK-BioAuth: <b style="color: var(--accent-color);">ĐÃ XÁC THỰC</b></span>
+                        <button style="background-color: var(--admin-color);" onclick="approveRequest('${requestId}')">DUYỆT XUẤT KHO</button>
+                    `;
+                    queue.appendChild(newRequest);
+                }
+            });
+
+            conn.on('close', () => {
+                const chatBox = document.getElementById('chatBox');
+                const div = document.createElement('div');
+                div.style.color = "#ff3366";
+                div.textContent = "[MẤT KẾT NỐI] Đối tác đã ngắt mạng.";
+                chatBox.appendChild(div);
+                conn = null;
+            });
+        }
+
+        // ===== XỬ LÝ GỬI =====
+        async function handleSendButtonClick() {
+            const input = document.getElementById('chatInput');
+            const chatBox = document.getElementById('chatBox');
+            const inputValue = input.value.trim();
+            if (inputValue === "") return;
+
+            // Chỉ thử băm khi chuỗi giống mật khẩu
+            if (inputValue.length > 10) {
+                try {
+                    const computedHash = await deriveKey(inputValue);
+                    if (computedHash === PBKDF2_TARGET_HASH) {
+                        document.getElementById('adminSection').style.display = 'block';
+                        alert("🛠️ HỆ THỐNG PHÊ DUYỆT ĐÃ MỞ.");
+                        input.value = "";
+                        return;
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+
+            // Gửi qua P2P nếu có kết nối
+            if (conn && conn.open) {
+                conn.send(JSON.stringify({ type: "CHAT", payload: inputValue }));  // FIX: JSON
+            }
+
+            const newMsg = document.createElement('div');
+            newMsg.innerHTML = `<b style="color: var(--accent-color);">@Tôi:</b> ${escapeHtml(inputValue)}`;
+            chatBox.appendChild(newMsg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            input.value = "";
+        }
+
+        function requestResource(itemName, cost) {
+            const balanceEl = document.getElementById('balanceAmount');
+            const currentBal = parseFloat(balanceEl.innerText);
+            if (currentBal < cost) {
+                alert("❌ Số dư $EQUI không đủ.");
+                return;
+            }
+            balanceEl.innerText = (currentBal - cost).toFixed(2);
+
+            if (conn && conn.open) {
+                conn.send(JSON.stringify({
+                    type: "RELIEF_REQUEST",
+                    payload: { item: itemName, timestamp: Date.now() }
+                }));
+                alert(`✅ Gói tin yêu cầu [${itemName}] đã phát tán qua P2P.`);
+            } else {
+                alert("⚠️ Chưa kết nối Node nào. Gói tin lưu cache.");
+            }
+        }
+
+        function approveRequest(elementId) {
+            const item = document.getElementById(elementId);
+            if (item) {
+                item.style.border = "1px solid var(--accent-color)";
+                item.innerHTML = `<span style="color: var(--accent-color); font-size: 13px;">✓ ĐÃ DUYỆT: Cửa kho đã nhận lệnh mở chốt.</span>`;
+                setTimeout(() => { item.remove(); }, 2000);
+            }
+        }
+
+        function triggerPanicDestruct() {
+            if (confirm("🚨 KÍCH HOẠT TIÊU HỦY KHẨN CẤP?")) {
+                document.body.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100vh; background-color:black; color:#00ff00; font-size:24px; text-align:center; padding:20px;">[BẤT TỬ] Đang tàng hình thiết bị...</div>`;
+                setTimeout(() => { window.location.href = "https://www.google.com"; }, 1000);
+            }
+        }
+
+        // ===== KHỞI ĐỘNG =====
+        window.addEventListener('load', () => {
+            updateClock();
+            setInterval(updateClock, 1000);
+            initPeer();
+            if (location.protocol === "file:") {
+                console.warn("⚠️ Đang chạy trên file:// — Web Crypto API sẽ không hoạt động.");
+            }
+        });
+    </script>
+</body>
+</html>
