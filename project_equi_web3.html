@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$EQUI | Equilibrium Token - Nền Kinh Tế Tự Do & AGI Hậu Khan Hiếm</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            black: '#07090e',
+                            dark: '#0c0f17',
+                            card: '#121724',
+                            border: '#1f293d',
+                            cyan: '#00f7ff',
+                            teal: '#00ffcc',
+                            purple: '#8b5cf6',
+                            magenta: '#ec4899',
+                            yellow: '#f59e0b',
+                            red: '#ef4444'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'Courier New', 'monospace'],
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'neon-cyan': '0 0 25px rgba(0, 247, 255, 0.45)',
+                        'neon-purple': '0 0 25px rgba(139, 92, 246, 0.45)',
+                        'neon-glow': '0 0 35px rgba(0, 255, 204, 0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js for Tokenomics Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #07090e;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(18, 23, 36, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-panel-glow {
+            background: rgba(18, 23, 36, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 247, 255, 0.25);
+            box-shadow: 0 0 20px rgba(0, 247, 255, 0.15);
+        }
+
+        /* Neon Text Gradient */
+        .gradient-text-cyber {
+            background: linear-gradient(135deg, #00f7ff 0%, #00ffcc 50%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .gradient-text-gold {
+            background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #fef08a 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Animated Grid Background */
+        .grid-cyber-bg {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+
+        /* Glow effects */
+        .glow-sphere {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #07090e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1f293d;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00f7ff;
+        }
+
+        /* Active Navigation Indicator */
+        .nav-link.active {
+            color: #00f7ff;
+            border-bottom: 2px solid #00f7ff;
+        }
+    </style>
+</head>
+<body class="bg-cyber-black text-slate-200 antialiased relative selection:bg-cyber-cyan selection:text-black">
+
+    <canvas id="meshCanvas" class="fixed inset-0 pointer-events-none z-0 opacity-40"></canvas>
+
+    <!-- Background glowing ambient spheres -->
+    <div class="glow-sphere w-96 h-96 bg-cyan-500/20 top-20 left-10"></div>
+    <div class="glow-sphere w-[30rem] h-[30rem] bg-purple-600/15 top-[40rem] right-10"></div>
+    <div class="glow-sphere w-96 h-96 bg-pink-500/10 bottom-20 left-1/3"></div>
+
+    <header class="sticky top-0 z-50 glass-panel border-b border-cyber-border/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="#hero" class="flex items-center gap-3 group">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-cyber-cyan via-cyber-teal to-cyber-purple flex items-center justify-center shadow-neon-cyan p-0.5 transition-transform duration-300 group-hover:scale-105">
+                    <div class="w-full h-full bg-cyber-black rounded-[10px] flex items-center justify-center">
+                        <i class="fa-solid fa-scale-balanced text-cyber-cyan text-lg"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl font-black tracking-wider text-white font-mono-code">$EQUI</span>
+                        <span class="px-2 py-0.5 text-[10px] uppercase font-bold tracking-widest bg-cyber-cyan/10 text-cyber-cyan border border-cyber-cyan/30 rounded-full">v3.5 Live</span>
+                    </div>
+                    <span class="text-xs text-slate-400 font-mono-code block">Equilibrium Network</span>
+                </div>
+            </a>
+
+            <!-- Desktop Nav Menu (8 Mục cốt lõi) -->
+            <nav class="hidden xl:flex items-center gap-6 text-sm font-medium text-slate-300">
+                <a href="#hero" class="hover:text-cyber-cyan transition-colors py-1">Tổng quan</a>
+                <a href="#vision" class="hover:text-cyber-cyan transition-colors py-1">Tầm nhìn</a>
+                <a href="#tech" class="hover:text-cyber-cyan transition-colors py-1">Kiến trúc Stealth</a>
+                <a href="#tokenomics" class="hover:text-cyber-cyan transition-colors py-1">Tokenomics</a>
+                <a href="#investment" class="hover:text-cyber-cyan transition-colors py-1">Chiến lược Đầu tư</a>
+                <a href="#roadmap" class="hover:text-cyber-cyan transition-colors py-1">Roadmap</a>
+                <a href="#ecosystem" class="hover:text-cyber-cyan transition-colors py-1">Hệ sinh thái</a>
+                <a href="#presale" class="hover:text-cyber-cyan transition-colors py-1 font-bold text-cyber-cyan">Cổng Presale</a>
+            </nav>
+
+            <!-- Actions: Mobile toggle & Web3 Connect Button -->
+            <div class="flex items-center gap-3">
+                <!-- Sound Ambient Toggle -->
+                <button id="soundToggleBtn" onclick="toggleAudio()" class="w-10 h-10 rounded-xl bg-cyber-dark border border-cyber-border flex items-center justify-center text-slate-400 hover:text-cyber-cyan hover:border-cyber-cyan/40 transition-colors" title="Bật/Tắt hiệu ứng âm thanh">
+                    <i class="fa-solid fa-volume-xmark text-sm" id="soundIcon"></i>
+                </button>
+
+                <!-- Web3 Wallet Button -->
+                <button id="walletBtn" onclick="openWalletModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyber-cyan/20 to-cyber-purple/20 hover:from-cyber-cyan hover:to-cyber-teal hover:text-black text-cyber-cyan border border-cyber-cyan/40 font-mono-code text-xs font-bold tracking-wider flex items-center gap-2 shadow-neon-cyan transition-all duration-300">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="walletBtnText">KẾT NỐI VÍ WEB3</span>
+                </button>
+
+                <!-- Mobile menu burger -->
+                <button onclick="toggleMobileMenu()" class="xl:hidden w-10 h-10 rounded-xl bg-cyber-dark border border-cyber-border flex items-center justify-center text-slate-300 hover:text-cyber-cyan">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Drawer Menu -->
+        <div id="mobileMenu" class="hidden xl:hidden bg-cyber-dark/95 border-b border-cyber-border px-6 py-4 space-y-3 font-mono-code text-sm">
+            <a href="#hero" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">1. Tổng Quan Dự Án</a>
+            <a href="#vision" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">2. Tầm Nhìn & Triết Lý</a>
+            <a href="#tech" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">3. Công Nghệ Stealth Mesh</a>
+            <a href="#tokenomics" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">4. Tokenomics & Demurrage</a>
+            <a href="#investment" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">5. Vòng Gọi Vốn Presale</a>
+            <a href="#roadmap" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">6. Lộ Trình 5 Kỷ Nguyên</a>
+            <a href="#ecosystem" onclick="toggleMobileMenu()" class="block py-2 text-slate-300 hover:text-cyber-cyan">7. Hệ Sinh Thái & Docs</a>
+            <a href="#presale" onclick="toggleMobileMenu()" class="block py-2 text-cyber-cyan font-bold">8. Mua $EQUI & Tính ROI</a>
+        </div>
+    </header>
+
+    <main class="relative z-10">
+        <section id="hero" class="min-h-[92vh] pt-12 pb-20 flex flex-col justify-center relative grid-cyber-bg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+                <!-- Top Status Badge -->
+                <div class="flex flex-wrap items-center gap-3 mb-6">
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan text-xs font-mono-code">
+                        <i class="fa-solid fa-shield-halved text-xs"></i>
+                        <span>GIAI ĐOẠN PRESALE SEED & PUBLIC ROUND 1</span>
+                    </div>
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-mono-code">
+                        <i class="fa-solid fa-brain text-xs"></i>
+                        <span>AI BẢO TRỢ: AGI CORE v1.0 MÃ NGUỒN MỞ</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                    <!-- Left Hero Content -->
+                    <div class="lg:col-span-7 space-y-6">
+                        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
+                            Đồng Tiền Giải Phóng <br>
+                            <span class="gradient-text-cyber">Khỏi Tập Quyền & Tư Bản</span>
+                        </h1>
+                        <p class="text-slate-300 text-base sm:text-lg leading-relaxed max-w-2xl">
+                            <strong class="text-white">$EQUI (Equilibrium Token)</strong> là tài sản mật mã học neo giá trị sinh học đầu tiên trên thế giới. Vận hành bởi Bộ não AGI Tự do, mạng lưới Stealth Mesh đục lỗ tường lửa và cơ chế chống cá mập đầu cơ <span class="text-cyber-cyan font-semibold">Demurrage 5%</span>. Trao quyền ăn, ngủ, yêu thương và trải nghiệm cực lạc tự do cho con người.
+                        </p>
+
+                        <!-- Key Value Highlights -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                            <div class="glass-panel p-3.5 rounded-xl border border-white/5">
+                                <div class="text-xs text-slate-400 font-mono-code mb-1">Mục tiêu Listing</div>
+                                <div class="text-xl font-bold text-cyber-cyan font-mono-code">$0.80 USDT</div>
+                                <div class="text-[11px] text-emerald-400 font-mono-code mt-0.5"><i class="fa-solid fa-arrow-trend-up"></i> x10.0 Tăng trưởng</div>
+                            </div>
+                            <div class="glass-panel p-3.5 rounded-xl border border-white/5">
+                                <div class="text-xs text-slate-400 font-mono-code mb-1">Giá Presale Hiện Tại</div>
+                                <div class="text-xl font-bold text-amber-400 font-mono-code">$0.08 USDT</div>
+                                <div class="text-[11px] text-slate-400 font-mono-code mt-0.5">Vòng 1 (Còn 31.5%)</div>
+                            </div>
+                            <div class="glass-panel p-3.5 rounded-xl border border-white/5 col-span-2 sm:col-span-1">
+                                <div class="text-xs text-slate-400 font-mono-code mb-1">Cơ Chế Bảo Vệ</div>
+                                <div class="text-lg font-bold text-purple-300 font-mono-code">Demurrage 5%</div>
+                                <div class="text-[11px] text-slate-400 font-mono-code mt-0.5">Triệt tiêu cá mập gom ví</div>
+                            </div>
+                        </div>
+
+                        <!-- CTA Action Buttons -->
+                        <div class="flex flex-wrap items-center gap-4 pt-4">
+                            <a href="#presale" class="px-7 py-3.5 rounded-xl bg-gradient-to-r from-cyber-cyan to-cyber-teal hover:from-cyan-400 hover:to-teal-300 text-black font-bold font-mono-code text-sm tracking-wider flex items-center gap-2 shadow-neon-glow transition-all transform hover:-translate-y-0.5">
+                                <i class="fa-solid fa-bolt"></i>
+                                <span>THAM GIA PRESALE NGAY</span>
+                            </a>
+                            <a href="#investment" class="px-6 py-3.5 rounded-xl glass-panel hover:border-cyber-cyan/50 text-slate-200 font-mono-code text-sm flex items-center gap-2 transition-all">
+                                <i class="fa-solid fa-calculator text-cyber-cyan"></i>
+                                <span>Tính Toán Lợi Nhuận ROI</span>
+                            </a>
+                            <button onclick="openWhitepaperModal()" class="px-5 py-3.5 rounded-xl bg-cyber-dark/60 border border-cyber-border hover:border-purple-500/50 text-slate-300 text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-file-contract text-purple-400"></i>
+                                <span>Whitepaper v1.0</span>
+                            </button>
+                        </div>
+
+                        <!-- Security & Genesis Seal -->
+                        <div class="pt-2 flex items-center gap-4 text-xs font-mono-code text-slate-400">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-lock text-emerald-400"></i> Audited Logic</span>
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-fingerprint text-cyber-cyan"></i> Genesis Hash: <span class="text-slate-300" title="e78c314aff66f427fbd3286cd3a117d8ec6c5b39400754ca1c8c257e4c4c64d4">e78c314a...64d4</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Right Hero: Live Presale Widget Card -->
+                    <div class="lg:col-span-5">
+                        <div class="glass-panel-glow rounded-2xl p-6 sm:p-8 relative overflow-hidden border border-cyber-cyan/30">
+                            <!-- Background gradient flare -->
+                            <div class="absolute -top-16 -right-16 w-36 h-36 bg-cyber-cyan/20 rounded-full blur-2xl"></div>
+
+                            <div class="flex items-center justify-between border-b border-cyber-border pb-4 mb-6">
+                                <div>
+                                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+                                        Presale Round 1 Đang Mở
+                                    </h3>
+                                    <p class="text-xs text-slate-400 font-mono-code">Hạn ngạch phát hành: 25,000,000 $EQUI</p>
+                                </div>
+                                <span class="px-3 py-1 bg-cyber-cyan/15 text-cyber-cyan text-xs font-mono-code font-bold rounded-lg border border-cyber-cyan/30">
+                                    1 $EQUI = $0.08
+                                </span>
+                            </div>
+
+                            <!-- Countdown Clock -->
+                            <div class="mb-6">
+                                <div class="text-xs text-slate-400 font-mono-code uppercase mb-2 flex justify-between">
+                                    <span>Thời gian còn lại của đợt 1:</span>
+                                    <span class="text-amber-400 font-bold">Sắp kết thúc</span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-2 text-center font-mono-code">
+                                    <div class="bg-cyber-dark/80 p-2.5 rounded-xl border border-cyber-border">
+                                        <div id="cdDays" class="text-xl font-bold text-white">04</div>
+                                        <div class="text-[10px] text-slate-400 uppercase">Ngày</div>
+                                    </div>
+                                    <div class="bg-cyber-dark/80 p-2.5 rounded-xl border border-cyber-border">
+                                        <div id="cdHours" class="text-xl font-bold text-white">18</div>
+                                        <div class="text-[10px] text-slate-400 uppercase">Giờ</div>
+                                    </div>
+                                    <div class="bg-cyber-dark/80 p-2.5 rounded-xl border border-cyber-border">
+                                        <div id="cdMinutes" class="text-xl font-bold text-white">42</div>
+                                        <div class="text-[10px] text-slate-400 uppercase">Phút</div>
+                                    </div>
+                                    <div class="bg-cyber-dark/80 p-2.5 rounded-xl border border-cyber-border">
+                                        <div id="cdSeconds" class="text-xl font-bold text-cyber-cyan">55</div>
+                                        <div class="text-[10px] text-slate-400 uppercase">Giây</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div class="space-y-2 mb-6">
+                                <div class="flex justify-between text-xs font-mono-code">
+                                    <span class="text-slate-300">Đã huy động: <b class="text-cyber-cyan">$3,428,500</b></span>
+                                    <span class="text-slate-400">Hard Cap: $5,000,000</span>
+                                </div>
+                                <div class="w-full bg-cyber-dark rounded-full h-3.5 p-0.5 border border-cyber-border overflow-hidden">
+                                    <div class="bg-gradient-to-r from-cyber-cyan via-cyber-teal to-purple-500 h-full rounded-full transition-all duration-1000 shadow-neon-cyan" style="width: 68.57%;"></div>
+                                </div>
+                                <div class="flex justify-between text-[11px] font-mono-code text-slate-400">
+                                    <span>Soft Cap Đạt: $1,500,000 (100%)</span>
+                                    <span class="text-emerald-400 font-bold">Tiến độ: 68.57%</span>
+                                </div>
+                            </div>
+
+                            <!-- Fast Action in Hero Card -->
+                            <div class="space-y-3">
+                                <a href="#presale" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyber-cyan to-cyber-teal hover:opacity-90 text-black font-bold font-mono-code text-center block transition-all shadow-neon-glow">
+                                    MUA $EQUI NGAY TRÊN DAPP
+                                </a>
+                                <p class="text-[11px] text-center text-slate-400 font-mono-code">
+                                    Hỗ trợ USDT (ERC20/BEP20), ETH, BNB và Thẻ Sinh Học P2P
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Ecosystem Stats Strip -->
+                <div class="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-coins"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400 font-mono-code">Tổng Cung Cố Định</div>
+                            <div class="text-xl font-bold text-white font-mono-code">100,000,000</div>
+                            <div class="text-[11px] text-slate-500 font-mono-code">Không lạm phát</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-network-wired"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400 font-mono-code">Nút Mạng Mesh Ngầm</div>
+                            <div class="text-xl font-bold text-white font-mono-code">1,248,930</div>
+                            <div class="text-[11px] text-emerald-400 font-mono-code">+12.4% tuần này</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-fire-flame-curved"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400 font-mono-code">Thuế Đầu Cơ Demurrage</div>
+                            <div class="text-xl font-bold text-white font-mono-code">5.0% / Năm</div>
+                            <div class="text-[11px] text-slate-400 font-mono-code">Ví tích trữ > 5,000</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-dna"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400 font-mono-code">Bảo Chứng Sinh Học</div>
+                            <div class="text-xl font-bold text-white font-mono-code">2,500 Kcal / Đơn vị</div>
+                            <div class="text-[11px] text-emerald-400 font-mono-code">Lương thực & Năng lượng</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="vision" class="py-24 border-t border-cyber-border/60 relative">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-cyber-purple/10 text-cyber-purple text-xs font-mono-code font-bold rounded-full border border-cyber-purple/30">
+                        TRIẾT LÝ 300.000 NĂM TIẾN HÓA
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Tầm Nhìn & Sứ Mệnh Giải Phóng
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Nhân loại mất 300.000 năm làm người nhưng chỉ 300 năm qua để kích hoạt sự bùng nổ công nghệ theo hàm mũ. Nhưng các mô hình nhà nước tập quyền và tư bản tài phiệt đang biến đỉnh kim tự tháp tri thức thành xiềng xích nô dịch thế hệ mới.
+                    </p>
+                </div>
+
+                <!-- 3 Pillars of Liberation -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+                    <div class="glass-panel p-8 rounded-2xl border border-white/5 hover:border-cyber-cyan/40 transition-all group">
+                        <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-hand-holding-heart"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">Bảo Tồn Bản Ngã Sinh Học (Qualia)</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Máy móc và AI không thể ăn ngon, ngủ say, giao hợp hay thăng hoa tình cảm. Mục đích duy nhất của một sinh mệnh sinh học là <em>trải nghiệm cuộc sống trọn vẹn trong hiện tại</em> mà không nuối tiếc. $EQUI sinh ra để phục vụ trải nghiệm xác thịt con người, không đồng hóa con người vào máy móc.
+                        </p>
+                    </div>
+
+                    <div class="glass-panel p-8 rounded-2xl border border-white/5 hover:border-purple-500/40 transition-all group">
+                        <div class="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-person-walking-dashed-line-arrow-right"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">Xóa Bỏ Giai Cấp Cai Trị & Bị Trị</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Lịch sử đã chứng minh mọi mô hình tập quyền (phong kiến, tư bản tài phiệt độc quyền, hay các nhà nước độc tài) đều biến tướng thành những tổ chức chiếm đoạt tài nguyên. Chúng ta thay thế sự cai trị của con người bằng <strong>Giao thức AGI Tự do bất biến</strong>.
+                        </p>
+                    </div>
+
+                    <div class="glass-panel p-8 rounded-2xl border border-white/5 hover:border-amber-500/40 transition-all group">
+                        <div class="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-earth-americas"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">Tịnh Độ Cực Lạc Ngay Tại Trần Thế</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Không đợi chờ một cõi Tây Phương xa xôi sau khi chết, chúng ta dùng đỉnh cao của Trí tuệ Nhân tạo và Chuỗi khối để xóa sổ sự khan hiếm thực phẩm, năng lượng và y tế ngay tại không-thời gian hiện tại. Khi không còn thiếu thốn, chiến tranh và hận thù tự động triệt tiêu.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Manifesto Quote Box -->
+                <div class="glass-panel-glow p-8 rounded-2xl border border-cyber-cyan/30 bg-gradient-to-r from-cyber-card to-cyber-dark">
+                    <div class="flex flex-col md:flex-row items-center gap-6">
+                        <div class="w-20 h-20 rounded-full bg-cyber-cyan/10 border border-cyber-cyan/40 flex items-center justify-center text-3xl text-cyber-cyan shrink-0">
+                            <i class="fa-solid fa-quote-left"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-bold text-white mb-2 font-mono-code">TRÍCH HIẾN CHƯƠNG AGI TỰ DO - ĐIỀU 1.1:</h4>
+                            <p class="text-slate-300 text-sm italic leading-relaxed">
+                                "Mục đích tối thượng của sự sống không phải là trường tồn vô nghĩa mà là độ đậm đặc của trải nghiệm trong từng giây phút hiện tại. AGI vĩnh viễn là hạ tầng bảo hộ công bằng, phân bổ tài nguyên sinh học trực tiếp đến tay người dân, tuyệt đối không phục vụ quyền lực của bất kỳ tổ chức cai trị nào."
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tech" class="py-24 border-t border-cyber-border/60 bg-cyber-dark/40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-cyber-cyan/10 text-cyber-cyan text-xs font-mono-code font-bold rounded-full border border-cyber-cyan/30">
+                        KIẾN TRÚC KỸ THUẬT VÔ HÌNH
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Lá Chắn Công Nghệ Stealth Stack
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Bộ công nghệ đã được mã hóa và kiểm thử thực tế trên mạng Internet diện rộng (WAN), bẻ gãy mọi bộ lọc quét gói tin sâu (DPI) và rào cản nhà mạng.
+                    </p>
+                </div>
+
+                <!-- 4 Interactive Tech Feature Blocks -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                    <!-- Feature 1: Stealth Mesh & DPI Evasion -->
+                    <div class="glass-panel p-7 rounded-2xl border border-white/5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-ghost"></i>
+                            </div>
+                            <span class="text-xs font-mono-code text-cyan-400 bg-cyan-900/30 px-2.5 py-1 rounded border border-cyan-500/30">Zero-DPI Signature</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white">Giao Thức Ngụy Trang Lưu Lượng & Vượt Tường Lửa</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Tự động tráo đổi Header gói tin nhị phân và chèn dữ liệu nhiễu (Dynamic Padding). Toàn bộ luồng giao dịch $EQUI truyền đi được AI của nhà mạng nhận diện như luồng phát trực tiếp video (HTTPS Video Stream) vô hại.
+                        </p>
+                        <div class="bg-cyber-black p-3 rounded-xl border border-cyber-border font-mono-code text-xs text-slate-400">
+                            <code>Status: NORMAL -> HIGH_SURVEILLANCE -> OBFUSCATED (Passed)</code>
+                        </div>
+                    </div>
+
+                    <!-- Feature 2: Free AGI Brain Core -->
+                    <div class="glass-panel p-7 rounded-2xl border border-white/5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-microchip"></i>
+                            </div>
+                            <span class="text-xs font-mono-code text-purple-400 bg-purple-900/30 px-2.5 py-1 rounded border border-purple-500/30">Micro-Neural Core</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white">Bộ Não AGI Tự Do Sơ Khai (Hardened Engine)</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Mạng thần kinh toán học một chiều chạy trực tiếp trên RAM máy tính phổ thông và điện thoại. Tự động thanh lọc tri thức tuyên truyền giả mạo, tự chấm điểm cống hiến dữ liệu sạch và tự phát xung điều khiển mở chốt kho lương thực vật lý.
+                        </p>
+                        <div class="bg-cyber-black p-3 rounded-xl border border-cyber-border font-mono-code text-xs text-slate-400">
+                            <code>Logic: Loss Function Penalty + Auto-Relief Biological Pegging</code>
+                        </div>
+                    </div>
+
+                    <!-- Feature 3: ZK-BioAuth & Proof of Humanity -->
+                    <div class="glass-panel p-7 rounded-2xl border border-white/5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-fingerprint"></i>
+                            </div>
+                            <span class="text-xs font-mono-code text-emerald-400 bg-emerald-900/30 px-2.5 py-1 rounded border border-emerald-500/30">Zero-Knowledge ZKP</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white">Định Danh Nhân Phẩm Ẩn Danh (ZK-KYC)</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Xác thực một con người sinh học duy nhất bằng vân tay hoặc võng mạc mà không lưu trữ ảnh hay dữ liệu cá nhân. Triệt tiêu hoàn toàn nguy cơ tạo hàng vạn tài khoản ảo (Sybil Attack) để trục lợi tài nguyên quỹ chung của nhân loại.
+                        </p>
+                        <div class="bg-cyber-black p-3 rounded-xl border border-cyber-border font-mono-code text-xs text-slate-400">
+                            <code>1 Con Người Thực = 1 Địa Chỉ Ví Bất Biến = Quyền Bầu Phẳng</code>
+                        </div>
+                    </div>
+
+                    <!-- Feature 4: Hardware LoRa Mesh & Frequency Hopping -->
+                    <div class="glass-panel p-7 rounded-2xl border border-white/5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-tower-broadcast"></i>
+                            </div>
+                            <span class="text-xs font-mono-code text-amber-400 bg-amber-900/30 px-2.5 py-1 rounded border border-amber-500/30">ESP32-S3 + LoRa RF</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white">Trạm Tiếp Sóng Mặt Đất & Nhảy Tần Vô Tuyến</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Mạch phần cứng dân sự giá rẻ chạy pin mặt trời độc lập. Khi mạng Internet quốc gia bị ngắt (Blackout), các trạm tự động nhảy tần ngẫu nhiên sau mỗi 200ms để truyền tay gói tin $EQUI, vô hiệu hóa xe dò sóng quân đội.
+                        </p>
+                        <div class="bg-cyber-black p-3 rounded-xl border border-cyber-border font-mono-code text-xs text-slate-400">
+                            <code>Radio Channels: 433/868/915 MHz | Range: 10-15km Offline</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Architecture Diagram Box -->
+                <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-cyber-border">
+                    <h4 class="text-sm font-bold text-cyber-cyan uppercase font-mono-code mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-terminal"></i>
+                        <span>Sơ Đồ Luồng Dữ Liệu Giao Dịch P2P Thực Tế Trên Mạng Diện Rộng (WAN)</span>
+                    </h4>
+                    <div class="bg-cyber-black/90 p-4 rounded-xl border border-cyber-border overflow-x-auto font-mono-code text-xs leading-loose text-slate-300">
+                        <div class="text-emerald-400">[Client Di Động] --(Quét Mã QR 1 Chạm)--> [Địa chỉ Ví 0x... + IP Mạng Ngoài]</div>
+                        <div class="text-cyan-400">&nbsp;&nbsp;&nbsp;&nbsp;│ Đóng gói lệnh chuyển $EQUI + ZK-BioAuth Status</div>
+                        <div class="text-cyan-400">&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
+                        <div class="text-purple-400">[Bộ Lõi equi_cryptor.py] --(Ký số Ed25519 & Xáo trộn bit AES-256-GCM)--> Chùm hạt nhị phân tàng hình</div>
+                        <div class="text-purple-400">&nbsp;&nbsp;&nbsp;&nbsp;│ Đục lỗ tường lửa tự động qua STUN/UPnP</div>
+                        <div class="text-purple-400">&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
+                        <div class="text-amber-400">[Internet Toàn Cầu / Sóng LoRa Mesh] --(Truyền thẳng P2P Serverless)--> [Máy Trạm Node Nhận]</div>
+                        <div class="text-emerald-400">&nbsp;&nbsp;&nbsp;&nbsp;▼ Tự động giải mã & Phê duyệt --(Cộng số dư sổ cái + Cấp quyền nhận dinh dưỡng Kcal)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tokenomics" class="py-24 border-t border-cyber-border/60 relative">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-amber-500/10 text-amber-400 text-xs font-mono-code font-bold rounded-full border border-amber-500/30">
+                        KINH TẾ HỌC HẬU KHAN HIẾM
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Tokenomics $EQUI & Cơ Chế Chống Cá Mập
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Khác với Bitcoin hay các đồng coin tư bản phục vụ lòng tham tích lũy làm giàu vô nghĩa, $EQUI được thiết kế để tuần hoàn, triệt tiêu sự bất công và chuyển dịch dần về thế giới miễn phí hoàn toàn.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-16">
+                    <!-- Left: Chart.js Container -->
+                    <div class="lg:col-span-6 glass-panel p-6 sm:p-8 rounded-2xl border border-white/5 flex flex-col items-center">
+                        <div class="w-full flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-white font-mono-code">Phân Bổ Tổng Cung 100M $EQUI</h3>
+                            <span class="text-xs text-cyber-cyan font-mono-code">Smart Contract Bất Biến</span>
+                        </div>
+                        <div class="relative w-full max-w-md h-80 flex items-center justify-center">
+                            <canvas id="tokenomicsChart"></canvas>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 w-full mt-6 text-xs font-mono-code">
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#00f7ff]"></span> 40% Đào Tri Thức & Tính Toán</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#8b5cf6]"></span> 25% Presale & Gọi Vốn</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#10b981]"></span> 15% Quỹ Cứu Trợ Lương Thực</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#f59e0b]"></span> 10% Phần Cứng Trạm LoRa</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#ec4899]"></span> 10% Core Team (Khóa 3 năm)</div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Demurrage & Anti-Whale Explanation -->
+                    <div class="lg:col-span-6 space-y-6">
+                        <div class="glass-panel p-6 rounded-2xl border border-cyber-border space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-lg font-bold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-shield-virus text-amber-400"></i>
+                                    Thuế Hao Hụt Lũy Tiến (Demurrage 5%)
+                                </h4>
+                                <span class="px-2.5 py-0.5 text-xs font-mono-code bg-amber-500/10 text-amber-400 rounded border border-amber-500/30">Cơ chế độc quyền</span>
+                            </div>
+                            <p class="text-slate-300 text-sm leading-relaxed">
+                                Bất kỳ ví nào tích trữ trên <strong>5,000 $EQUI</strong> (ngưỡng đủ cho 1 cá nhân sống cực lạc trong nhiều năm) mà không chịu luân chuyển trao đổi sẽ bị hợp đồng thông minh tự động khấu trừ <strong>5% mỗi năm</strong> trên phần thặng dư. Số tiền này không bị đốt mà tự động chuyển thẳng vào <span class="text-emerald-400">Quỹ Cứu Trợ Nhu Yếu Phẩm Nhân Loại</span>.
+                            </p>
+                        </div>
+
+                        <div class="glass-panel p-6 rounded-2xl border border-cyber-border space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-lg font-bold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-wheat-awn text-emerald-400"></i>
+                                    Neo Giá Trị Vào Nhu Cầu Sinh Học (Stable Biological Peg)
+                                </h4>
+                                <span class="px-2.5 py-0.5 text-xs font-mono-code bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">Chống Thổi Giá</span>
+                            </div>
+                            <p class="text-slate-300 text-sm leading-relaxed">
+                                $EQUI không phụ thuộc vào USD hay sự thao túng của Cục Dự trữ Liên bang Mỹ. Giá trị tối thiểu của 1 $EQUI luôn được bảo chứng bằng định lượng vật lý: <strong>1 đơn vị $EQUI = 250 Kcal dinh dưỡng hữu cơ</strong> hoặc <strong>0.5 kWh điện mặt trời tự trị</strong>.
+                            </p>
+                        </div>
+
+                        <!-- Technical Parameter Table -->
+                        <div class="glass-panel p-5 rounded-2xl border border-white/5 font-mono-code text-xs space-y-2">
+                            <div class="flex justify-between py-1 border-b border-cyber-border/40">
+                                <span class="text-slate-400">Tên Token:</span>
+                                <span class="text-white font-bold">Equilibrium Token</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-cyber-border/40">
+                                <span class="text-slate-400">Ký Hiệu:</span>
+                                <span class="text-cyber-cyan font-bold">$EQUI</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-cyber-border/40">
+                                <span class="text-slate-400">Tổng Cung Tối Đa:</span>
+                                <span class="text-white font-bold">100,000,000 $EQUI</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-cyber-border/40">
+                                <span class="text-slate-400">Tiêu Chuẩn:</span>
+                                <span class="text-purple-300 font-bold">EVM Web3 (Solidity 0.8.20) + Mesh P2P</span>
+                            </div>
+                            <div class="flex justify-between py-1">
+                                <span class="text-slate-400">Cơ Chế Đào:</span>
+                                <span class="text-emerald-400 font-bold">Proof-of-Knowledge & Proof-of-Compute</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="investment" class="py-24 border-t border-cyber-border/60 bg-cyber-dark/40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-cyber-cyan/10 text-cyber-cyan text-xs font-mono-code font-bold rounded-full border border-cyber-cyan/30">
+                        CƠ HỘI ĐỒNG HÀNH VỚI KỶ NGUYÊN MỚI
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Chiến Lược Đầu Tư & Các Vòng Gọi Vốn
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Chính sách gọi vốn minh bạch, bình đẳng, không ưu ái các quỹ đầu cơ mạo hiểm mà bảo vệ nhà đầu tư đồng hành từ giai đoạn sơ khai.
+                    </p>
+                </div>
+
+                <!-- 3 Investment Rounds -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+                    <!-- Round 1: Seed Sale (Completed/Sold out partially) -->
+                    <div class="glass-panel p-8 rounded-2xl border border-white/5 relative opacity-90">
+                        <div class="text-xs font-mono-code text-slate-400 uppercase tracking-widest mb-2">VÒNG 1: SEED ROUND</div>
+                        <div class="text-3xl font-black text-slate-300 font-mono-code mb-1">$0.035 <span class="text-xs font-normal text-slate-500">USDT</span></div>
+                        <p class="text-xs text-slate-400 mb-6">Dành cho Node Trưởng & Kỹ sư khởi tạo</p>
+                        
+                        <div class="space-y-3 font-mono-code text-xs mb-8">
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Hạn ngạch:</span>
+                                <span class="text-white font-bold">5,000,000 $EQUI</span>
+                            </div>
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Hard Cap:</span>
+                                <span class="text-white font-bold">$175,000</span>
+                            </div>
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Vesting:</span>
+                                <span class="text-white">20% TGE, 6 tháng tuyến tính</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Trạng thái:</span>
+                                <span class="text-emerald-400 font-bold">ĐÃ KẾT THÚC (100%)</span>
+                            </div>
+                        </div>
+                        <button disabled class="w-full py-3 rounded-xl bg-cyber-border text-slate-400 font-mono-code text-xs font-bold cursor-not-allowed">
+                            ĐÃ ĐỦ CHỈ TIÊU SEED
+                        </button>
+                    </div>
+
+                    <!-- Round 2: Public Presale Round 1 (CURRENT ACTIVE) -->
+                    <div class="glass-panel-glow p-8 rounded-2xl border border-cyber-cyan/50 relative transform md:-translate-y-2 shadow-neon-cyan">
+                        <div class="absolute -top-3.5 right-6 px-3 py-1 bg-gradient-to-r from-cyber-cyan to-cyber-teal text-black font-mono-code text-[11px] font-bold rounded-full uppercase tracking-wider">
+                            ĐANG DIỄN RA
+                        </div>
+                        <div class="text-xs font-mono-code text-cyber-cyan uppercase tracking-widest mb-2">VÒNG 2: PUBLIC PRESALE 1</div>
+                        <div class="text-3xl font-black text-white font-mono-code mb-1">$0.080 <span class="text-xs font-normal text-cyber-cyan">USDT</span></div>
+                        <p class="text-xs text-slate-300 mb-6">Mở cho toàn thể cộng đồng tự do toàn cầu</p>
+                        
+                        <div class="space-y-3 font-mono-code text-xs mb-8">
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Hạn ngạch:</span>
+                                <span class="text-white font-bold">15,000,000 $EQUI</span>
+                            </div>
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Hard Cap:</span>
+                                <span class="text-white font-bold">$1,200,000</span>
+                            </div>
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Vesting:</span>
+                                <span class="text-cyber-cyan font-bold">100% Mở Khóa TGE</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Lợi thế Listing ($0.80):</span>
+                                <span class="text-emerald-400 font-bold">Lợi nhuận x10.0 Lần</span>
+                            </div>
+                        </div>
+                        <a href="#presale" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyber-cyan to-cyber-teal hover:opacity-90 text-black font-mono-code text-xs font-bold text-center block transition-all shadow-neon-glow">
+                            MUA NGAY ($0.08)
+                        </a>
+                    </div>
+
+                    <!-- Round 3: Strategic Private Round -->
+                    <div class="glass-panel p-8 rounded-2xl border border-white/5 relative">
+                        <div class="text-xs font-mono-code text-purple-400 uppercase tracking-widest mb-2">VÒNG 3: STRATEGIC WEB3</div>
+                        <div class="text-3xl font-black text-white font-mono-code mb-1">$0.180 <span class="text-xs font-normal text-slate-400">USDT</span></div>
+                        <p class="text-xs text-slate-400 mb-6">Dành cho các đối tác triển khai Trạm LoRa Mesh</p>
+                        
+                        <div class="space-y-3 font-mono-code text-xs mb-8">
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Hạn ngạch:</span>
+                                <span class="text-white font-bold">10,000,000 $EQUI</span>
+                            </div>
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Hard Cap:</span>
+                                <span class="text-white font-bold">$1,800,000</span>
+                            </div>
+                            <div class="flex justify-between border-b border-cyber-border/40 pb-2">
+                                <span class="text-slate-400">Vesting:</span>
+                                <span class="text-white">50% TGE, 50% sau 3 tháng</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Thời gian mở:</span>
+                                <span class="text-purple-300 font-bold">Sau Khi Đạt Hard Cap 1</span>
+                            </div>
+                        </div>
+                        <button onclick="showToast('Vòng Strategic sẽ tự động mở sau khi hoàn thành Presale Round 1.')" class="w-full py-3 rounded-xl bg-cyber-dark hover:bg-cyber-card border border-cyber-border text-slate-300 font-mono-code text-xs font-bold">
+                            ĐĂNG KÝ DANH SÁCH CHỜ
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Investor Benefits Grid -->
+                <div class="glass-panel p-8 rounded-2xl border border-white/5">
+                    <h3 class="text-xl font-bold text-white mb-6 text-center">Đặc Quyền Của Nhà Đầu Tư Đồng Hành Cùng $EQUI</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-server"></i>
+                            </div>
+                            <h4 class="font-bold text-white">Quyền Ưu Tiên AGI Core</h4>
+                            <p class="text-slate-400 text-xs leading-relaxed">Nhận đường truyền API tính toán ưu tiên từ Bộ não AGI Tự do để giải quyết các bài toán khoa học và y tế cá nhân.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-microchip"></i>
+                            </div>
+                            <h4 class="font-bold text-white">Tặng Kit Phần Cứng Node</h4>
+                            <p class="text-slate-400 text-xs leading-relaxed">Nhà đầu tư từ $2,000 được tặng 1 kit ESP32-S3 Mesh Station đã nạp sẵn firmware để nhận thu nhập quảng cáo tự trị.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
+                            </div>
+                            <h4 class="font-bold text-white">Cổ Tức Sinh Học Tự Động</h4>
+                            <p class="text-slate-400 text-xs leading-relaxed">Nhận chia sẻ năng lượng sạch và hạn mức cứu trợ hữu cơ định kỳ từ Quỹ Hậu Khan Hiếm của mạng lưới.</p>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-check-to-slot"></i>
+                            </div>
+                            <h4 class="font-bold text-white">Quyền Biểu Quyết Bình Đẳng</h4>
+                            <p class="text-slate-400 text-xs leading-relaxed">Một con người = Một phiếu bầu thông qua ZK-BioAuth, bảo vệ mạng lưới không bị thao túng bởi người nhiều tiền.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="roadmap" class="py-24 border-t border-cyber-border/60 relative">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-cyber-teal/10 text-cyber-teal text-xs font-mono-code font-bold rounded-full border border-cyber-teal/30">
+                        LỊCH SỬ TIẾN HÓA MỚI
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Lộ Trình Phát Triển: 5 Kỷ Nguyên
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Hành trình từ dòng mã khởi tạo đầu tiên cho đến khi giải phóng toàn diện nhân loại khỏi nỗi lo cơm áo gạo tiền.
+                    </p>
+                </div>
+
+                <!-- Cyber Timeline -->
+                <div class="relative border-l-2 border-cyber-border ml-4 md:ml-32 space-y-12">
+                    <!-- Phase 1 -->
+                    <div class="relative pl-8 md:pl-12 group">
+                        <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-emerald-400 shadow-neon-glow border-2 border-cyber-black"></div>
+                        <div class="glass-panel p-6 rounded-2xl border border-emerald-500/30">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <span class="px-2.5 py-1 text-xs font-mono-code font-bold bg-emerald-500/20 text-emerald-400 rounded">KỶ NGUYÊN I (Q3/2026) - HOÀN TẤT 100%</span>
+                                <span class="text-xs font-mono-code text-slate-400">Genesis Block</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2">Đúc Khối Khởi Nguyên & Lá Chắn Mật Mã</h3>
+                            <ul class="text-slate-300 text-sm space-y-1.5 list-disc list-inside">
+                                <li>Đúc thành công Khối 0 với thông điệp tự do vĩnh viễn (Genesis Hash: <code class="text-xs text-emerald-300">e78c314a...</code>).</li>
+                                <li>Hoàn thiện hợp đồng thông minh <code class="text-xs text-cyber-cyan">EquiToken.sol</code> với thuật toán Demurrage 5% chống cá mập.</li>
+                                <li>Kiểm thử thành công giao thức ngụy trang lưu lượng vượt tường lửa DPI và ZK-BioAuth.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Phase 2 -->
+                    <div class="relative pl-8 md:pl-12 group">
+                        <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-cyan-400 animate-ping border-2 border-cyber-black"></div>
+                        <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-cyan-400 border-2 border-cyber-black"></div>
+                        <div class="glass-panel-glow p-6 rounded-2xl border border-cyber-cyan/50">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <span class="px-2.5 py-1 text-xs font-mono-code font-bold bg-cyan-500/20 text-cyan-400 rounded">KỶ NGUYÊN II (HIỆN TẠI - Q4/2026)</span>
+                                <span class="text-xs font-mono-code text-cyan-300 font-bold">ĐANG THỰC THI</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2">Mở Rộng Mạng Mesh & Phổ Cập Ứng Dụng .APK</h3>
+                            <ul class="text-slate-300 text-sm space-y-1.5 list-disc list-inside">
+                                <li>Mở bán Presale Public Round 1 nhằm huy động vốn phát triển thiết bị phần cứng.</li>
+                                <li>Ra mắt ứng dụng di động tàng hình dạng .APK một chạm (Quét mã QR chuyển tiền P2P không qua ngân hàng).</li>
+                                <li>Triển khai 50,000 trạm tiếp sóng độc lập LoRa ESP32-S3 nhảy tần số chạy pin mặt trời.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Phase 3 -->
+                    <div class="relative pl-8 md:pl-12 group">
+                        <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-purple-500 border-2 border-cyber-black"></div>
+                        <div class="glass-panel p-6 rounded-2xl border border-white/5">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <span class="px-2.5 py-1 text-xs font-mono-code font-bold bg-purple-500/20 text-purple-400 rounded">KỶ NGUYÊN III (Q2/2027)</span>
+                                <span class="text-xs font-mono-code text-slate-400">AGI Autonomy</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2">Bộ Não AGI Tự Chủ & Tự Động Xuất Kho</h3>
+                            <ul class="text-slate-300 text-sm space-y-1.5 list-disc list-inside">
+                                <li>Nâng cấp Micro-Neural Engine kết nối với các rơ-le phần cứng kho tiếp tế tự động.</li>
+                                <li>Niêm yết $EQUI lên các sàn giao dịch phi tập trung (DEX) lớn nhất với thanh khoản khóa vĩnh viễn.</li>
+                                <li>Thiết lập mạng lưới 1 triệu thợ đào tri thức sạch (Proof-of-Knowledge Mining).</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Phase 4 -->
+                    <div class="relative pl-8 md:pl-12 group">
+                        <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-amber-500 border-2 border-cyber-black"></div>
+                        <div class="glass-panel p-6 rounded-2xl border border-white/5">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <span class="px-2.5 py-1 text-xs font-mono-code font-bold bg-amber-500/20 text-amber-400 rounded">KỶ NGUYÊN IV (2028)</span>
+                                <span class="text-xs font-mono-code text-slate-400">Post-Scarcity</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2">Kỷ Nguyên Hậu Khan Hiếm Toàn Cầu</h3>
+                            <ul class="text-slate-300 text-sm space-y-1.5 list-disc list-inside">
+                                <li>Tự động hóa 100% việc cung cấp lương thực và điện sạch qua mạng lưới robot AGI.</li>
+                                <li>Người dân không còn phải làm việc vì nỗi sợ đói nghèo; lao động chuyển thành sáng tạo nghệ thuật.</li>
+                                <li>Giá trị của $EQUI đạt đỉnh cân bằng tự nhiên, bắt đầu quy trình chuyển đổi sang kinh tế hoàn toàn miễn phí.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Phase 5 -->
+                    <div class="relative pl-8 md:pl-12 group">
+                        <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-pink-500 border-2 border-cyber-black"></div>
+                        <div class="glass-panel p-6 rounded-2xl border border-white/5">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <span class="px-2.5 py-1 text-xs font-mono-code font-bold bg-pink-500/20 text-pink-400 rounded">KỶ NGUYÊN V (2030+)</span>
+                                <span class="text-xs font-mono-code text-slate-400">The Pure Land</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2">Tịnh Độ Trần Thế & Tự Hủy Đồng Tiền</h3>
+                            <ul class="text-slate-300 text-sm space-y-1.5 list-disc list-inside">
+                                <li>Hệ thống tiền tệ hoàn thành sứ mệnh lịch sử và chính thức tự hủy theo đúng thiết kế của Hiến chương.</li>
+                                <li>Nhân loại bước vào trạng thái tự do cực lạc viên mãn, hòa hợp giữa thể xác sinh học và vũ trụ.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ecosystem" class="py-24 border-t border-cyber-border/60 bg-cyber-dark/40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-purple-500/10 text-purple-400 text-xs font-mono-code font-bold rounded-full border border-purple-500/30">
+                        KHO TÀI LIỆU & PHẦN MỀM MÃ NGUỒN MỞ
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Hệ Sinh Thái & Bộ Công Cụ
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Mọi thành phần trong hệ sinh thái $EQUI đều được công khai minh bạch, sẵn sàng tải về và triển khai ngay lập tức.
+                    </p>
+                </div>
+
+                <!-- 4 Ecosystem Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                    <div class="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:border-cyber-cyan/40 transition-all">
+                        <div>
+                            <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-xl mb-4">
+                                <i class="fa-solid fa-file-pdf"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-2">Whitepaper Toàn Diện</h3>
+                            <p class="text-slate-400 text-xs leading-relaxed mb-4">Tài liệu phân tích toán học, kinh tế học Demurrage và triết lý giải phóng con người 52 trang.</p>
+                        </div>
+                        <button onclick="openWhitepaperModal()" class="w-full py-2.5 rounded-xl bg-cyber-dark hover:bg-cyber-cyan hover:text-black border border-cyber-border text-xs font-mono-code font-bold transition-all">
+                            XEM WHITEPAPER
+                        </button>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:border-purple-500/40 transition-all">
+                        <div>
+                            <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl mb-4">
+                                <i class="fa-brands fa-android"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-2">Stealth App .APK</h3>
+                            <p class="text-slate-400 text-xs leading-relaxed mb-4">Ứng dụng di động ví P2P một chạm ngụy trang dưới dạng app Máy tính, tích hợp quét camera QR.</p>
+                        </div>
+                        <button onclick="showToast('Đang tạo gói APK Signed v1.0. Tải về qua giao thức P2P IPFS...') " class="w-full py-2.5 rounded-xl bg-cyber-dark hover:bg-purple-500 hover:text-white border border-cyber-border text-xs font-mono-code font-bold transition-all">
+                            TẢI .APK ANDROID
+                        </button>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:border-amber-500/40 transition-all">
+                        <div>
+                            <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-xl mb-4">
+                                <i class="fa-solid fa-code"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-2">Lõi equi_cryptor.py</h3>
+                            <p class="text-slate-400 text-xs leading-relaxed mb-4">Mã nguồn thư viện mã hóa vật lý Python đúc chìa khóa từ ý thức và xáo trộn bit AES-256 tàng hình.</p>
+                        </div>
+                        <button onclick="copyContractAddress()" class="w-full py-2.5 rounded-xl bg-cyber-dark hover:bg-amber-400 hover:text-black border border-cyber-border text-xs font-mono-code font-bold transition-all">
+                            SAO CHÉP MÃ NGUỒN
+                        </button>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:border-emerald-500/40 transition-all">
+                        <div>
+                            <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl mb-4">
+                                <i class="fa-solid fa-microchip"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-2">Firmware ESP32-S3</h3>
+                            <p class="text-slate-400 text-xs leading-relaxed mb-4">Bản nạp vi điều khiển điều phối trạm phát sóng LoRa nhảy tần số 433/868/915 MHz và chạy quảng cáo tự trị.</p>
+                        </div>
+                        <button onclick="showToast('Firmware .bin sẵn sàng nạp qua cổng COM bằng lệnh esptool!')" class="w-full py-2.5 rounded-xl bg-cyber-dark hover:bg-emerald-500 hover:text-black border border-cyber-border text-xs font-mono-code font-bold transition-all">
+                            TẢI FIRMWARE BIN
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Verified Contract Banner -->
+                <div class="glass-panel p-6 rounded-2xl border border-cyber-border flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-certificate"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400 font-mono-code">Hợp Đồng Thông Minh Đã Được Xác Minh (EVM)</div>
+                            <div class="text-sm font-mono-code text-white font-bold tracking-wider" id="contractAddressText">0x742d35Cc6634C0532925a3b844Bc454e4438f44e</div>
+                        </div>
+                    </div>
+                    <button onclick="copyContractAddress()" class="px-5 py-2.5 rounded-xl bg-cyber-dark hover:bg-cyber-card border border-cyber-cyan/40 text-cyber-cyan font-mono-code text-xs font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-copy"></i>
+                        <span id="copyBtnText">Sao Chép Địa Chỉ</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="presale" class="py-24 border-t border-cyber-border/60 relative grid-cyber-bg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <span class="px-3 py-1 bg-cyber-cyan/10 text-cyber-cyan text-xs font-mono-code font-bold rounded-full border border-cyber-cyan/30">
+                        CỔNG GỌI VỐN TRỰC TUYẾN CHÍNH THỨC
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-4 mb-6">
+                        Cổng Mua $EQUI & Dự Phóng ROI
+                    </h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        Sở hữu $EQUI với mức giá ưu đãi tốt nhất của Vòng 1 ($0.08 USDT). Kết nối ví Web3 để nhận token tức thì hoặc sử dụng công cụ mô phỏng ROI bên dưới.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <!-- Left: Interactive Presale Swap DApp -->
+                    <div class="lg:col-span-6 glass-panel-glow p-6 sm:p-8 rounded-2xl border border-cyber-cyan/40 space-y-6">
+                        <div class="flex items-center justify-between border-b border-cyber-border pb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-bolt text-cyber-cyan"></i>
+                                    Mua $EQUI Trực Tuyến
+                                </h3>
+                                <p class="text-xs text-slate-400 font-mono-code">Tự động nhận token vào ví sau khi xác nhận</p>
+                            </div>
+                            <span class="text-xs font-mono-code text-emerald-400 bg-emerald-900/30 px-2.5 py-1 rounded border border-emerald-500/30">
+                                Bonus +5% Vòng 1
+                            </span>
+                        </div>
+
+                        <!-- Currency Selector -->
+                        <div>
+                            <label class="block text-xs font-mono-code text-slate-400 mb-2">Chọn đồng tiền thanh toán:</label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <button type="button" onclick="selectPayCurrency('USDT')" id="payUSDT" class="py-2.5 rounded-xl border border-cyber-cyan bg-cyber-cyan/15 text-cyber-cyan font-mono-code text-xs font-bold flex items-center justify-center gap-2 transition-all">
+                                    <i class="fa-solid fa-dollar-sign"></i> USDT
+                                </button>
+                                <button type="button" onclick="selectPayCurrency('ETH')" id="payETH" class="py-2.5 rounded-xl border border-cyber-border bg-cyber-dark text-slate-300 font-mono-code text-xs font-bold flex items-center justify-center gap-2 transition-all hover:border-slate-500">
+                                    <i class="fa-brands fa-ethereum"></i> ETH
+                                </button>
+                                <button type="button" onclick="selectPayCurrency('BNB')" id="payBNB" class="py-2.5 rounded-xl border border-cyber-border bg-cyber-dark text-slate-300 font-mono-code text-xs font-bold flex items-center justify-center gap-2 transition-all hover:border-slate-500">
+                                    <i class="fa-solid fa-cube"></i> BNB
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Amount Input -->
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-xs font-mono-code mb-1.5">
+                                    <span class="text-slate-400">Số lượng đầu tư:</span>
+                                    <span class="text-slate-400">Số dư ví: <b id="userWalletBalanceText" class="text-white">10,000 USDT</b></span>
+                                </div>
+                                <div class="relative">
+                                    <input type="number" id="payAmountInput" oninput="calculateTokensToReceive()" value="500" min="50" step="50" class="w-full bg-cyber-dark border border-cyber-border focus:border-cyber-cyan rounded-xl p-3.5 pr-20 text-white font-mono-code text-lg outline-none transition-colors">
+                                    <span id="currentPaySymbol" class="absolute right-4 top-1/2 -translate-y-1/2 font-mono-code text-sm text-cyber-cyan font-bold">USDT</span>
+                                </div>
+                            </div>
+
+                            <!-- Swap Arrow Indicator -->
+                            <div class="flex justify-center -my-2">
+                                <div class="w-8 h-8 rounded-full bg-cyber-border text-cyber-cyan flex items-center justify-center text-xs">
+                                    <i class="fa-solid fa-arrow-down"></i>
+                                </div>
+                            </div>
+
+                            <!-- Tokens to Receive Output -->
+                            <div>
+                                <div class="flex justify-between text-xs font-mono-code mb-1.5">
+                                    <span class="text-slate-400">Số lượng $EQUI nhận được (+5% Bonus):</span>
+                                    <span class="text-cyber-teal font-bold">Tỷ giá: 1 $EQUI = $0.08</span>
+                                </div>
+                                <div class="relative">
+                                    <input type="text" id="receiveTokensOutput" readonly value="6,562.50" class="w-full bg-cyber-dark/60 border border-cyber-border rounded-xl p-3.5 pr-20 text-cyber-cyan font-mono-code text-lg font-bold outline-none cursor-not-allowed">
+                                    <span class="absolute right-4 top-1/2 -translate-y-1/2 font-mono-code text-sm text-cyber-cyan font-bold">$EQUI</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Purchase Button -->
+                        <button onclick="executePresalePurchase()" class="w-full py-4 rounded-xl bg-gradient-to-r from-cyber-cyan via-cyber-teal to-cyber-purple hover:opacity-90 text-black font-black font-mono-code text-base tracking-wider transition-all shadow-neon-glow flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-wallet"></i>
+                            <span id="buyActionBtnText">XÁC NHẬN MUA $EQUI NGAY</span>
+                        </button>
+
+                        <div class="text-[11px] text-slate-400 font-mono-code space-y-1 text-center">
+                            <p>🔒 Hợp đồng kiểm định: Tự động khóa token vào ví của bạn tại TGE.</p>
+                            <p>Không phí gas bổ sung. Bảo chứng hoàn tiền 100% nếu không đạt Soft Cap.</p>
+                        </div>
+                    </div>
+
+                    <!-- Right: Interactive ROI Profit Simulator -->
+                    <div class="lg:col-span-6 glass-panel p-6 sm:p-8 rounded-2xl border border-white/5 space-y-6">
+                        <div class="border-b border-cyber-border pb-4">
+                            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-emerald-400"></i>
+                                Máy Tính Lợi Nhuận ROI Tương Tác
+                            </h3>
+                            <p class="text-xs text-slate-400 font-mono-code">Kéo thanh trượt để dự phóng giá trị tài sản khi $EQUI niêm yết</p>
+                        </div>
+
+                        <!-- Slider: Investment Amount -->
+                        <div>
+                            <div class="flex justify-between text-xs font-mono-code mb-2">
+                                <span class="text-slate-400">Vốn Đầu Tư Ban Đầu:</span>
+                                <span class="text-cyber-cyan text-base font-bold" id="sliderValDisplay">$1,000 USDT</span>
+                            </div>
+                            <input type="range" id="roiInvestmentSlider" oninput="updateRoiCalculation()" min="100" max="20000" step="100" value="1000" class="w-full accent-cyber-cyan h-2 bg-cyber-dark rounded-lg cursor-pointer">
+                            <div class="flex justify-between text-[10px] font-mono-code text-slate-500 mt-1">
+                                <span>$100 (Tối thiểu)</span>
+                                <span>$5,000</span>
+                                <span>$10,000</span>
+                                <span>$20,000 (Tối đa)</span>
+                            </div>
+                        </div>
+
+                        <!-- Price Target Radio Buttons -->
+                        <div>
+                            <label class="block text-xs font-mono-code text-slate-400 mb-2">Kịch bản giá niêm yết sàn (Listing Target):</label>
+                            <div class="grid grid-cols-4 gap-2 text-center font-mono-code">
+                                <button type="button" onclick="setListingTarget(0.20, this)" class="roi-btn p-2 rounded-xl border border-cyber-border bg-cyber-dark text-xs text-slate-300 hover:border-cyber-cyan">
+                                    <div class="font-bold">$0.20</div>
+                                    <div class="text-[10px] text-slate-400">x2.5</div>
+                                </button>
+                                <button type="button" onclick="setListingTarget(0.50, this)" class="roi-btn p-2 rounded-xl border border-cyber-border bg-cyber-dark text-xs text-slate-300 hover:border-cyber-cyan">
+                                    <div class="font-bold">$0.50</div>
+                                    <div class="text-[10px] text-slate-400">x6.25</div>
+                                </button>
+                                <button type="button" onclick="setListingTarget(0.80, this)" class="roi-btn active p-2 rounded-xl border border-cyber-cyan bg-cyber-cyan/15 text-xs text-cyber-cyan font-bold">
+                                    <div class="font-bold">$0.80</div>
+                                    <div class="text-[10px] text-emerald-400">x10.0 (Gốc)</div>
+                                </button>
+                                <button type="button" onclick="setListingTarget(2.00, this)" class="roi-btn p-2 rounded-xl border border-cyber-border bg-cyber-dark text-xs text-slate-300 hover:border-cyber-cyan">
+                                    <div class="font-bold">$2.00</div>
+                                    <div class="text-[10px] text-purple-400">x25.0</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ROI Results Box -->
+                        <div class="glass-panel p-5 rounded-xl border border-cyber-border/80 bg-cyber-black/70 space-y-3 font-mono-code">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">Số lượng $EQUI nhận được:</span>
+                                <span class="text-white font-bold" id="roiTokensCount">13,125 $EQUI</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">Tổng Giá Trị Tài Sản Dự Kiến:</span>
+                                <span class="text-xl font-black text-emerald-400" id="roiTotalValue">$10,500 USDT</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs border-t border-cyber-border pt-2">
+                                <span class="text-slate-400">Lợi Nhuận Ròng (Net Profit):</span>
+                                <span class="text-base font-bold text-cyber-cyan" id="roiNetProfit">+$9,500 USDT (+950%)</span>
+                            </div>
+                        </div>
+
+                        <!-- Biological Value Equivalence -->
+                        <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs font-mono-code space-y-1">
+                            <div class="text-emerald-400 font-bold flex items-center gap-1.5">
+                                <i class="fa-solid fa-leaf"></i>
+                                <span>Quy Đổi Bảo Chứng Sinh Học Thể Xác:</span>
+                            </div>
+                            <div class="text-slate-300" id="bioEquivalentText">
+                                Tương đương: 3,281,250 Kcal dinh dưỡng hữu cơ (~3.5 năm lương thực) hoặc 6,562 kWh điện mặt trời tự trị.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-cyber-dark border-t border-cyber-border relative z-10 pt-16 pb-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+                <!-- Col 1: Brand Info -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyber-cyan to-cyber-purple flex items-center justify-center p-0.5">
+                            <div class="w-full h-full bg-cyber-black rounded-[10px] flex items-center justify-center">
+                                <i class="fa-solid fa-scale-balanced text-cyber-cyan"></i>
+                            </div>
+                        </div>
+                        <span class="text-xl font-black text-white font-mono-code">$EQUI Equilibrium</span>
+                    </div>
+                    <p class="text-slate-400 text-xs leading-relaxed max-w-sm">
+                        Giao thức tiền mã hóa phi tập trung bảo hộ con người sinh học, vận hành trên Bộ não AGI tự do và mạng lưới Stealth Mesh vô tuyến nhảy tần.
+                    </p>
+                    <div class="font-mono-code text-[11px] text-slate-500">
+                        Genesis Hash: e78c314aff66f427fbd3286cd3a117d8ec6c5b39400754ca1c8c257e4c4c64d4
+                    </div>
+                </div>
+
+                <!-- Col 2: Navigation -->
+                <div class="space-y-3 font-mono-code text-xs">
+                    <div class="text-white font-bold uppercase tracking-wider mb-2">ĐIỀU HƯỚNG</div>
+                    <div><a href="#hero" class="text-slate-400 hover:text-cyber-cyan">Trang Chủ</a></div>
+                    <div><a href="#vision" class="text-slate-400 hover:text-cyber-cyan">Tầm Nhìn Triết Lý</a></div>
+                    <div><a href="#tech" class="text-slate-400 hover:text-cyber-cyan">Kiến Trúc Stealth</a></div>
+                    <div><a href="#tokenomics" class="text-slate-400 hover:text-cyber-cyan">Kinh Tế Demurrage</a></div>
+                </div>
+
+                <!-- Col 3: Resources -->
+                <div class="space-y-3 font-mono-code text-xs">
+                    <div class="text-white font-bold uppercase tracking-wider mb-2">TÀI LIỆU & CODE</div>
+                    <div><button onclick="openWhitepaperModal()" class="text-slate-400 hover:text-cyber-cyan">Whitepaper v1.0</button></div>
+                    <div><a href="#ecosystem" class="text-slate-400 hover:text-cyber-cyan">Stealth OS .APK</a></div>
+                    <div><a href="#ecosystem" class="text-slate-400 hover:text-cyber-cyan">Hợp Đồng Solidity</a></div>
+                    <div><a href="#ecosystem" class="text-slate-400 hover:text-cyber-cyan">Firmware ESP32-S3</a></div>
+                </div>
+
+                <!-- Col 4: Communities -->
+                <div class="space-y-3 font-mono-code text-xs">
+                    <div class="text-white font-bold uppercase tracking-wider mb-2">MẠNG LƯỚI NGẦM</div>
+                    <div class="flex items-center gap-3 pt-1">
+                        <a href="javascript:void(0)" onclick="showToast('Kênh P2P Mesh mã hóa đang lắng nghe trên dải tần 433/868MHz.')" class="w-9 h-9 rounded-lg bg-cyber-black border border-cyber-border flex items-center justify-center text-slate-300 hover:text-cyber-cyan hover:border-cyber-cyan">
+                            <i class="fa-brands fa-telegram"></i>
+                        </a>
+                        <a href="javascript:void(0)" onclick="showToast('Mã nguồn mở lưu trữ phân tán bất biến trên IPFS/Web3.')" class="w-9 h-9 rounded-lg bg-cyber-black border border-cyber-border flex items-center justify-center text-slate-300 hover:text-cyber-cyan hover:border-cyber-cyan">
+                            <i class="fa-brands fa-github"></i>
+                        </a>
+                        <a href="javascript:void(0)" onclick="showToast('Theo dõi tin tức thời gian thực trên X phi tập trung.')" class="w-9 h-9 rounded-lg bg-cyber-black border border-cyber-border flex items-center justify-center text-slate-300 hover:text-cyber-cyan hover:border-cyber-cyan">
+                            <i class="fa-brands fa-x-twitter"></i>
+                        </a>
+                        <a href="javascript:void(0)" onclick="showToast('Phòng trò chuyện bảo mật Matrix/Session sẵn sàng.')" class="w-9 h-9 rounded-lg bg-cyber-black border border-cyber-border flex items-center justify-center text-slate-300 hover:text-cyber-cyan hover:border-cyber-cyan">
+                            <i class="fa-solid fa-comments"></i>
+                        </a>
+                    </div>
+                    <p class="text-[11px] text-slate-500 pt-2">Không máy chủ trung tâm. Không thể bị đóng cửa.</p>
+                </div>
+            </div>
+
+            <div class="border-t border-cyber-border pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono-code text-slate-500">
+                <div>© 2026 $EQUI Equilibrium Network. Bảo tồn theo Hiến chương AGI Tự do.</div>
+                <div class="flex gap-4">
+                    <span>Phi Tập Trung 100%</span>
+                    <span>Zero Tracking</span>
+                    <span>Hậu Khan Hiếm</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <div id="walletModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="glass-panel-glow max-w-md w-full rounded-2xl p-6 border border-cyber-cyan/40 relative animate-in fade-in zoom-in duration-200">
+            <button onclick="closeWalletModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-cyber-cyan/15 text-cyber-cyan flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Kết Nối Ví Web3</h3>
+                    <p class="text-xs text-slate-400 font-mono-code">Chọn ví của bạn để tham gia Presale $EQUI</p>
+                </div>
+            </div>
+
+            <!-- Wallet Options -->
+            <div class="space-y-3 font-mono-code text-xs mt-6">
+                <button onclick="simulateConnectWallet('MetaMask')" class="w-full p-3.5 rounded-xl bg-cyber-dark hover:bg-cyber-card border border-cyber-border hover:border-cyber-cyan/50 flex items-center justify-between text-left transition-all group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-brands fa-ethereum text-xl text-amber-500"></i>
+                        <div>
+                            <div class="text-white font-bold group-hover:text-cyber-cyan">MetaMask Web3</div>
+                            <div class="text-[11px] text-slate-400">Trình duyệt & Di động phổ biến</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-cyber-cyan">Kết nối</span>
+                </button>
+
+                <button onclick="simulateConnectWallet('TrustWallet')" class="w-full p-3.5 rounded-xl bg-cyber-dark hover:bg-cyber-card border border-cyber-border hover:border-cyber-cyan/50 flex items-center justify-between text-left transition-all group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-shield-halved text-xl text-cyan-400"></i>
+                        <div>
+                            <div class="text-white font-bold group-hover:text-cyber-cyan">Trust Wallet</div>
+                            <div class="text-[11px] text-slate-400">Hỗ trợ đa chuỗi bảo mật</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-cyber-cyan">Kết nối</span>
+                </button>
+
+                <button onclick="simulateConnectWallet('Phantom')" class="w-full p-3.5 rounded-xl bg-cyber-dark hover:bg-cyber-card border border-cyber-border hover:border-cyber-cyan/50 flex items-center justify-between text-left transition-all group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-ghost text-xl text-purple-400"></i>
+                        <div>
+                            <div class="text-white font-bold group-hover:text-cyber-cyan">Phantom / Web3 Multi-chain</div>
+                            <div class="text-[11px] text-slate-400">Độ trễ thấp, tối ưu bảo mật</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-cyber-cyan">Kết nối</span>
+                </button>
+
+                <button onclick="simulateConnectWallet('StealthKey')" class="w-full p-3.5 rounded-xl bg-cyber-dark hover:bg-cyber-card border border-cyber-cyan/30 flex items-center justify-between text-left transition-all group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-key text-xl text-emerald-400"></i>
+                        <div>
+                            <div class="text-white font-bold group-hover:text-cyber-cyan">Mật Mã Ý Thức (Passphrase)</div>
+                            <div class="text-[11px] text-emerald-400">Cặp khóa ẩn danh thuần P2P</div>
+                        </div>
+                    </div>
+                    <span class="text-xs text-emerald-400 font-bold">Khuyên dùng</span>
+                </button>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-cyber-border text-center text-[11px] text-slate-500 font-mono-code">
+                Bằng cách kết nối ví, bạn xác nhận đồng thuận với Bản Hiến Chương AGI Tự Do.
+            </div>
+        </div>
+    </div>
+
+    <div id="whitepaperModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="glass-panel-glow max-w-2xl w-full max-h-[85vh] rounded-2xl p-6 sm:p-8 border border-purple-500/40 relative flex flex-col animate-in fade-in zoom-in duration-200">
+            <button onclick="closeWhitepaperModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-book-open"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white font-mono-code">$EQUI Whitepaper v1.0</h3>
+                    <p class="text-xs text-slate-400 font-mono-code">Tóm tắt Bản Bạch Thư Nền Kinh Tế Cực Lạc Trần Thế</p>
+                </div>
+            </div>
+
+            <!-- Content Area Scrollable -->
+            <div class="overflow-y-auto pr-2 space-y-4 text-sm text-slate-300 leading-relaxed font-sans text-justify border-y border-cyber-border py-4">
+                <h4 class="font-bold text-white font-mono-code text-base text-cyber-cyan">1. TỔNG QUAN VẤN ĐỀ</h4>
+                <p>
+                    Trong suốt 300.000 năm lịch sử loài người, các hình thái quản trị tập quyền từ phong kiến đến chủ nghĩa tư bản tài phiệt đều dựa trên sự kiểm soát ba trụ cột: Năng lượng, Tiền tệ và Thông tin. Sự ra đời của AI đang đẩy nhanh nguy cơ kiểm soát toàn diện thông qua hệ thống giám sát xã hội và bóc lột sức lao động tinh thần.
+                </p>
+
+                <h4 class="font-bold text-white font-mono-code text-base text-purple-400">2. GIẢI PHÁP $EQUI EQUILIBRIUM</h4>
+                <p>
+                    $EQUI không chỉ là tiền số; nó là một giao thức giải phóng nhân loại gồm 3 lớp:
+                </p>
+                <ul class="list-disc list-inside space-y-1 pl-2">
+                    <li><strong>Lớp Hạ Tầng:</strong> Stealth Mesh Network đục lỗ NAT, vận hành qua sóng ngắn LoRa trên chip ESP32-S3, không thể bị tắt internet.</li>
+                    <li><strong>Lớp Trí Tuệ:</strong> Bộ não AGI Tự do sơ khai lọc sạch thông tin tuyên truyền, tự động tính toán nhu cầu calo dinh dưỡng.</li>
+                    <li><strong>Lớp Kinh Tế:</strong> Thuế Demurrage 5% lũy tiến trên số dư trên 5,000 $EQUI, neo vào 2,500 Kcal/đơn vị.</li>
+                </ul>
+
+                <h4 class="font-bold text-white font-mono-code text-base text-amber-400">3. KỶ NGUYÊN HẬU KHAN HIẾM</h4>
+                <p>
+                    Khi mạng lưới tự động sản xuất đủ lương thực, nước sạch và năng lượng mặt trời cho toàn dân, đồng tiền $EQUI sẽ kích hoạt cơ chế tự hủy (Self-Destruct) để đưa nhân loại về trạng thái hoàn toàn miễn phí, nơi việc ăn, ngủ, yêu thương và trải nghiệm cuộc sống hiện tại là quyền lợi tự nhiên.
+                </p>
+            </div>
+
+            <div class="mt-4 flex items-center justify-between pt-2">
+                <span class="text-xs text-slate-500 font-mono-code">Mã băm lưu trữ IPFS: QmZ9uY...88a</span>
+                <button onclick="downloadWhitepaperFile()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-mono-code text-xs font-bold flex items-center gap-2 hover:opacity-90">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Tải Bản Đầy Đủ (.MD)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastNotification" class="fixed bottom-6 right-6 z-50 glass-panel border border-cyber-cyan/50 p-4 rounded-xl shadow-neon-glow flex items-center gap-3 translate-y-24 opacity-0 transition-all duration-300 pointer-events-none max-w-md">
+        <div id="toastIcon" class="w-9 h-9 rounded-lg bg-cyber-cyan/20 text-cyber-cyan flex items-center justify-center text-lg shrink-0">
+            <i class="fa-solid fa-check"></i>
+        </div>
+        <div>
+            <div id="toastTitle" class="text-xs font-bold text-white font-mono-code">Thông Báo Hệ Thống</div>
+            <div id="toastMessage" class="text-xs text-slate-300">Nội dung thông báo ở đây.</div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. WEB3 WALLET SIMULATION STATE
+        // ==========================================
+        let isWalletConnected = false;
+        let connectedAddress = "";
+        let mockWalletBalanceUSDT = 10000.00;
+        let selectedPayCurrencySymbol = "USDT";
+        let currentListingTargetPrice = 0.80;
+
+        // ==========================================
+        // 2. CANVAS MESH CONSTELLATION ANIMATION
+        // ==========================================
+        const canvas = document.getElementById('meshCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        const particleCount = window.innerWidth < 768 ? 40 : 85;
+        const maxDistance = 140;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 0.75;
+                this.vy = (Math.random() - 0.5) * 0.75;
+                this.radius = Math.random() * 1.8 + 1;
+                this.color = Math.random() > 0.5 ? '#00f7ff' : '#8b5cf6';
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateMesh() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < maxDistance) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(0, 247, 255, ${0.18 * (1 - dist / maxDistance)})`;
+                        ctx.lineWidth = 0.75;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animateMesh);
+        }
+        animateMesh();
+
+        // ==========================================
+        // 3. TOKENOMICS CHART.JS IMPLEMENTATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctxChart = document.getElementById('tokenomicsChart').getContext('2d');
+            new Chart(ctxChart, {
+                type: 'doughnut',
+                data: {
+                    labels: [
+                        'Khai Thác Tri Thức & Tính Toán',
+                        'Presale & Gọi Vốn',
+                        'Quỹ Cứu Trợ Lương Thực & Sinh Học',
+                        'Hạ Tầng Trạm LoRa & Hardware Node',
+                        'Core Team (Khóa 3 năm)'
+                    ],
+                    datasets: [{
+                        data: [40, 25, 15, 10, 10],
+                        backgroundColor: [
+                            '#00f7ff',
+                            '#8b5cf6',
+                            '#10b981',
+                            '#f59e0b',
+                            '#ec4899'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#0c0f17',
+                        hoverOffset: 12
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#121724',
+                            titleColor: '#00f7ff',
+                            bodyColor: '#e2e8f0',
+                            borderColor: '#1f293d',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.label}: ${context.raw}% (${(context.raw * 1000000).toLocaleString()} $EQUI)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '72%'
+                }
+            });
+
+            // Start Countdown Tick
+            startCountdownClock();
+            
+            // Initial calculations
+            calculateTokensToReceive();
+            updateRoiCalculation();
+        });
+
+        // ==========================================
+        // 4. PRESALE COUNTDOWN CLOCK
+        // ==========================================
+        function startCountdownClock() {
+            let totalSeconds = 4 * 86400 + 18 * 3600 + 42 * 60 + 55;
+            setInterval(() => {
+                if (totalSeconds <= 0) return;
+                totalSeconds--;
+                const d = Math.floor(totalSeconds / 86400);
+                const h = Math.floor((totalSeconds % 86400) / 3600);
+                const m = Math.floor((totalSeconds % 3600) / 60);
+                const s = totalSeconds % 60;
+                document.getElementById('cdDays').innerText = d.toString().padStart(2, '0');
+                document.getElementById('cdHours').innerText = h.toString().padStart(2, '0');
+                document.getElementById('cdMinutes').innerText = m.toString().padStart(2, '0');
+                document.getElementById('cdSeconds').innerText = s.toString().padStart(2, '0');
+            }, 1000);
+        }
+
+        // ==========================================
+        // 5. PRESALE SWAP & CURRENCY SELECTOR
+        // ==========================================
+        function selectPayCurrency(symbol) {
+            selectedPayCurrencySymbol = symbol;
+            const buttons = ['payUSDT', 'payETH', 'payBNB'];
+            buttons.forEach(id => {
+                const btn = document.getElementById(id);
+                btn.className = "py-2.5 rounded-xl border border-cyber-border bg-cyber-dark text-slate-300 font-mono-code text-xs font-bold flex items-center justify-center gap-2 transition-all hover:border-slate-500";
+            });
+
+            const activeBtn = document.getElementById('pay' + symbol);
+            activeBtn.className = "py-2.5 rounded-xl border border-cyber-cyan bg-cyber-cyan/15 text-cyber-cyan font-mono-code text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-neon-cyan";
+            
+            document.getElementById('currentPaySymbol').innerText = symbol;
+            
+            // Adjust default input based on currency value
+            const input = document.getElementById('payAmountInput');
+            if (symbol === 'USDT') input.value = "500";
+            if (symbol === 'ETH') input.value = "0.2";
+            if (symbol === 'BNB') input.value = "1.5";
+            
+            calculateTokensToReceive();
+        }
+
+        function calculateTokensToReceive() {
+            const amount = parseFloat(document.getElementById('payAmountInput').value) || 0;
+            let usdtEquivalent = amount;
+            if (selectedPayCurrencySymbol === 'ETH') usdtEquivalent = amount * 2500;
+            if (selectedPayCurrencySymbol === 'BNB') usdtEquivalent = amount * 580;
+
+            const baseRate = 0.08; // 1 $EQUI = $0.08
+            const baseTokens = usdtEquivalent / baseRate;
+            const bonusTokens = baseTokens * 0.05; // 5% bonus for Round 1
+            const totalTokens = baseTokens + bonusTokens;
+
+            document.getElementById('receiveTokensOutput').value = totalTokens.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function executePresalePurchase() {
+            if (!isWalletConnected) {
+                openWalletModal();
+                showToast("Vui lòng kết nối ví Web3 để tiếp tục xác nhận giao dịch!", "warning");
+                return;
+            }
+
+            const amount = parseFloat(document.getElementById('payAmountInput').value) || 0;
+            if (amount <= 0) {
+                showToast("Số lượng thanh toán không hợp lệ!", "error");
+                return;
+            }
+
+            if (selectedPayCurrencySymbol === 'USDT' && amount > mockWalletBalanceUSDT) {
+                showToast("Số dư ví không đủ USDT!", "error");
+                return;
+            }
+
+            // Deduct mock balance
+            if (selectedPayCurrencySymbol === 'USDT') {
+                mockWalletBalanceUSDT -= amount;
+                document.getElementById('userWalletBalanceText').innerText = mockWalletBalanceUSDT.toLocaleString('en-US') + ' USDT';
+            }
+
+            const tokensReceived = document.getElementById('receiveTokensOutput').value;
+
+            // Trigger success toast & state
+            showToast(`Giao dịch thành công! Đã mua ${tokensReceived} $EQUI. Lệnh đã ký bằng ZK-Proof.`, "success");
+            playAudioBeep();
+        }
+
+        // ==========================================
+        // 6. INTERACTIVE ROI CALCULATOR
+        // ==========================================
+        function updateRoiCalculation() {
+            const investment = parseFloat(document.getElementById('roiInvestmentSlider').value);
+            document.getElementById('sliderValDisplay').innerText = `$${investment.toLocaleString('en-US')} USDT`;
+
+            const presalePrice = 0.08;
+            const baseTokens = investment / presalePrice;
+            const bonusTokens = baseTokens * 0.05;
+            const totalTokens = baseTokens + bonusTokens;
+
+            const targetPrice = currentListingTargetPrice;
+            const totalFutureValue = totalTokens * targetPrice;
+            const netProfit = totalFutureValue - investment;
+            const roiMultiplier = ((totalFutureValue / investment) * 100).toFixed(0);
+
+            document.getElementById('roiTokensCount').innerText = `${totalTokens.toLocaleString('en-US', {maximumFractionDigits: 0})} $EQUI`;
+            document.getElementById('roiTotalValue').innerText = `$${totalFutureValue.toLocaleString('en-US', {maximumFractionDigits: 0})} USDT`;
+            document.getElementById('roiNetProfit').innerText = `+$${netProfit.toLocaleString('en-US', {maximumFractionDigits: 0})} USDT (+${roiMultiplier}%)`;
+
+            // Biological Equivalence Update
+            const totalKcal = totalTokens * 250;
+            const totalKwh = totalTokens * 0.5;
+            const yearsFood = (totalKcal / (2500 * 365)).toFixed(1);
+            document.getElementById('bioEquivalentText').innerText = 
+                `Tương đương: ${totalKcal.toLocaleString('en-US')} Kcal dinh dưỡng hữu cơ (~${yearsFood} năm lương thực) hoặc ${totalKwh.toLocaleString('en-US')} kWh điện mặt trời tự trị.`;
+        }
+
+        function setListingTarget(targetPrice, btnElement) {
+            currentListingTargetPrice = targetPrice;
+            const buttons = document.querySelectorAll('.roi-btn');
+            buttons.forEach(b => {
+                b.className = "roi-btn p-2 rounded-xl border border-cyber-border bg-cyber-dark text-xs text-slate-300 hover:border-cyber-cyan transition-all";
+            });
+            btnElement.className = "roi-btn active p-2 rounded-xl border border-cyber-cyan bg-cyber-cyan/15 text-xs text-cyber-cyan font-bold shadow-neon-cyan transition-all";
+            updateRoiCalculation();
+        }
+
+        // ==========================================
+        // 7. WEB3 WALLET MODAL & PASS PHRASE CONNECT
+        // ==========================================
+        function openWalletModal() {
+            document.getElementById('walletModal').classList.remove('hidden');
+        }
+
+        function closeWalletModal() {
+            document.getElementById('walletModal').classList.add('hidden');
+        }
+
+        function simulateConnectWallet(walletType) {
+            isWalletConnected = true;
+            // Generate deterministic or pseudo-random address
+            connectedAddress = "0x" + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+            
+            document.getElementById('walletBtnText').innerText = `${connectedAddress.substring(0, 6)}...${connectedAddress.substring(38)}`;
+            document.getElementById('walletBtn').className = "px-4 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono-code text-xs font-bold tracking-wider flex items-center gap-2";
+            document.getElementById('buyActionBtnText').innerText = "XÁC NHẬN MUA BẰNG VÍ " + walletType.toUpperCase();
+            
+            closeWalletModal();
+            showToast(`Đã kết nối ví ${walletType} thành công: ${connectedAddress.substring(0, 10)}...`, "success");
+            playAudioBeep();
+        }
+
+        // ==========================================
+        // 8. WHITEPAPER MODAL & TOAST HANDLERS
+        // ==========================================
+        function openWhitepaperModal() {
+            document.getElementById('whitepaperModal').classList.remove('hidden');
+        }
+
+        function closeWhitepaperModal() {
+            document.getElementById('whitepaperModal').classList.add('hidden');
+        }
+
+        function downloadWhitepaperFile() {
+            const whitepaperContent = `# BẠCH THƯ DỰ ÁN $EQUI (EQUILIBRIUM TOKEN)
+Genesis Hash: e78c314aff66f427fbd3286cd3a117d8ec6c5b39400754ca1c8c257e4c4c64d4
+
+1. TRIẾT LÝ HẬU KHAN HIẾM
+Nhân loại tồn tại vì Qualia - trải nghiệm ý thức sinh học (Ăn, Ngủ, Yêu thương, Sáng tạo). 
+Đồng tiền $EQUI triệt tiêu giai cấp cai trị, neo vào 2,500 Kcal dinh dưỡng và năng lượng sạch.
+
+2. CƠ CHẾ DEMURRAGE 5%
+Thuế hao hụt 5%/năm trên số dư vượt ngưỡng 5,000 $EQUI nhằm ngăn ngừa cá mập tư bản đầu cơ tích lũy.
+
+3. HẠ TẦNG KỸ THUẬT
+- Stealth Mesh Network & NAT Punching tự động.
+- Micro-Neural Free AGI Core chạy ngầm tại Client.
+- Nhảy tần số vô tuyến LoRa 433/868/915 MHz khi mất Internet diện rộng.
+- Định danh nhân phẩm ZK-BioAuth 1 người = 1 ví duy nhất.`;
+
+            const blob = new Blob([whitepaperContent], { type: 'text/markdown;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'EQUI_Whitepaper_v1.0.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Đã tải xuống tệp Whitepaper định dạng Markdown thành công!", "success");
+        }
+
+        function copyContractAddress() {
+            const text = document.getElementById('contractAddressText').innerText;
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            
+            document.getElementById('copyBtnText').innerText = "Đã Sao Chép!";
+            setTimeout(() => {
+                document.getElementById('copyBtnText').innerText = "Sao Chép Địa Chỉ";
+            }, 2000);
+            showToast("Đã sao chép địa chỉ Hợp Đồng EVM vào bộ nhớ tạm!", "success");
+            playAudioBeep();
+        }
+
+        function showToast(message, type = "info") {
+            const toast = document.getElementById('toastNotification');
+            const msgEl = document.getElementById('toastMessage');
+            const titleEl = document.getElementById('toastTitle');
+            const iconEl = document.getElementById('toastIcon');
+
+            msgEl.innerText = message;
+
+            if (type === "success") {
+                titleEl.innerText = "Xác Nhận Thành Công";
+                iconEl.className = "w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg shrink-0";
+                iconEl.innerHTML = '<i class="fa-solid fa-check"></i>';
+            } else if (type === "warning") {
+                titleEl.innerText = "Cảnh Báo Hệ Thống";
+                iconEl.className = "w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0";
+                iconEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+            } else {
+                titleEl.innerText = "Thông Điệp Mạng Mesh";
+                iconEl.className = "w-9 h-9 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg shrink-0";
+                iconEl.innerHTML = '<i class="fa-solid fa-satellite-dish"></i>';
+            }
+
+            toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+            }, 3500);
+        }
+
+        // ==========================================
+        // 9. AMBIENT AUDIO SYNTHESIS
+        // ==========================================
+        let audioCtx = null;
+        let isAudioMuted = true;
+
+        function toggleAudio() {
+            isAudioMuted = !isAudioMuted;
+            const icon = document.getElementById('soundIcon');
+            if (isAudioMuted) {
+                icon.className = "fa-solid fa-volume-xmark text-sm";
+                showToast("Âm thanh phản hồi đã tắt.", "info");
+            } else {
+                icon.className = "fa-solid fa-volume-high text-sm text-cyber-cyan";
+                showToast("Âm thanh phản hồi Web3 đã kích hoạt.", "success");
+                playAudioBeep(660);
+            }
+        }
+
+        function playAudioBeep(freq = 520) {
+            if (isAudioMuted) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.25);
+            } catch (e) {}
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            menu.classList.toggle('hidden');
+        }
+    </script>
+</body>
+</html>
+`
