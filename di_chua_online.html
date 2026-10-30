@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Chùa Online 3D - WebRTC Multiplayer (Sansa & Niệm Phật Edition)</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- PeerJS (WebRTC P2P DataChannel kết nối các thành viên mở file HTML) -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Merriweather:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #120b07;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .font-sansa { font-family: 'Noto Serif KR', serif; }
+        .font-zen { font-family: 'Merriweather', serif; }
+
+        /* Nhãn tên 3D chiếu lên màn hình 2D */
+        .avatar-label-container {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            text-align: center;
+            white-space: nowrap;
+        }
+        /* Bong bóng lời nguyện bay lên trên đầu nhân vật */
+        @keyframes popSpeech {
+            0% { transform: scale(0.7) translateY(8px); opacity: 0; }
+            15% { transform: scale(1.03) translateY(0); opacity: 1; }
+            85% { transform: scale(1) translateY(0); opacity: 1; }
+            100% { transform: scale(0.9) translateY(-10px); opacity: 0; }
+        }
+        .prayer-bubble {
+            animation: popSpeech 4.5s ease-out forwards;
+        }
+        /* Kim cương vàng xoay trên đầu nhân vật chính */
+        @keyframes spinSlow {
+            0% { transform: translateY(0px) rotateY(0deg); }
+            50% { transform: translateY(-4px) rotateY(180deg); }
+            100% { transform: translateY(0px) rotateY(360deg); }
+        }
+        .player-diamond {
+            display: inline-block;
+            animation: spinSlow 2.8s infinite linear;
+        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(24, 15, 10, 0.5); }
+        ::-webkit-scrollbar-thumb { background: #c89d54; border-radius: 4px; }
+    </style>
+</head>
+<body class="text-[#f7f2eb]">
+
+    <!-- Vùng chứa Canvas 3D -->
+    <div id="canvas-container" class="fixed inset-0 z-0"></div>
+
+    <!-- Lớp chứa Nhãn Tên, Cấp Độ & Bong Bóng Cầu Nguyện 3D -> 2D -->
+    <div id="labels-layer" class="fixed inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- ================= GIAO DIỆN HUD ĐA TẦNG (TỔNG HỢP TỪ 3 ẢNH THAM KHẢO) ================= -->
+    <div class="fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 md:p-5">
+
+        <!-- TẦNG TRÊN: Hồ sơ & Phòng chùa (Trái) | Thông báo Toast (Giữa) | Điểm Tâm Đức & WebRTC (Phải) -->
+        <div class="flex flex-wrap justify-between items-start gap-3">
+
+            <!-- CỤM BÊN TRÁI: Hồ sơ Phật tử + Bảng Vàng Công Đức + Chú Tiểu Chúc Phúc -->
+            <div class="flex flex-col gap-2.5 max-w-xs w-full sm:w-auto">
+                
+                <!-- 1. Thẻ Hồ sơ & Chọn Chùa (Từ Ảnh 1 & Ảnh 3) -->
+                <div class="pointer-events-auto bg-[#1e130c]/90 backdrop-blur-md border border-[#c89d54]/40 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
+                    <div onclick="openModal('modal-profile')" class="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 border-2 border-amber-300 flex items-center justify-center text-lg font-bold cursor-pointer shadow-md" title="Đổi trang phục / Pháp danh">
+                        🪷
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span id="hud-username" class="font-bold text-sm text-white truncate">Liễu Nhiên</span>
+                            <span id="hud-level" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40 font-semibold">Cấp 1</span>
+                        </div>
+                        <div id="hud-rank-title" class="text-[11px] text-[#cbb292]">Măng trúc - bậc 1</div>
+                        <div class="flex items-center gap-2 mt-1 text-[11px]">
+                            <button onclick="openModal('modal-map')" class="text-amber-300 hover:underline font-semibold flex items-center gap-1">
+                                <span>🏯</span>
+                                <span id="hud-temple-name">Chùa Nhất Trụ</span>
+                                <span>▾</span>
+                            </button>
+                            <span class="text-stone-500">•</span>
+                            <span class="flex items-center gap-1 text-emerald-400">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                <strong id="hud-online-count">62</strong> online
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. BẢNG VÀNG CÔNG ĐỨC (Từ Ảnh 2 & Ảnh 3) -->
+                <div id="leaderboard-panel" class="pointer-events-auto bg-[#23150d]/90 backdrop-blur-md border border-[#d4a359]/50 rounded-2xl p-3 shadow-2xl w-64">
+                    <div class="flex justify-between items-center border-b border-[#d4a359]/30 pb-1.5 mb-2">
+                        <div>
+                            <h3 class="text-xs font-bold text-[#f6d899] tracking-wide uppercase">🏆 BẢNG VÀNG CÔNG ĐỨC</h3>
+                            <p class="text-[10px] text-[#bfa382]">Vàng • Bạc • Đồng Hàng Đầu</p>
+                        </div>
+                        <span id="webrtc-badge" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/70 text-emerald-300 border border-emerald-500/40">
+                            P2P Đang kết nối...
+                        </span>
+                    </div>
+                    <div id="leaderboard-list" class="space-y-1.5 text-xs max-h-36 overflow-y-auto pr-1">
+                        <!-- Render động bằng JS -->
+                    </div>
+                </div>
+
+                <!-- 3. Hộp thoại CHÚ TIỂU CHÚC PHÚC (Từ Ảnh 2) -->
+                <div id="blessing-card" class="pointer-events-auto bg-[#f7eedd]/95 border-2 border-[#d4a359] text-[#2b1a0e] rounded-2xl p-3 shadow-xl w-64 transition-all duration-300">
+                    <div class="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                        <span>🙏 Chú Tiểu chúc phúc</span>
+                        <span id="blessing-target-name" class="text-sky-700">Đại chúng</span>
+                        <span>💙</span>
+                    </div>
+                    <p id="blessing-message" class="text-[11px] text-[#4a321f] mt-1 leading-relaxed">
+                        Mến chào bạn ghé thăm không gian tĩnh tâm hôm nay — chúc bạn và gia đình luôn an vui, thư thái! ~
+                    </p>
+                </div>
+            </div>
+
+            <!-- CỤM GIỮA TRÊN: Thông báo Hành Trì & Chào Hợp Thập (Từ Ảnh 1 & Ảnh 3) -->
+            <div class="flex flex-col items-center gap-2 mx-auto">
+                <div id="center-banner" class="bg-black/75 backdrop-blur-md border border-amber-400/50 text-amber-100 px-5 py-2 rounded-full text-xs font-medium shadow-2xl transition-all duration-300 flex items-center gap-2">
+                    <span>☸️</span>
+                    <span id="center-banner-text">Chánh Đạo vừa tròn một chuỗi 108 hạt</span>
+                </div>
+                <div class="text-[11px] bg-black/45 px-3 py-1 rounded-full text-amber-200/90 border border-white/10">
+                    💡 Click lên mặt sàn gỗ để <strong>đi bộ</strong> hoặc click vào <strong>bồ đoàn trống</strong> để ngồi thiền
+                </div>
+            </div>
+
+            <!-- CỤM BÊN PHẢI: Điểm Tâm Đức, Nút Niệm Phật & Bảng 8 Tâm Ý Dâng Lễ (Từ Ảnh 1, 2, 3) -->
+            <div class="flex flex-col items-end gap-2.5">
+                
+                <!-- Thanh Điểm Hoa Sen, Kim Cương & Nút Nghe Niệm Phật 염불 듣기 -->
+                <div class="pointer-events-auto flex items-center gap-2">
+                    <div class="bg-[#1e130c]/90 backdrop-blur-md border border-[#c89d54]/40 rounded-2xl px-3.5 py-2 flex items-center gap-3 text-xs shadow-xl">
+                        <span title="Điểm Tâm Đức / Hoa Sen" class="flex items-center gap-1 font-bold text-amber-300">
+                            🏵️ <span id="stat-merit">210</span>
+                        </span>
+                        <span class="text-stone-600">|</span>
+                        <span title="Chuỗi 108 hạt đã hoàn thành" class="flex items-center gap-1 font-bold text-sky-300">
+                            💎 <span id="stat-gems">0</span>
+                        </span>
+                    </div>
+
+                    <button onclick="toggleChantingAudio()" 
+                        class="bg-[#1e130c]/90 hover:bg-[#322015] backdrop-blur-md border border-[#c89d54]/50 rounded-2xl px-3.5 py-2 shadow-xl transition flex items-center gap-2">
+                        <span id="chant-icon" class="text-base">🔇</span>
+                        <div class="text-left leading-tight">
+                            <div id="chant-kr" class="font-sansa text-[11px] font-bold text-[#f3d292]">염불 듣기</div>
+                            <div id="chant-vi" class="text-[10px] text-[#cbb292]">Nghe niệm Phật</div>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Bảng Dâng Lễ 8 TÂM Ý (Từ Ảnh 2 - Có thể thu gọn/mở rộng) -->
+                <div id="tamy-panel" class="pointer-events-auto bg-[#23150d]/90 backdrop-blur-md border border-[#d4a359]/50 rounded-2xl p-2.5 shadow-2xl w-52">
+                    <div class="flex justify-between items-center border-b border-[#d4a359]/30 pb-1.5 mb-1.5 px-1">
+                        <span class="text-xs font-bold text-[#f6d899]">🪷 Dâng Lễ Tâm Ý</span>
+                        <span class="text-[10px] text-amber-300/80">Cầu phúc</span>
+                    </div>
+                    <div class="space-y-1 max-h-60 overflow-y-auto pr-0.5" id="tamy-buttons-container">
+                        <!-- Nạp 8 Tâm Ý bằng JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL LẦN TRÀNG HẠT NỔI (Khi mở) -->
+        <div id="bead-modal" class="hidden pointer-events-auto self-center bg-[#1e130c]/95 backdrop-blur-md border-2 border-[#c89d54]/60 rounded-3xl p-4 shadow-2xl w-72 text-center">
+            <div class="flex justify-between items-center mb-1">
+                <span class="font-sansa text-xs font-bold text-[#f3d292]">염주 굴리기 · Lần Tràng Hạt (108 Hạt)</span>
+                <button onclick="toggleBeadModal()" class="text-[#bfa588] hover:text-white text-lg leading-none">&times;</button>
+            </div>
+            <div class="relative my-2 flex justify-center">
+                <canvas id="bead-canvas" width="190" height="190" class="rounded-2xl bg-[#120b07] border border-[#c89d54]/30 cursor-ns-resize touch-none"></canvas>
+                <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="text-[10px] text-[#bfa588]">Đã niệm</span>
+                    <span id="bead-count-num" class="font-sansa text-2xl font-bold text-amber-300">0</span>
+                    <span id="bead-cycle-text" class="text-[10px] text-amber-400">0 / 108 hạt</span>
+                </div>
+            </div>
+            <p class="text-[11px] text-[#cbb292] mb-2">Vuốt dọc trên chuỗi hạt hoặc bấm nút bên dưới</p>
+            <button onclick="rollBead(1)" class="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-[#19100a] font-bold text-xs transition">
+                Lần 1 hạt (+1 Tâm Đức)
+            </button>
+        </div>
+
+        <!-- TẦNG DƯỚI: Nút "Đứng dậy" & Thanh Dock Chức Năng Kép (Từ Ảnh 1 & Ảnh 3) -->
+        <div class="flex flex-col items-center gap-2 w-full">
+
+            <!-- Nút Đứng Dậy / Ngồi Thiền nhanh (Từ góc phải dưới Ảnh 3) -->
+            <div class="pointer-events-auto self-end mr-2 md:mr-8">
+                <button id="btn-stand-toggle" onclick="toggleStandUp()" 
+                    class="px-5 py-2 rounded-full bg-[#8c6f3e]/90 hover:bg-[#a6844a] border border-amber-300/60 text-white font-bold text-xs shadow-xl transition transform active:scale-95 flex items-center gap-1.5">
+                    <span>🚶</span>
+                    <span id="stand-toggle-text">Đứng dậy</span>
+                </button>
+            </div>
+
+            <!-- Thanh Dock Chính (Chia cụm Quản lý Trái & Hành trì Phải đúng chuẩn Ảnh 3) -->
+            <div class="pointer-events-auto w-full max-w-5xl flex flex-wrap justify-between items-center gap-2 bg-[#1b110b]/92 backdrop-blur-md border border-[#c89d54]/40 rounded-3xl px-4 py-2 shadow-2xl">
+                
+                <!-- Cụm Trái: Nhiệm vụ, Bảng vàng, Bản đồ chùa, Kinh kệ, Cài đặt nhân vật -->
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <button onclick="openModal('modal-quests')" class="flex flex-col items-center px-3 py-1.5 rounded-xl hover:bg-white/10 text-[#dfd0be] transition">
+                        <span class="text-base">📋</span>
+                        <span class="text-[10px] font-medium mt-0.5">Nhiệm vụ</span>
+                    </button>
+                    <button onclick="toggleLeaderboard()" class="flex flex-col items-center px-3 py-1.5 rounded-xl hover:bg-white/10 text-[#dfd0be] transition">
+                        <span class="text-base">🏆</span>
+                        <span class="text-[10px] font-medium mt-0.5">Xếp hạng</span>
+                    </button>
+                    <button onclick="openModal('modal-map')" class="flex flex-col items-center px-3 py-1.5 rounded-xl hover:bg-white/10 text-[#dfd0be] transition">
+                        <span class="text-base">🗺️</span>
+                        <span class="text-[10px] font-medium mt-0.5">Bản đồ chùa</span>
+                    </button>
+                    <button onclick="openModal('modal-sutra')" class="flex flex-col items-center px-3 py-1.5 rounded-xl hover:bg-white/10 text-[#dfd0be] transition">
+                        <span class="text-base">📜</span>
+                        <span class="text-[10px] font-medium mt-0.5">Tủ Kinh</span>
+                    </button>
+                    <button onclick="openModal('modal-profile')" class="flex flex-col items-center px-3 py-1.5 rounded-xl hover:bg-white/10 text-[#dfd0be] transition">
+                        <span class="text-base">⚙️</span>
+                        <span class="text-[10px] font-medium mt-0.5">Cài đặt</span>
+                    </button>
+                    <button onclick="cycleCameraMode()" class="flex flex-col items-center px-3 py-1.5 rounded-xl hover:bg-white/10 text-amber-200 transition">
+                        <span class="text-base">🎥</span>
+                        <span id="cam-label" class="text-[10px] font-medium mt-0.5">Góc nhìn</span>
+                    </button>
+                </div>
+
+                <!-- Cụm Phải: Chắp tay (합장), Lạy Phật (절하기), Tràng hạt (염주), Gõ Mõ (목탁), Dâng lễ -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="triggerGreetingHapjang()" 
+                        class="flex flex-col items-center justify-center w-16 py-1.5 rounded-2xl bg-[#2f1f14] hover:bg-[#422c1d] border border-[#c89d54]/40 text-[#f7f2eb] transition active:scale-95">
+                        <span class="text-base">🙏</span>
+                        <span class="text-[10px] font-semibold mt-0.5">Chắp tay</span>
+                    </button>
+
+                    <button id="btn-bow" onclick="triggerBowProstration()" 
+                        class="flex flex-col items-center justify-center w-16 py-1.5 rounded-2xl bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-[#19100a] font-bold transition active:scale-95 shadow-lg">
+                        <span class="text-base">🙇</span>
+                        <span class="text-[10px] font-bold mt-0.5">Lạy Phật</span>
+                    </button>
+
+                    <button onclick="toggleBeadModal()" 
+                        class="flex flex-col items-center justify-center w-16 py-1.5 rounded-2xl bg-[#2f1f14] hover:bg-[#422c1d] border border-[#c89d54]/40 text-[#f7f2eb] transition active:scale-95">
+                        <span class="text-base">📿</span>
+                        <span class="text-[10px] font-semibold mt-0.5">Tràng hạt</span>
+                    </button>
+
+                    <button onclick="triggerMoktakKnock()" 
+                        class="flex flex-col items-center justify-center w-16 py-1.5 rounded-2xl bg-[#2f1f14] hover:bg-[#422c1d] border border-[#c89d54]/40 text-[#f7f2eb] transition active:scale-95">
+                        <span class="text-base">🪘</span>
+                        <span class="text-[10px] font-semibold mt-0.5">Gõ Mõ</span>
+                    </button>
+
+                    <button onclick="toggleTamYPanel()" 
+                        class="flex flex-col items-center justify-center w-16 py-1.5 rounded-2xl bg-[#3d2616] hover:bg-[#52331e] border border-amber-400/50 text-amber-200 transition active:scale-95">
+                        <span class="text-base">🕯️</span>
+                        <span class="text-[10px] font-semibold mt-0.5">Dâng lễ</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 1: CÀI ĐẶT NHÂN VẬT & PHÁP DANH ================= -->
+    <div id="modal-profile" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-[#24160e] border-2 border-[#c89d54]/60 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div class="w-14 h-14 mx-auto mb-2 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-2xl">
+                🪷
+            </div>
+            <h2 class="font-zen text-xl font-bold text-[#f3d292]">Bước Vào Chánh Điện Đa Người Chơi</h2>
+            <p class="text-xs text-[#cbb292] mt-1">
+                Hệ thống tự động kết nối WebRTC P2P với các thành viên đang mở trang web này.
+            </p>
+
+            <div class="mt-4 text-left space-y-3">
+                <div>
+                    <label class="block text-xs text-[#dfd0be] mb-1">Pháp danh / Tên hiển thị trên đầu nhân vật:</label>
+                    <input id="input-profile-name" type="text" value="Liễu Nhiên" maxlength="22"
+                        class="w-full px-3.5 py-2.5 rounded-xl bg-[#120b07] border border-[#c89d54]/50 text-white text-sm focus:outline-none focus:border-amber-400">
+                </div>
+
+                <div>
+                    <label class="block text-xs text-[#dfd0be] mb-1">Hình tướng nhân vật (Từ Ảnh 1 & Ảnh 3):</label>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button id="style-monk" onclick="selectHairStyle('monk')" class="py-2.5 px-3 rounded-xl bg-amber-500 text-[#19100a] font-bold text-xs border border-amber-300">
+                            🧑‍🦲 Chú Tiểu (Đầu trọc)
+                        </button>
+                        <button id="style-lay" onclick="selectHairStyle('bun')" class="py-2.5 px-3 rounded-xl bg-[#332014] text-[#dfd0be] font-semibold text-xs border border-[#c89d54]/30">
+                            🧘 Cư Sĩ (Tóc búi)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="saveProfileAndEnter()" 
+                class="w-full mt-5 py-3 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:brightness-110 text-[#19100a] font-bold text-sm shadow-lg transition">
+                Vào Chánh Điện & Kết Nối WebRTC
+            </button>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 2: NHIỆM VỤ TU TẬP HÀNG NGÀY (Từ Ảnh 3) ================= -->
+    <div id="modal-quests" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#24160e] border-2 border-[#c89d54]/60 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-[#c89d54]/30 pb-3">
+                <h3 class="font-zen text-lg font-bold text-[#f3d292]">📋 Nhiệm Vụ Tinh Tấn Hôm Nay</h3>
+                <button onclick="closeModal('modal-quests')" class="text-[#dfd0be] hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <div id="quest-list-box" class="mt-4 space-y-2.5 text-xs">
+                <!-- Render bằng JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 3: BẢN ĐỒ CHÙA / ĐỔI PHÒNG WEBRTC (Từ Ảnh 1 & 3) ================= -->
+    <div id="modal-map" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#24160e] border-2 border-[#c89d54]/60 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-[#c89d54]/30 pb-3">
+                <h3 class="font-zen text-lg font-bold text-[#f3d292]">🗺️ Bản Đồ Chùa & Phòng WebRTC</h3>
+                <button onclick="closeModal('modal-map')" class="text-[#dfd0be] hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-xs text-[#cbb292] mt-2">Chọn cùng một ngôi chùa để gặp gỡ các Phật tử đang ở trong phòng đó:</p>
+            <div class="mt-3 space-y-2.5 text-xs">
+                <button onclick="switchTempleRoom('nhat-tru', 'Chùa Nhất Trụ')" class="w-full p-3 rounded-2xl bg-[#332014] hover:bg-[#472d1c] border border-amber-400/40 flex justify-between items-center text-left">
+                    <div>
+                        <div class="font-bold text-amber-300 text-sm">🏯 Chùa Nhất Trụ (Niệm Phật Online)</div>
+                        <div class="text-[#cbb292] mt-0.5">Tượng Phật Vàng & Bảng Vàng Tinh Tấn 3D</div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">Phòng #1</span>
+                </button>
+                <button onclick="switchTempleRoom('cheongyeondang', 'Cheongyeondang #2')" class="w-full p-3 rounded-2xl bg-[#332014] hover:bg-[#472d1c] border border-amber-400/40 flex justify-between items-center text-left">
+                    <div>
+                        <div class="font-bold text-amber-300 text-sm">⛰️ Mountain Temple (Cheongyeondang #2)</div>
+                        <div class="text-[#cbb292] mt-0.5">Không gian Sansa rừng trúc thanh tịnh</div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">Phòng #2</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 4: TỦ KINH QUÁN CHIẾU ================= -->
+    <div id="modal-sutra" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#24160e] border-2 border-[#c89d54]/60 rounded-3xl max-w-lg w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-[#c89d54]/30 pb-3">
+                <h3 class="font-zen text-lg font-bold text-[#f3d292]">📜 Tủ Sách Kinh & Kệ Quán Chiếu</h3>
+                <button onclick="closeModal('modal-sutra')" class="text-[#dfd0be] hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <div class="mt-4 bg-[#120b07] border border-[#c89d54]/30 rounded-2xl p-5 space-y-3 font-zen text-sm text-[#f7eedd] leading-relaxed text-center max-h-72 overflow-y-auto">
+                <h4 class="text-amber-300 font-bold text-base">Bát Nhã Tâm Kinh Tinh Yếu</h4>
+                <p>Quán Tự Tại Bồ Tát khi thực hành sâu xa Bát Nhã Ba La Mật Đa, soi thấy năm uẩn đều không, vượt qua mọi khổ ách.</p>
+                <p>Sắc chẳng khác Không, Không chẳng khác Sắc. Sắc tức là Không, Không tức là Sắc.</p>
+                <p>Tâm không ngăn ngại, vì không ngăn ngại nên không sợ hãi, xa lìa mộng tưởng điên đảo, đạt tới Cứu Cánh Niết Bàn.</p>
+                <p class="text-amber-300 italic">Yết đế, yết đế, ba la yết đế, ba la tăng yết đế, Bồ đề tát bà ha.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MÃ NGUỒN LOGIC 3D + WEBRTC P2P MULTIPLAYER ================= -->
+    <script>
+        // =========================================================================
+        // 1. DANH SÁCH 8 LỄ VẬT "TÂM Ý" (Từ Ảnh 2) & NHIỆM VỤ TU TẬP (Từ Ảnh 3)
+        // =========================================================================
+        const TAM_Y_OFFERINGS = [
+            { id: 'anlac', name: 'Tâm Ý An Lạc', icon: '🪷', points: 10, bubble: 'Dâng lễ CẦU AN LẠC x1!' },
+            { id: 'suckhoe', name: 'Cầu Sức Khỏe', icon: '🌿', points: 10, bubble: 'Dâng lễ CẦU SỨC KHỎE x1!' },
+            { id: 'cattuong', name: 'Tâm Ý Cát Tường', icon: '✨', points: 12, bubble: 'Dâng lễ CÁT TƯỜNG x1!' },
+            { id: 'nhanduyen', name: 'Tâm Ý Nhân Duyên', icon: '🏮', points: 12, bubble: 'Dâng lễ NHÂN DUYÊN x1!' },
+            { id: 'sumvay', name: 'Tâm Ý Sum Vầy', icon: '🙏', points: 15, bubble: 'Dâng lễ SUM VẦY x1!' },
+            { id: 'thinhvuong', name: 'Tâm Ý Thịnh Vượng', icon: '🌾', points: 15, bubble: 'Dâng lễ THỊNH VƯỢNG x1!' },
+            { id: 'binhyen', name: 'Tâm Ý Bình Yên', icon: '🔔', points: 18, bubble: 'Dâng lễ BÌNH YÊN x1!' },
+            { id: 'daiphuc', name: 'Tâm Ý Đại Phúc', icon: '🌟', points: 25, bubble: 'Dâng lễ ĐẠI PHÚC x1!' }
+        ];
+
+        const DAILY_QUESTS = [
+            { id: 'q_bow', title: 'Thành tâm Lạy Phật 3 lễ', progress: 0, target: 3, reward: 20, done: false },
+            { id: 'q_bead', title: 'Lần chuỗi hạt 18 lần', progress: 0, target: 18, reward: 25, done: false },
+            { id: 'q_greet', title: 'Chắp tay chào đại chúng (합장)', progress: 0, target: 1, reward: 15, done: false },
+            { id: 'q_offer', title: 'Dâng 1 lễ Tâm Ý lên Chánh Điện', progress: 0, target: 1, reward: 30, done: false }
+        ];
+
+        // Khởi tạo danh sách nút 8 Tâm Ý bên phải màn hình
+        function renderTamYButtons() {
+            const box = document.getElementById('tamy-buttons-container');
+            box.innerHTML = TAM_Y_OFFERINGS.map(item => `
+                <button onclick="sendTamYOffering('${item.id}')" 
+                    class="w-full px-2.5 py-1.5 rounded-xl bg-[#342014] hover:bg-[#4d301e] border border-[#d4a359]/30 flex items-center justify-between text-left transition group">
+                    <span class="flex items-center gap-2 text-xs font-medium text-[#f7eedd] group-hover:text-amber-300">
+                        <span>${item.icon}</span>
+                        <span>${item.name}</span>
+                    </span>
+                    <span class="text-[10px] text-amber-400 font-bold">+${item.points}</span>
+                </button>
+            `).join('');
+        }
+        renderTamYButtons();
+
+        // =========================================================================
+        // 2. HỆ THỐNG ÂM THANH TỔNG HỢP WEB AUDIO API (KHÔNG DÙNG MP3 NGOÀI)
+        // =========================================================================
+        let audioCtx = null;
+        let isChanting = false;
+        let chantTimer = null;
+        let activeOscList = [];
+
+        function ensureAudio() {
+            if (!audioCtx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioCtx();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function stopAllChantAudio() {
+            if (chantTimer) { clearInterval(chantTimer); chantTimer = null; }
+            activeOscList.forEach(node => {
+                try {
+                    node.gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+                    node.osc.stop(audioCtx.currentTime + 0.02);
+                } catch (e) {}
+            });
+            activeOscList = [];
+        }
+
+        function playMoktakSound(pitch = 1.0) {
+            ensureAudio();
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(740 * pitch, now);
+            osc.frequency.exponentialRampToValueAtTime(350 * pitch, now + 0.045);
+
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(660 * pitch, now);
+            filter.Q.setValueAtTime(5.5, now);
+
+            gain.gain.setValueAtTime(0.7, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.16);
+        }
+
+        function playBellSound(freq = 246.94, duration = 4.0) {
+            ensureAudio();
+            const now = audioCtx.currentTime;
+            [1, 2.0, 2.76, 4.08].forEach((r, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq * r, now);
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.linearRampToValueAtTime([0.2, 0.09, 0.04, 0.015][i], now + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.0004, now + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + duration);
+            });
+        }
+
+        function toggleChantingAudio() {
+            ensureAudio();
+            stopAllChantAudio();
+            isChanting = !isChanting;
+
+            document.getElementById('chant-icon').textContent = isChanting ? '🔊' : '🔇';
+            document.getElementById('chant-kr').textContent = isChanting ? '염불 멈추기' : '염불 듣기';
+            document.getElementById('chant-vi').textContent = isChanting ? 'Dừng niệm Phật' : 'Nghe niệm Phật';
+
+            if (isChanting) {
+                const now = audioCtx.currentTime;
+                [110, 164.81].forEach(freq => {
+                    const osc = audioCtx.createOscillator();
+                    const filter = audioCtx.createBiquadFilter();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(220, now);
+                    gain.gain.setValueAtTime(0.001, now);
+                    gain.gain.linearRampToValueAtTime(0.055, now + 1.0);
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    activeOscList.push({ osc, gain });
+                });
+
+                let beat = 0;
+                playBellSound(220, 4.2);
+                chantTimer = setInterval(() => {
+                    if (!isChanting) return;
+                    beat++;
+                    playMoktakSound(beat % 4 === 0 ? 1.05 : 1.0);
+                    if (beat % 8 === 0) playBellSound(220, 4.0);
+                }, 1100);
+            }
+        }
+
+        // =========================================================================
+        // 3. KHỞI TẠO KHÔNG GIAN 3D CHÁNH ĐIỆN (THREE.JS)
+        // Tích hợp Cửa Sổ Nan Gỗ Nhìn Ra Rừng Trúc (Ảnh 1) + Bảng Vàng 3D & Lư Hương (Ảnh 3)
+        // =========================================================================
+        const container = document.getElementById('canvas-container');
+        const labelsLayer = document.getElementById('labels-layer');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x130c07);
+        scene.fog = new THREE.FogExp2(0x130c07, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 150);
+        const defaultCamPos = new THREE.Vector3(0, 6.8, 14.5);
+        const defaultLookAt = new THREE.Vector3(0, 2.5, -3.0);
+        camera.position.copy(defaultCamPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.copy(defaultLookAt);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.maxPolarAngle = Math.PI / 2 - 0.03;
+        controls.minDistance = 2.5;
+        controls.maxDistance = 28;
+
+        // Ánh sáng Chánh Điện
+        scene.add(new THREE.AmbientLight(0xffdfba, 0.55));
+        const sunLight = new THREE.DirectionalLight(0xffe4a0, 1.15);
+        sunLight.position.set(8, 16, 10);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+
+        const altarPointLight = new THREE.PointLight(0xffaa00, 2.2, 18);
+        altarPointLight.position.set(0, 5.0, -6.0);
+        scene.add(altarPointLight);
+
+        // --- 3.1. Sàn gỗ tối màu + Thảm đỏ chính đạo (Từ Ảnh 1 & Ảnh 2) ---
+        function createPlankTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#2b1b10';
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = '#1a0f08';
+            ctx.lineWidth = 3;
+            for (let i = 0; i <= 512; i += 64) {
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(12, 12);
+            return tex;
+        }
+
+        const floorMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(44, 44),
+            new THREE.MeshStandardMaterial({ map: createPlankTexture(), roughness: 0.62 })
+        );
+        floorMesh.rotation.x = -Math.PI / 2;
+        floorMesh.receiveShadow = true;
+        scene.add(floorMesh);
+
+        // Thảm đỏ thêu hoa văn dọc lối đi giữa (Từ Ảnh 2)
+        const redCarpet = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.3, 16),
+            new THREE.MeshStandardMaterial({ color: 0x6e1b14, roughness: 0.85 })
+        );
+        redCarpet.rotation.x = -Math.PI / 2;
+        redCarpet.position.set(0, 0.01, 2.0);
+        redCarpet.receiveShadow = true;
+        scene.add(redCarpet);
+
+        // --- 3.2. Hai bức tường cửa sổ nan gỗ nhìn ra rừng cây xanh (Từ Ảnh 1) ---
+        function createWindowWall(xPos) {
+            const wallGroup = new THREE.Group();
+            wallGroup.position.set(xPos, 0, 0);
+
+            // Nền cảnh rừng cây xanh nắng chiếu bên ngoài cửa sổ
+            const natureBackdrop = new THREE.Mesh(
+                new THREE.PlaneGeometry(26, 8),
+                new THREE.MeshBasicMaterial({ color: 0x4f6d3a, side: THREE.DoubleSide })
+            );
+            natureBackdrop.position.set(xPos > 0 ? 0.4 : -0.4, 4.5, 0);
+            natureBackdrop.rotation.y = Math.PI / 2;
+            wallGroup.add(natureBackdrop);
+
+            // Các song cửa gỗ dọc & ngang
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x26150b, roughness: 0.8 });
+            const bottomWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.8, 26), woodMat);
+            bottomWall.position.y = 0.9;
+            wallGroup.add(bottomWall);
+
+            for (let z = -12; z <= 12; z += 4) {
+                const col = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.35, 11, 16), new THREE.MeshStandardMaterial({ color: 0x5c1d14 }));
+                col.position.set(0, 5.5, z);
+                col.castShadow = true;
+                wallGroup.add(col);
+            }
+            scene.add(wallGroup);
+        }
+        createWindowWall(-11.5);
+        createWindowWall(11.5);
+
+        // --- 3.3. Bức tường hậu cung, Tranh thờ Mandala & Tượng Phật Vàng ---
+        const backWall = new THREE.Mesh(
+            new THREE.BoxGeometry(24, 13, 0.8),
+            new THREE.MeshStandardMaterial({ color: 0x24140b, roughness: 0.85 })
+        );
+        backWall.position.set(0, 6.5, -9.2);
+        scene.add(backWall);
+
+        // Vòng hào quang Mandala sau tượng Phật
+        const haloGroup = new THREE.Group();
+        haloGroup.position.set(0, 4.9, -8.5);
+        const outerHalo = new THREE.Mesh(
+            new THREE.TorusGeometry(3.2, 0.1, 20, 90),
+            new THREE.MeshBasicMaterial({ color: 0xffe066 })
+        );
+        const mandalaDisc = new THREE.Mesh(
+            new THREE.CircleGeometry(3.15, 64),
+            new THREE.MeshBasicMaterial({ color: 0xd97706, transparent: true, opacity: 0.22 })
+        );
+        haloGroup.add(outerHalo, mandalaDisc);
+        scene.add(haloGroup);
+
+        // Tượng Phật Vàng trên tòa sen
+        const buddhaGroup = new THREE.Group();
+        buddhaGroup.position.set(0, 0, -7.2);
+        const goldMat = new THREE.MeshStandardMaterial({
+            color: 0xffcf40,
+            metalness: 0.85,
+            roughness: 0.22,
+            emissive: 0x331f00,
+            emissiveIntensity: 0.25
+        });
+
+        const altarTable = new THREE.Mesh(
+            new THREE.BoxGeometry(7.2, 1.2, 3.8),
+            new THREE.MeshStandardMaterial({ color: 0x3d2210, roughness: 0.65 })
+        );
+        altarTable.position.y = 0.6;
+        altarTable.castShadow = true;
+        altarTable.receiveShadow = true;
+        buddhaGroup.add(altarTable);
+
+        const lotusPedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.6, 0.6, 32), goldMat);
+        lotusPedestal.position.y = 1.45;
+        buddhaGroup.add(lotusPedestal);
+
+        const bLegs = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.65, 0.65, 32), goldMat);
+        bLegs.position.y = 2.05; bLegs.scale.set(1.15, 1, 0.85);
+        buddhaGroup.add(bLegs);
+
+        const bTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.25, 2.0, 32), goldMat);
+        bTorso.position.y = 3.3; bTorso.scale.set(1.1, 1, 0.8);
+        buddhaGroup.add(bTorso);
+
+        const bHead = new THREE.Mesh(new THREE.SphereGeometry(0.72, 32, 32), goldMat);
+        bHead.position.y = 5.1; bHead.scale.set(0.95, 1.06, 0.95);
+        buddhaGroup.add(bHead);
+
+        const bUshnisha = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 20), goldMat);
+        bUshnisha.position.y = 5.85;
+        buddhaGroup.add(bUshnisha);
+        scene.add(buddhaGroup);
+
+        // --- 3.4. Lư Hương Đồng có Nhang Đang Cháy & Khói Trầm (Từ Ảnh 2 & 3) ---
+        const censerGroup = new THREE.Group();
+        censerGroup.position.set(0, 1.2, -4.6);
+        const bronzeMat = new THREE.MeshStandardMaterial({ color: 0x8c6239, metalness: 0.7, roughness: 0.35 });
+        const censerBowl = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 0.55, 24), bronzeMat);
+        censerGroup.add(censerBowl);
+
+        // 3 nén nhang có đốm lửa đỏ trên đầu
+        [-0.12, 0, 0.12].forEach(ix => {
+            const stick = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.015, 0.015, 0.65, 8),
+                new THREE.MeshBasicMaterial({ color: 0xb45309 })
+            );
+            stick.position.set(ix, 0.45, 0);
+            censerGroup.add(stick);
+
+            const ember = new THREE.Mesh(
+                new THREE.SphereGeometry(0.03, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0xff3b00 })
+            );
+            ember.position.set(ix, 0.78, 0);
+            censerGroup.add(ember);
+        });
+        scene.add(censerGroup);
+
+        // --- 3.5. Bia 3D "BẢNG VÀNG TINH TẤN TUẦN NÀY" đặt cạnh Bàn Thờ (Từ Ảnh 3) ---
+        function createStele3DTexture(topUsers) {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 768;
+            const ctx = c.getContext('2d');
+
+            ctx.fillStyle = '#241409';
+            ctx.fillRect(0, 0, 512, 768);
+            ctx.strokeStyle = '#d4a359';
+            ctx.lineWidth = 14;
+            ctx.strokeRect(16, 16, 480, 736);
+
+            ctx.fillStyle = '#f6d899';
+            ctx.font = 'bold 34px Merriweather, serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('BẢNG VÀNG', 256, 85);
+            ctx.font = 'bold 24px Plus Jakarta Sans, sans-serif';
+            ctx.fillText('TINH TẤN TUẦN NÀY', 256, 125);
+
+            ctx.textAlign = 'left';
+            ctx.font = '24px Plus Jakarta Sans, sans-serif';
+            topUsers.slice(0, 7).forEach((u, idx) => {
+                const y = 200 + idx * 72;
+                ctx.fillStyle = idx === 0 ? '#fbbf24' : idx === 1 ? '#e2e8f0' : idx === 2 ? '#d97706' : '#f7eedd';
+                ctx.fillText(`${idx + 1}. ${u.name}`, 55, y);
+                ctx.textAlign = 'right';
+                ctx.fillText(`★ ${u.merit}`, 455, y);
+                ctx.textAlign = 'left';
+            });
+
+            return new THREE.CanvasTexture(c);
+        }
+
+        const steleMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(2.3, 3.5, 0.2),
+            new THREE.MeshStandardMaterial({ roughness: 0.5 })
+        );
+        steleMesh.position.set(-4.6, 2.2, -5.8);
+        steleMesh.rotation.y = 0.25;
+        scene.add(steleMesh);
+
+        // =========================================================================
+        // 4. HỆ THỐNG BỒ ĐOÀN (24 THẢM NGỒI THIỀN)
+        // =========================================================================
+        const matList = [];
+        const matMeshes = [];
+        const rows = 4;
+        const cols = 6;
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const idx = r * cols + c;
+                // Chừa lối đi thảm đỏ ở giữa
+                const rawCol = c - (cols - 1) / 2;
+                const x = rawCol * 2.25 + (rawCol > 0 ? 0.65 : -0.65);
+                const z = -1.2 + r * 2.25;
+
+                const mesh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.68, 0.72, 0.14, 32),
+                    new THREE.MeshStandardMaterial({
+                        color: (r + c) % 2 === 0 ? 0x4f3b2b : 0x3b3a38,
+                        roughness: 0.88
+                    })
+                );
+                mesh.position.set(x, 0.07, z);
+                mesh.receiveShadow = true;
+                mesh.castShadow = true;
+                mesh.userData = { matIndex: idx };
+
+                scene.add(mesh);
+                matMeshes.push(mesh);
+                matList.push({
+                    index: idx,
+                    row: r + 1,
+                    col: c + 1,
+                    x,
+                    z,
+                    occupiedBy: null
+                });
+            }
+        }
+
+        const hoverRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.73, 0.85, 32),
+            new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide })
+        );
+        hoverRing.rotation.x = -Math.PI / 2;
+        hoverRing.position.y = 0.025;
+        hoverRing.visible = false;
+        scene.add(hoverRing);
+
+        // =========================================================================
+        // 5. MÔ HÌNH CHÚ TIỂU / CƯ SĨ CÓ Y VÀNG KASA & TƯ THẾ ĐỨNG / NGỒI / ĐI BỘ / LẠY
+        // =========================================================================
+        function createMonkAvatar3D({ id, name, level = 1, hairStyle = 'monk', robeColor = 0x738fa8, isSelf = false }) {
+            const root = new THREE.Group();
+
+            const robeMat = new THREE.MeshStandardMaterial({ color: robeColor, roughness: 0.75 });
+            const sashMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.55 }); // Y Kasa vàng (Từ Ảnh 1 & 3)
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xf2ccb2, roughness: 0.45 });
+            const hairMat = new THREE.MeshStandardMaterial({ color: 0x1c1613, roughness: 0.8 });
+
+            // 1. Đế chân xếp bằng (Hiển thị khi đang ngồi thiền / lạy Phật)
+            const sittingLegs = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.52, 0.26, 24), robeMat);
+            sittingLegs.position.y = 0.20;
+            sittingLegs.castShadow = true;
+            root.add(sittingLegs);
+
+            // 2. Đôi chân đứng & đi bộ (Hiển thị khi bấm "Đứng dậy" như Ảnh 1)
+            const standingLegsGroup = new THREE.Group();
+            const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.55, 16), robeMat);
+            leftLeg.position.set(-0.15, 0.28, 0);
+            const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.55, 16), robeMat);
+            rightLeg.position.set(0.15, 0.28, 0);
+            standingLegsGroup.add(leftLeg, rightLeg);
+            standingLegsGroup.visible = false;
+            root.add(standingLegsGroup);
+
+            // 3. Khớp thân trên (UpperBodyPivot): Dùng để gập lưng về phía -Z khi Lạy Phật
+            const upperBodyPivot = new THREE.Group();
+            upperBodyPivot.position.set(0, 0.30, 0);
+            root.add(upperBodyPivot);
+
+            // Thân áo tràng lam
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.41, 0.68, 24), robeMat);
+            torso.position.y = 0.34;
+            torso.castShadow = true;
+            upperBodyPivot.add(torso);
+
+            // Dải Y Kasa màu vàng vắt chéo qua vai (Đặc trưng của Ảnh 1 & Ảnh 3)
+            const kasaSash = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.065, 12, 32), sashMat);
+            kasaSash.position.set(0, 0.38, 0);
+            kasaSash.rotation.set(0.55, 0, 0.45);
+            kasaSash.scale.set(1.0, 1.15, 0.95);
+            upperBodyPivot.add(kasaSash);
+
+            // Đầu nhân vật
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.29, 28, 28), skinMat);
+            head.position.y = 0.88;
+            head.castShadow = true;
+            upperBodyPivot.add(head);
+
+            // Tóc búi Cư sĩ (Ẩn nếu là Chú tiểu đầu trọc)
+            const hairBunGroup = new THREE.Group();
+            const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.295, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+            hairCap.position.y = 0.89;
+            hairCap.rotation.x = -0.15;
+            const topBun = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 16), hairMat);
+            topBun.position.set(0, 1.20, 0.04);
+            hairBunGroup.add(hairCap, topBun);
+            hairBunGroup.visible = (hairStyle === 'bun');
+            upperBodyPivot.add(hairBunGroup);
+
+            // Hai bàn tay chắp trước ngực (ở phía trước mặt -Z)
+            const handsGroup = new THREE.Group();
+            handsGroup.position.set(0, 0.42, -0.32);
+            const palmL = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), skinMat);
+            palmL.scale.set(0.6, 1.3, 1.2); palmL.position.x = -0.035;
+            const palmR = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), skinMat);
+            palmR.scale.set(0.6, 1.3, 1.2); palmR.position.x = 0.035;
+            handsGroup.add(palmL, palmR);
+            upperBodyPivot.add(handsGroup);
+
+            // Tạo nhãn DOM 2D nổi trên đầu nhân vật (Tên + Cấp độ + Bong bóng cầu nguyện)
+            const labelEl = document.createElement('div');
+            labelEl.className = 'avatar-label-container';
+            labelEl.innerHTML = `
+                <div class="speech-slot mb-1"></div>
+                ${isSelf ? '<div class="player-diamond text-amber-300 text-sm leading-none mb-0.5">♦</div>' : ''}
+                <div class="px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm border ${isSelf ? 'border-amber-400/70' : 'border-white/15'} shadow">
+                    <div class="avatar-name font-bold text-[11px] ${isSelf ? 'text-amber-200' : 'text-white'} leading-tight">${name}</div>
+                    <div class="avatar-lvl text-[9px] text-amber-300/90 leading-tight">Cấp ${level}</div>
+                </div>
+            `;
+            labelsLayer.appendChild(labelEl);
+
+            root.userData = {
+                id,
+                name,
+                level,
+                hairStyle,
+                isSelf,
+                posture: 'SITTING', // 'SITTING' | 'STANDING'
+                action: 'IDLE',     // 'IDLE' | 'WALKING' | 'BOWING' | 'GREETING'
+                actionTimer: 0,
+                walkCycle: 0,
+                matIndex: -1,
+                targetPos: new THREE.Vector3(),
+                sittingLegs,
+                standingLegsGroup,
+                leftLeg,
+                rightLeg,
+                upperBodyPivot,
+                handsGroup,
+                hairBunGroup,
+                labelEl
+            };
+
+            return root;
+        }
+
+        // Hiển thị bong bóng lời nguyện trên đầu bất kỳ Avatar nào (Từ Ảnh 2)
+        function showAvatarSpeechBubble(avatar, text) {
+            if (!avatar || !avatar.userData.labelEl) return;
+            const slot = avatar.userData.labelEl.querySelector('.speech-slot');
+            slot.innerHTML = `
+                <div class="prayer-bubble inline-block bg-[#fdfbf7] text-[#2b1a0e] border-2 border-amber-500 rounded-2xl px-3 py-1 text-[11px] font-bold shadow-lg">
+                    🙏 ${text}
+                </div>
+            `;
+        }
+
+        // Cập nhật tên hoặc kiểu tóc của Avatar
+        function updateAvatarIdentity(avatar, newName, newLevel, newHairStyle) {
+            const d = avatar.userData;
+            d.name = newName;
+            d.level = newLevel;
+            d.hairStyle = newHairStyle;
+            d.hairBunGroup.visible = (newHairStyle === 'bun');
+            if (d.labelEl) {
+                d.labelEl.querySelector('.avatar-name').textContent = newName;
+                d.labelEl.querySelector('.avatar-lvl').textContent = `Cấp ${newLevel}`;
+            }
+        }
+
+        // Chuyển đổi tư thế Ngồi Thiền <-> Đứng Dậy
+        function setAvatarPosture(avatar, posture) {
+            const d = avatar.userData;
+            d.posture = posture;
+            if (posture === 'STANDING') {
+                d.sittingLegs.visible = false;
+                d.standingLegsGroup.visible = true;
+                d.upperBodyPivot.position.y = 0.52;
+            } else {
+                d.sittingLegs.visible = true;
+                d.standingLegsGroup.visible = false;
+                d.upperBodyPivot.position.y = 0.30;
+                avatar.rotation.y = 0; // Quay mặt chuẩn về phía Tượng Phật (-Z)
+            }
+        }
+
+        // =========================================================================
+        // 6. KHỞI TẠO NGƯỜI CHƠI CHÍNH & CÁC ĐỒNG TU TRONG CHÁNH ĐIỆN
+        // =========================================================================
+        const myClientId = 'monk_' + Math.random().toString(36).substring(2, 9);
+        let myProfile = {
+            id: myClientId,
+            name: 'Liễu Nhiên',
+            level: 3,
+            merit: 210,
+            gems: 0,
+            hairStyle: 'monk',
+            roomId: 'nhat-tru'
+        };
+
+        // Đặt người chơi ở Hàng 3 - Thảm 3 (Index 14)
+        let myMatIndex = 14;
+        matList[myMatIndex].occupiedBy = myClientId;
+        const playerAvatar = createMonkAvatar3D({
+            id: myClientId,
+            name: myProfile.name,
+            level: myProfile.level,
+            hairStyle: myProfile.hairStyle,
+            robeColor: 0x6989a8,
+            isSelf: true
+        });
+        playerAvatar.position.set(matList[myMatIndex].x, 0, matList[myMatIndex].z);
+        playerAvatar.userData.targetPos.copy(playerAvatar.position);
+        playerAvatar.userData.matIndex = myMatIndex;
+        scene.add(playerAvatar);
+
+        // Tạo các Phật tử đồng tu (NPC lấy cảm hứng từ tên trong Ảnh 2 & Ảnh 3)
+        const npcProfiles = [
+            { id: 'npc_1', name: 'Hạnh Ý', level: 4, merit: 145, hairStyle: 'bun', matIndex: 9 },
+            { id: 'npc_2', name: 'Lê Tịnh', level: 16, merit: 320, hairStyle: 'monk', matIndex: 7 },
+            { id: 'npc_3', name: 'Thích Đi Ngủ', level: 2, merit: 85, hairStyle: 'bun', matIndex: 6 },
+            { id: 'npc_4', name: 'Tâm Huệ Tiến', level: 5, merit: 190, hairStyle: 'monk', matIndex: 2 },
+            { id: 'npc_5', name: 'Hahibi', level: 9, merit: 260, hairStyle: 'bun', matIndex: 3 },
+            { id: 'npc_6', name: 'Nhu Quynh', level: 6, merit: 175, hairStyle: 'bun', matIndex: 10 }
+        ];
+        const npcAvatars = [];
+
+        npcProfiles.forEach(p => {
+            matList[p.matIndex].occupiedBy = p.id;
+            const npc = createMonkAvatar3D({
+                id: p.id,
+                name: p.name,
+                level: p.level,
+                hairStyle: p.hairStyle,
+                robeColor: 0x566f84,
+                isSelf: false
+            });
+            npc.position.set(matList[p.matIndex].x, 0, matList[p.matIndex].z);
+            npc.userData.targetPos.copy(npc.position);
+            npc.userData.matIndex = p.matIndex;
+            scene.add(npc);
+            npcAvatars.push({ profile: p, avatar: npc });
+        });
+
+        // Định kỳ đồng tu thực hiện Lạy Phật hoặc Dâng Lễ tạo không khí tu tập sống động
+        setInterval(() => {
+            const pick = npcAvatars[Math.floor(Math.random() * npcAvatars.length)];
+            if (pick && pick.avatar.userData.action === 'IDLE') {
+                if (Math.random() < 0.65) {
+                    pick.avatar.userData.action = 'BOWING';
+                    pick.avatar.userData.actionTimer = 0;
+                } else {
+                    const randOffer = TAM_Y_OFFERINGS[Math.floor(Math.random() * TAM_Y_OFFERINGS.length)];
+                    showAvatarSpeechBubble(pick.avatar, randOffer.bubble);
+                }
+            }
+        }, 5500);
+
+        // =========================================================================
+        // 7. HỆ THỐNG KẾT NỐI ĐA NGƯỜI CHƠI WEBRTC (PEERJS AUTO-HUB + DATACHANNEL)
+        // Các thành viên mở file HTML sẽ tự động kết nối vào cùng 1 phòng chùa
+        // =========================================================================
+        const remotePeersMap = {}; // peerId -> { profile, avatar, conn }
+        let myPeerInstance = null;
+        let isRoomHub = false;
+        let hostConnection = null;
+
+        // Kênh phụ BroadcastChannel cho các tab cùng máy tính
+        const localTabChannel = ('BroadcastChannel' in window) ? new BroadcastChannel('chua_webrtc_local_v1') : null;
+
+        function getRoomHubPeerId(roomSlug) {
+            return `chua-online-3d-hub-2026-${roomSlug}`;
+        }
+
+        function updateWebRTCStatusBadge(text, isConnected = true) {
+            const badge = document.getElementById('webrtc-badge');
+            badge.textContent = text;
+            badge.className = isConnected
+                ? 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/80 text-emerald-300 border border-emerald-500/40'
+                : 'text-[9px] px-1.5 py-0.5 rounded bg-amber-900/80 text-amber-300 border border-amber-500/40';
+        }
+
+        // Khởi tạo hoặc chuyển phòng WebRTC
+        function initWebRTCRoom(roomSlug) {
+            if (myPeerInstance) {
+                try { myPeerInstance.destroy(); } catch (e) {}
+            }
+            // Xóa các remote avatar cũ khi đổi phòng
+            Object.keys(remotePeersMap).forEach(pid => removeRemotePeer(pid));
+
+            const hubPeerId = getRoomHubPeerId(roomSlug);
+            updateWebRTCStatusBadge('Đang kết nối WebRTC...', false);
+
+            // Bước 1: Thử đăng ký làm Hub (Host) của phòng chùa
+            const candidateHub = new Peer(hubPeerId, {
+                config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+            });
+
+            candidateHub.on('open', () => {
+                isRoomHub = true;
+                myPeerInstance = candidateHub;
+                updateWebRTCStatusBadge('WebRTC: Chủ phòng (P2P)', true);
+
+                // Lắng nghe các thành viên khác kết nối vào phòng chùa
+                candidateHub.on('connection', (conn) => {
+                    setupDataChannelEvents(conn);
+                });
+            });
+
+            // Bước 2: Nếu Hub ID đã có người giữ, tự động kết nối làm Thành viên (Client Peer) tới Hub đó
+            candidateHub.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    isRoomHub = false;
+                    const clientPeer = new Peer({
+                        config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+                    });
+                    myPeerInstance = clientPeer;
+
+                    clientPeer.on('open', () => {
+                        const conn = clientPeer.connect(hubPeerId, { reliable: true });
+                        hostConnection = conn;
+                        setupDataChannelEvents(conn);
+                    });
+                } else {
+                    updateWebRTCStatusBadge('P2P Nội bộ (Local)', true);
+                }
+            });
+        }
+
+        function setupDataChannelEvents(conn) {
+            conn.on('open', () => {
+                updateWebRTCStatusBadge(
+                    isRoomHub ? `WebRTC P2P (${Object.keys(remotePeersMap).length + 1} kết nối)` : 'WebRTC: Đã vào Chùa',
+                    true
+                );
+                // Gửi ngay trạng thái hiện tại của mình cho đối phương
+                sendMyFullStatePacket(conn);
+            });
+
+            conn.on('data', (packet) => {
+                handleIncomingNetworkPacket(packet, conn);
+                // Nếu mình là Hub, chuyển tiếp (Relay) gói tin cho tất cả các thành viên khác trong chùa
+                if (isRoomHub) {
+                    Object.values(remotePeersMap).forEach(item => {
+                        if (item.conn && item.conn !== conn && item.conn.open) {
+                            item.conn.send(packet);
+                        }
+                    });
+                }
+            });
+
+            conn.on('close', () => {
+                // Tìm và xóa thành viên vừa rời đi
+                Object.keys(remotePeersMap).forEach(pid => {
+                    if (remotePeersMap[pid].conn === conn) {
+                        removeRemotePeer(pid);
+                    }
+                });
+            });
+        }
+
+        function broadcastPacket(packet) {
+            // 1. Gửi qua WebRTC DataChannel
+            if (isRoomHub) {
+                Object.values(remotePeersMap).forEach(item => {
+                    if (item.conn && item.conn.open) item.conn.send(packet);
+                });
+            } else if (hostConnection && hostConnection.open) {
+                hostConnection.send(packet);
+            }
+            // 2. Gửi song song qua BroadcastChannel nội bộ
+            if (localTabChannel) {
+                localTabChannel.postMessage(packet);
+            }
+        }
+
+        if (localTabChannel) {
+            localTabChannel.onmessage = (e) => {
+                if (e.data && e.data.senderId !== myClientId && e.data.roomId === myProfile.roomId) {
+                    handleIncomingNetworkPacket(e.data, null);
+                }
+            };
+        }
+
+        function sendMyFullStatePacket(targetConn = null) {
+            const packet = {
+                type: 'SYNC_STATE',
+                senderId: myClientId,
+                roomId: myProfile.roomId,
+                profile: myProfile,
+                matIndex: playerAvatar.userData.matIndex,
+                posture: playerAvatar.userData.posture,
+                pos: { x: playerAvatar.position.x, z: playerAvatar.position.z }
+            };
+            if (targetConn && targetConn.open) {
+                targetConn.send(packet);
+            } else {
+                broadcastPacket(packet);
+            }
+        }
+
+        function handleIncomingNetworkPacket(pkt, sourceConn) {
+            if (!pkt || pkt.senderId === myClientId || pkt.roomId !== myProfile.roomId) return;
+
+            let peerEntry = remotePeersMap[pkt.senderId];
+
+            if (pkt.type === 'REQUEST_SYNC') {
+                sendMyFullStatePacket(sourceConn);
+                return;
+            }
+
+            if (pkt.type === 'SYNC_STATE' || pkt.type === 'MOVE_TARGET') {
+                if (!peerEntry && pkt.profile) {
+                    const av = createMonkAvatar3D({
+                        id: pkt.senderId,
+                        name: pkt.profile.name,
+                        level: pkt.profile.level,
+                        hairStyle: pkt.profile.hairStyle,
+                        robeColor: 0x7b98b2,
+                        isSelf: false
+                    });
+                    av.position.set(pkt.pos.x, 0, pkt.pos.z);
+                    av.userData.targetPos.set(pkt.pos.x, 0, pkt.pos.z);
+                    scene.add(av);
+                    peerEntry = { profile: pkt.profile, avatar: av, conn: sourceConn };
+                    remotePeersMap[pkt.senderId] = peerEntry;
+
+                    showCenterBanner(`🙏 Phật tử ${pkt.profile.name} vừa bước vào Chánh Điện`);
+                    // Phản hồi lại trạng thái của mình nếu đây là thành viên mới
+                    if (pkt.type === 'SYNC_STATE') sendMyFullStatePacket(sourceConn);
+                }
+
+                if (peerEntry) {
+                    if (sourceConn) peerEntry.conn = sourceConn;
+                    if (pkt.profile) {
+                        peerEntry.profile = pkt.profile;
+                        updateAvatarIdentity(peerEntry.avatar, pkt.profile.name, pkt.profile.level, pkt.profile.hairStyle);
+                    }
+                    // Cập nhật chiếm chỗ bồ đoàn
+                    const oldMat = peerEntry.avatar.userData.matIndex;
+                    if (matList[oldMat] && matList[oldMat].occupiedBy === pkt.senderId) {
+                        matList[oldMat].occupiedBy = null;
+                    }
+                    peerEntry.avatar.userData.matIndex = pkt.matIndex;
+                    if (pkt.matIndex >= 0 && matList[pkt.matIndex]) {
+                        matList[pkt.matIndex].occupiedBy = pkt.senderId;
+                    }
+
+                    peerEntry.avatar.userData.targetPos.set(pkt.pos.x, 0, pkt.pos.z);
+                    peerEntry.avatar.userData.posture = pkt.posture;
+                    if (peerEntry.avatar.position.distanceTo(peerEntry.avatar.userData.targetPos) > 0.1) {
+                        setAvatarPosture(peerEntry.avatar, 'STANDING');
+                        peerEntry.avatar.userData.action = 'WALKING';
+                    } else {
+                        setAvatarPosture(peerEntry.avatar, pkt.posture);
+                    }
+                    refreshLeaderboardAndStele();
+                }
+            } else if (pkt.type === 'ACTION_EVENT' && peerEntry) {
+                const av = peerEntry.avatar;
+                if (pkt.actionType === 'BOW') {
+                    setAvatarPosture(av, 'SITTING');
+                    av.userData.action = 'BOWING';
+                    av.userData.actionTimer = 0;
+                    if (pkt.merit) peerEntry.profile.merit = pkt.merit;
+                    refreshLeaderboardAndStele();
+                } else if (pkt.actionType === 'HAPJANG') {
+                    av.userData.action = 'GREETING';
+                    av.userData.actionTimer = 0;
+                    showCenterBanner(`🙏 ${peerEntry.profile.name} vừa chắp tay chào đại chúng (합장)`);
+                    showAvatarSpeechBubble(av, 'A Di Đà Phật 🙏');
+                } else if (pkt.actionType === 'OFFERING') {
+                    if (pkt.merit) peerEntry.profile.merit = pkt.merit;
+                    showAvatarSpeechBubble(av, pkt.bubbleText);
+                    updateBlessingCard(peerEntry.profile.name, pkt.offeringName);
+                    spawnOfferingParticles();
+                    refreshLeaderboardAndStele();
+                } else if (pkt.actionType === 'MALA_108') {
+                    showCenterBanner(`☸️ ${peerEntry.profile.name} vừa tròn một chuỗi 108 hạt!`);
+                }
+            }
+        }
+
+        function removeRemotePeer(peerId) {
+            const entry = remotePeersMap[peerId];
+            if (!entry) return;
+            const mIdx = entry.avatar.userData.matIndex;
+            if (matList[mIdx] && matList[mIdx].occupiedBy === peerId) {
+                matList[mIdx].occupiedBy = null;
+            }
+            if (entry.avatar.userData.labelEl) entry.avatar.userData.labelEl.remove();
+            scene.remove(entry.avatar);
+            delete remotePeersMap[peerId];
+            refreshLeaderboardAndStele();
+        }
+
+        // =========================================================================
+        // 8. CẬP NHẬT BẢNG VÀNG CÔNG ĐỨC 2D & BIA ĐÁ 3D TRONG CHÁNH ĐIỆN
+        // =========================================================================
+        function refreshLeaderboardAndStele() {
+            const allPractitioners = [
+                { name: myProfile.name + ' (Bạn)', merit: myProfile.merit, isSelf: true },
+                ...Object.values(remotePeersMap).map(r => ({ name: r.profile.name, merit: r.profile.merit || 100, isSelf: false })),
+                ...npcAvatars.map(n => ({ name: n.profile.name, merit: n.profile.merit, isSelf: false }))
+            ];
+            allPractitioners.sort((a, b) => b.merit - a.merit);
+
+            // 1. Render lên Bảng Vàng HUD góc trên trái (Chuẩn Ảnh 2)
+            const listEl = document.getElementById('leaderboard-list');
+            listEl.innerHTML = allPractitioners.slice(0, 6).map((u, idx) => {
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `0${idx + 1}`;
+                return `
+                    <div class="flex justify-between items-center px-2 py-1 rounded-lg ${u.isSelf ? 'bg-amber-500/25 border border-amber-400/50' : 'bg-black/35'}">
+                        <span class="truncate font-medium ${u.isSelf ? 'text-amber-200 font-bold' : 'text-[#f7eedd]'}">${medal} ${u.name}</span>
+                        <span class="text-amber-300 font-semibold whitespace-nowrap ml-2">★ ${u.merit} tâm đức</span>
+                    </div>
+                `;
+            }).join('');
+
+            // 2. Cập nhật Bia 3D "BẢNG VÀNG TINH TẤN TUẦN NÀY" ngay trong Chánh Điện (Chuẩn Ảnh 3)
+            if (steleMesh.material.map) steleMesh.material.map.dispose();
+            steleMesh.material.map = createStele3DTexture(allPractitioners);
+            steleMesh.material.needsUpdate = true;
+
+            // Cập nhật số lượng người online
+            document.getElementById('hud-online-count').textContent = 56 + Object.keys(remotePeersMap).length + npcAvatars.length;
+        }
+        refreshLeaderboardAndStele();
+
+        // =========================================================================
+        // 9. TƯƠNG TÁC ĐI BỘ TRONG CHÙA, CHỌN BỒ ĐOÀN & CÁC PHÁP HÀNH TRÌ
+        // =========================================================================
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let downPt = { x: 0, y: 0 };
+
+        window.addEventListener('pointermove', (e) => {
+            pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+
+            const matHits = raycaster.intersectObjects(matMeshes);
+            if (matHits.length > 0 && playerAvatar.userData.action !== 'BOWING') {
+                const m = matList[matHits[0].object.userData.matIndex];
+                if (m && (!m.occupiedBy || m.occupiedBy === myClientId)) {
+                    hoverRing.position.set(m.x, 0.025, m.z);
+                    hoverRing.visible = true;
+                    document.body.style.cursor = 'pointer';
+                    return;
+                }
+            }
+            hoverRing.visible = false;
+            document.body.style.cursor = 'default';
+        });
+
+        window.addEventListener('pointerdown', (e) => {
+            downPt = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y) > 6) return;
+            if (e.target !== renderer.domElement) return;
+            if (playerAvatar.userData.action === 'BOWING') return;
+
+            pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+
+            // Ưu tiên 1: Click vào Bồ Đoàn -> Đi bộ tới bồ đoàn đó và ngồi xuống
+            const matHits = raycaster.intersectObjects(matMeshes);
+            if (matHits.length > 0) {
+                const pickedIdx = matHits[0].object.userData.matIndex;
+                const targetMat = matList[pickedIdx];
+                if (targetMat && (!targetMat.occupiedBy || targetMat.occupiedBy === myClientId)) {
+                    walkToCushionAndSit(pickedIdx);
+                    return;
+                }
+            }
+
+            // Ưu tiên 2: Click lên mặt sàn gỗ -> Đứng dậy và đi bộ tới vị trí đó (Như Ảnh 1)
+            const floorHits = raycaster.intersectObject(floorMesh);
+            if (floorHits.length > 0) {
+                const pt = floorHits[0].point;
+                // Giới hạn trong phạm vi Chánh Điện
+                const tx = Math.max(-9.5, Math.min(9.5, pt.x));
+                const tz = Math.max(-3.2, Math.min(8.5, pt.z));
+                walkFreelyToFloorPoint(tx, tz);
+            }
+        });
+
+        function walkToCushionAndSit(newMatIdx) {
+            const targetMat = matList[newMatIdx];
+            if (!targetMat) return;
+
+            if (myMatIndex >= 0 && matList[myMatIndex]) {
+                matList[myMatIndex].occupiedBy = null;
+            }
+            myMatIndex = newMatIdx;
+            targetMat.occupiedBy = myClientId;
+
+            playerAvatar.userData.matIndex = newMatIdx;
+            playerAvatar.userData.targetPos.set(targetMat.x, 0, targetMat.z);
+            playerAvatar.userData.desiredFinalPosture = 'SITTING';
+
+            setAvatarPosture(playerAvatar, 'STANDING');
+            playerAvatar.userData.action = 'WALKING';
+            updateStandButtonUI('SITTING');
+
+            broadcastPacket({
+                type: 'MOVE_TARGET',
+                senderId: myClientId,
+                roomId: myProfile.roomId,
+                profile: myProfile,
+                matIndex: newMatIdx,
+                posture: 'SITTING',
+                pos: { x: targetMat.x, z: targetMat.z }
+            });
+        }
+
+        function walkFreelyToFloorPoint(tx, tz) {
+            if (myMatIndex >= 0 && matList[myMatIndex]) {
+                matList[myMatIndex].occupiedBy = null;
+            }
+            myMatIndex = -1;
+            playerAvatar.userData.matIndex = -1;
+            playerAvatar.userData.targetPos.set(tx, 0, tz);
+            playerAvatar.userData.desiredFinalPosture = 'STANDING';
+
+            setAvatarPosture(playerAvatar, 'STANDING');
+            playerAvatar.userData.action = 'WALKING';
+            updateStandButtonUI('STANDING');
+
+            broadcastPacket({
+                type: 'MOVE_TARGET',
+                senderId: myClientId,
+                roomId: myProfile.roomId,
+                profile: myProfile,
+                matIndex: -1,
+                posture: 'STANDING',
+                pos: { x: tx, z: tz }
+            });
+        }
+
+        // Nút "Đứng dậy" / "Ngồi thiền" (Từ góc dưới phải Ảnh 3)
+        function toggleStandUp() {
+            if (playerAvatar.userData.action === 'BOWING') return;
+
+            if (playerAvatar.userData.posture === 'SITTING') {
+                // Đứng dậy bước ra lối đi cạnh bồ đoàn
+                const standX = playerAvatar.position.x + (playerAvatar.position.x > 0 ? -0.9 : 0.9);
+                const standZ = playerAvatar.position.z;
+                walkFreelyToFloorPoint(standX, standZ);
+            } else {
+                // Tìm bồ đoàn trống gần nhất để ngồi xuống
+                let nearestIdx = -1;
+                let minDist = 999;
+                matList.forEach(m => {
+                    if (!m.occupiedBy) {
+                        const d = Math.hypot(m.x - playerAvatar.position.x, m.z - playerAvatar.position.z);
+                        if (d < minDist) { minDist = d; nearestIdx = m.index; }
+                    }
+                });
+                if (nearestIdx >= 0) walkToCushionAndSit(nearestIdx);
+            }
+        }
+
+        function updateStandButtonUI(posture) {
+            const txt = document.getElementById('stand-toggle-text');
+            txt.textContent = (posture === 'SITTING') ? 'Đứng dậy' : 'Ngồi thiền';
+        }
+
+        // 1. Chắp Tay Chào Đại Chúng (합장 - Từ Ảnh 1)
+        function triggerGreetingHapjang() {
+            if (playerAvatar.userData.action === 'BOWING') return;
+            playerAvatar.userData.action = 'GREETING';
+            playerAvatar.userData.actionTimer = 0;
+
+            playBellSound(329.63, 3.0);
+            addMeritAndExp(2);
+            advanceQuest('q_greet', 1);
+
+            showCenterBanner(`🙏 ${myProfile.name} vừa chắp tay chào đại chúng (합장)`);
+            showAvatarSpeechBubble(playerAvatar, 'A Di Đà Phật 🙏');
+
+            broadcastPacket({
+                type: 'ACTION_EVENT',
+                senderId: myClientId,
+                roomId: myProfile.roomId,
+                actionType: 'HAPJANG'
+            });
+        }
+
+        // 2. Lạy Phật 3 Pha Chuẩn Hướng -Z (절하기 - Từ Ảnh 1 & 3)
+        function triggerBowProstration() {
+            if (playerAvatar.userData.action === 'BOWING') return;
+            // Tự động chuyển về tư thế quỳ/ngồi hướng về Đức Phật (-Z) trước khi lạy
+            setAvatarPosture(playerAvatar, 'SITTING');
+            updateStandButtonUI('SITTING');
+            playerAvatar.userData.action = 'BOWING';
+            playerAvatar.userData.actionTimer = 0;
+
+            playBellSound(261.63, 4.0);
+            addMeritAndExp(5);
+            advanceQuest('q_bow', 1);
+            showAvatarSpeechBubble(playerAvatar, 'Thành tâm lễ Phật 🙏');
+
+            broadcastPacket({
+                type: 'ACTION_EVENT',
+                senderId: myClientId,
+                roomId: myProfile.roomId,
+                actionType: 'BOW',
+                merit: myProfile.merit
+            });
+        }
+
+        // 3. Gõ Mõ Tịnh Tâm
+        function triggerMoktakKnock() {
+            playMoktakSound(1.0);
+            addMeritAndExp(1);
+            if (playerAvatar.userData.action === 'IDLE') {
+                playerAvatar.userData.upperBodyPivot.rotation.x = -0.14;
+                setTimeout(() => {
+                    if (playerAvatar.userData.action === 'IDLE') {
+                        playerAvatar.userData.upperBodyPivot.rotation.x = 0;
+                    }
+                }, 140);
+            }
+        }
+
+        // 4. Dâng Lễ 8 Tâm Ý (Từ Ảnh 2)
+        function sendTamYOffering(offeringId) {
+            const item = TAM_Y_OFFERINGS.find(o => o.id === offeringId);
+            if (!item) return;
+
+            playBellSound(392.0, 4.5);
+            addMeritAndExp(item.points);
+            advanceQuest('q_offer', 1);
+
+            showAvatarSpeechBubble(playerAvatar, item.bubble);
+            updateBlessingCard(myProfile.name, item.name);
+            spawnOfferingParticles();
+
+            broadcastPacket({
+                type: 'ACTION_EVENT',
+                senderId: myClientId,
+                roomId: myProfile.roomId,
+                actionType: 'OFFERING',
+                offeringName: item.name,
+                bubbleText: item.bubble,
+                merit: myProfile.merit
+            });
+        }
+
+        function updateBlessingCard(userName, offeringName) {
+            document.getElementById('blessing-target-name').textContent = userName;
+            document.getElementById('blessing-message').textContent =
+                `Mến chào bạn ${userName} vừa dâng "${offeringName}" — Chú Tiểu chúc bạn và gia đình luôn bình an, vạn sự cát tường như ý! ~`;
+        }
+
+        function showCenterBanner(text) {
+            const banner = document.getElementById('center-banner-text');
+            banner.textContent = text;
+        }
+
+        // Cộng điểm Tâm Đức & Tự động Thăng Cấp (Cấp 1 -> Cấp 2...)
+        function addMeritAndExp(amount) {
+            myProfile.merit += amount;
+            const newLevel = Math.floor(myProfile.merit / 80) + 1;
+            if (newLevel > myProfile.level) {
+                myProfile.level = newLevel;
+                showCenterBanner(`✨ Chúc mừng ${myProfile.name} đã thăng lên Cấp ${newLevel}!`);
+            }
+            document.getElementById('stat-merit').textContent = myProfile.merit;
+            document.getElementById('hud-level').textContent = `Cấp ${myProfile.level}`;
+            updateAvatarIdentity(playerAvatar, myProfile.name, myProfile.level, myProfile.hairStyle);
+            refreshLeaderboardAndStele();
+        }
+
+        // =========================================================================
+        // 10. HỆ THỐNG LẦN TRÀNG HẠT 108 HẠT & NHIỆM VỤ HÀNG NGÀY
+        // =========================================================================
+        const beadCanvas = document.getElementById('bead-canvas');
+        const beadCtx = beadCanvas.getContext('2d');
+        let totalBeadsCount = 0;
+        let isDraggingBead = false;
+        let lastBeadY = 0;
+        let accumBeadY = 0;
+
+        function toggleBeadModal() {
+            document.getElementById('bead-modal').classList.toggle('hidden');
+            drawBeadRing();
+        }
+
+        function drawBeadRing() {
+            const w = beadCanvas.width;
+            const h = beadCanvas.height;
+            beadCtx.clearRect(0, 0, w, h);
+            const cx = w / 2, cy = h / 2, r = 68, count = 18;
+            const offset = (totalBeadsCount / count) * Math.PI * 2 - Math.PI / 2;
+
+            beadCtx.beginPath();
+            beadCtx.arc(cx, cy, r, 0, Math.PI * 2);
+            beadCtx.strokeStyle = '#6e4e32';
+            beadCtx.lineWidth = 3;
+            beadCtx.stroke();
+
+            for (let i = 0; i < count; i++) {
+                const a = (i / count) * Math.PI * 2 + offset;
+                const bx = cx + Math.cos(a) * r;
+                const by = cy + Math.sin(a) * r;
+                const isGuru = (i === 0);
+                const br = isGuru ? 12 : 9.5;
+                const g = beadCtx.createRadialGradient(bx - 2, by - 2, 2, bx, by, br);
+                if (isGuru) {
+                    g.addColorStop(0, '#fde68a'); g.addColorStop(0.5, '#d97706'); g.addColorStop(1, '#78350f');
+                } else {
+                    g.addColorStop(0, '#a37551'); g.addColorStop(0.6, '#5c3a21'); g.addColorStop(1, '#2b180a');
+                }
+                beadCtx.beginPath();
+                beadCtx.arc(bx, by, br, 0, Math.PI * 2);
+                beadCtx.fillStyle = g;
+                beadCtx.fill();
+            }
+        }
+
+        function rollBead(step = 1) {
+            totalBeadsCount = Math.max(0, totalBeadsCount + step);
+            if (step > 0) {
+                playMoktakSound(1.25);
+                addMeritAndExp(1);
+                advanceQuest('q_bead', 1);
+
+                // Khi hoàn thành mỗi 108 hạt (Chuẩn thông báo Ảnh 3)
+                if (totalBeadsCount > 0 && totalBeadsCount % 108 === 0) {
+                    myProfile.gems += 1;
+                    document.getElementById('stat-gems').textContent = myProfile.gems;
+                    showCenterBanner(`☸️ ${myProfile.name} vừa tròn một chuỗi 108 hạt!`);
+                    broadcastPacket({
+                        type: 'ACTION_EVENT',
+                        senderId: myClientId,
+                        roomId: myProfile.roomId,
+                        actionType: 'MALA_108'
+                    });
+                }
+            }
+            document.getElementById('bead-count-num').textContent = totalBeadsCount;
+            document.getElementById('bead-cycle-text').textContent = `${totalBeadsCount % 108} / 108 hạt`;
+            drawBeadRing();
+        }
+
+        beadCanvas.addEventListener('pointerdown', (e) => {
+            isDraggingBead = true; lastBeadY = e.clientY; accumBeadY = 0;
+            beadCanvas.setPointerCapture(e.pointerId);
+        });
+        beadCanvas.addEventListener('pointermove', (e) => {
+            if (!isDraggingBead) return;
+            accumBeadY += (e.clientY - lastBeadY);
+            lastBeadY = e.clientY;
+            if (Math.abs(accumBeadY) >= 22) {
+                rollBead(accumBeadY > 0 ? 1 : -1);
+                accumBeadY = 0;
+            }
+        });
+        beadCanvas.addEventListener('pointerup', () => { isDraggingBead = false; });
+
+        // Hệ thống Nhiệm vụ
+        function advanceQuest(qId, delta) {
+            const q = DAILY_QUESTS.find(item => item.id === qId);
+            if (!q || q.done) return;
+            q.progress = Math.min(q.target, q.progress + delta);
+            if (q.progress >= q.target) {
+                q.done = true;
+                addMeritAndExp(q.reward);
+                showCenterBanner(`🎉 Hoàn thành nhiệm vụ: "${q.title}" (+${q.reward} Tâm Đức)`);
+            }
+            renderQuestModal();
+        }
+
+        function renderQuestModal() {
+            const box = document.getElementById('quest-list-box');
+            box.innerHTML = DAILY_QUESTS.map(q => `
+                <div class="p-3 rounded-2xl bg-[#160d08] border ${q.done ? 'border-emerald-500/50' : 'border-[#c89d54]/30'} flex justify-between items-center">
+                    <div>
+                        <div class="font-bold ${q.done ? 'text-emerald-300 line-through' : 'text-white'}">${q.title}</div>
+                        <div class="text-[11px] text-[#bfa588] mt-0.5">Tiến độ: ${q.progress}/${q.target} • Thưởng: +${q.reward} 🏵️</div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${q.done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">
+                        ${q.done ? 'Đã xong ✓' : 'Đang tu tập'}
+                    </span>
+                </div>
+            `).join('');
+        }
+        renderQuestModal();
+
+        // =========================================================================
+        // 11. QUẢN LÝ MODAL, CÀI ĐẶT NHÂN VẬT, ĐỔI PHÒNG CHÙA & GÓC NHÌN CAMERA
+        // =========================================================================
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function toggleLeaderboard() { document.getElementById('leaderboard-panel').classList.toggle('hidden'); }
+        function toggleTamYPanel() { document.getElementById('tamy-panel').classList.toggle('hidden'); }
+
+        function selectHairStyle(style) {
+            myProfile.hairStyle = style;
+            document.getElementById('style-monk').className = style === 'monk'
+                ? 'py-2.5 px-3 rounded-xl bg-amber-500 text-[#19100a] font-bold text-xs border border-amber-300'
+                : 'py-2.5 px-3 rounded-xl bg-[#332014] text-[#dfd0be] font-semibold text-xs border border-[#c89d54]/30';
+            document.getElementById('style-lay').className = style === 'bun'
+                ? 'py-2.5 px-3 rounded-xl bg-amber-500 text-[#19100a] font-bold text-xs border border-amber-300'
+                : 'py-2.5 px-3 rounded-xl bg-[#332014] text-[#dfd0be] font-semibold text-xs border border-[#c89d54]/30';
+        }
+
+        function saveProfileAndEnter() {
+            const inputName = document.getElementById('input-profile-name').value.trim();
+            if (inputName) myProfile.name = inputName;
+
+            document.getElementById('hud-username').textContent = myProfile.name;
+            updateAvatarIdentity(playerAvatar, myProfile.name, myProfile.level, myProfile.hairStyle);
+            closeModal('modal-profile');
+
+            playBellSound(246.94, 4.0);
+            refreshLeaderboardAndStele();
+            initWebRTCRoom(myProfile.roomId);
+            sendMyFullStatePacket();
+        }
+
+        function switchTempleRoom(roomSlug, displayName) {
+            myProfile.roomId = roomSlug;
+            document.getElementById('hud-temple-name').textContent = displayName;
+            closeModal('modal-map');
+            showCenterBanner(`🏯 Đã chuyển sang không gian: ${displayName}`);
+            initWebRTCRoom(roomSlug);
+        }
+
+        // 3 Chế độ Camera mượt mà
+        let camMode = 'OVERVIEW';
+        let isCamLerping = false;
+        const targetCamPos = new THREE.Vector3().copy(defaultCamPos);
+        const targetLookAt = new THREE.Vector3().copy(defaultLookAt);
+
+        function cycleCameraMode() {
+            const lbl = document.getElementById('cam-label');
+            if (camMode === 'OVERVIEW') {
+                camMode = 'FOLLOW';
+                lbl.textContent = 'Sau lưng';
+                targetCamPos.set(playerAvatar.position.x, 2.3, playerAvatar.position.z + 3.2);
+                targetLookAt.set(0, 3.0, -7.0);
+            } else if (camMode === 'FOLLOW') {
+                camMode = 'FIRST_PERSON';
+                lbl.textContent = 'Góc thứ 1';
+                targetCamPos.set(playerAvatar.position.x, 1.3, playerAvatar.position.z - 0.15);
+                targetLookAt.set(0, 3.8, -7.0);
+            } else {
+                camMode = 'OVERVIEW';
+                lbl.textContent = 'Toàn cảnh';
+                targetCamPos.copy(defaultCamPos);
+                targetLookAt.copy(defaultLookAt);
+            }
+            isCamLerping = true;
+        }
+
+        // Hiệu ứng hạt ánh sao khi dâng lễ
+        const activeStarSystems = [];
+        function spawnOfferingParticles() {
+            const count = 120;
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+            const vels = [];
+            for (let i = 0; i < count; i++) {
+                pos[i * 3] = (Math.random() - 0.5) * 7;
+                pos[i * 3 + 1] = 0.2 + Math.random() * 1.0;
+                pos[i * 3 + 2] = -1.5 - Math.random() * 5.0;
+                vels.push({
+                    vx: (0 - pos[i * 3]) * 0.01,
+                    vy: 0.04 + Math.random() * 0.03,
+                    vz: (-7.0 - pos[i * 3 + 2]) * 0.01
+                });
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+                color: 0xffe066, size: 0.22, transparent: true, opacity: 1, blending: THREE.AdditiveBlending
+            }));
+            scene.add(pts);
+            activeStarSystems.push({ pts, vels, age: 0, maxAge: 160 });
+        }
+
+        // =========================================================================
+        // 12. VÒNG LẶP ANIMATION 3D & CHIẾU TỌA ĐỘ NHÃN TÊN 2D
+        // =========================================================================
+        const clock = new THREE.Clock();
+        const projVec = new THREE.Vector3();
+
+        function updateSingleAvatar(av, delta) {
+            const d = av.userData;
+            const pivot = d.upperBodyPivot;
+            const hands = d.handsGroup;
+
+            // 1. Trạng thái ĐI BỘ (WALKING)
+            if (d.action === 'WALKING') {
+                const dx = d.targetPos.x - av.position.x;
+                const dz = d.targetPos.z - av.position.z;
+                const dist = Math.hypot(dx, dz);
+
+                if (dist > 0.06) {
+                    const speed = 3.2 * delta;
+                    const step = Math.min(dist, speed);
+                    av.position.x += (dx / dist) * step;
+                    av.position.z += (dz / dist) * step;
+
+                    // Xoay mặt nhân vật về hướng đi (Vì mặt trước của rig là trục -Z nên cộng Math.PI)
+                    av.rotation.y = Math.atan2(dx, dz) + Math.PI;
+
+                    // Đánh chân bước đi tự nhiên
+                    d.walkCycle += delta * 12;
+                    d.leftLeg.rotation.x = Math.sin(d.walkCycle) * 0.45;
+                    d.rightLeg.rotation.x = -Math.sin(d.walkCycle) * 0.45;
+                } else {
+                    av.position.copy(d.targetPos);
+                    d.leftLeg.rotation.x = 0;
+                    d.rightLeg.rotation.x = 0;
+                    d.action = 'IDLE';
+                    if (d.desiredFinalPosture === 'SITTING' || d.matIndex >= 0) {
+                        setAvatarPosture(av, 'SITTING');
+                    }
+                }
+            }
+
+            // 2. Trạng thái LẠY PHẬT 3 PHA (BOWING - 절하기)
+            else if (d.action === 'BOWING') {
+                d.actionTimer += delta * 0.85;
+                const p = d.actionTimer;
+                if (p < 0.25) {
+                    const t = p / 0.25;
+                    hands.position.y = 0.42 + Math.sin(t * Math.PI) * 0.25;
+                    pivot.rotation.x = -t * 0.15;
+                } else if (p < 0.75) {
+                    const t = (p - 0.25) / 0.50;
+                    const curve = Math.sin(t * Math.PI);
+                    pivot.rotation.x = -0.15 - curve * 1.12; // Gập sâu về phía trước (-Z)
+                    hands.position.y = 0.42 + curve * 0.18;
+                    hands.position.z = -0.32 - curve * 0.26;
+                } else if (p < 1.0) {
+                    const t = (p - 0.75) / 0.25;
+                    pivot.rotation.x = -0.15 * (1 - t);
+                    hands.position.set(0, 0.42, -0.32);
+                } else {
+                    pivot.rotation.x = 0;
+                    hands.position.set(0, 0.42, -0.32);
+                    d.action = 'IDLE';
+                    d.actionTimer = 0;
+                }
+            }
+
+            // 3. Trạng thái CHẮP TAY CHÀO ĐẠI CHÚNG (GREETING - 합장)
+            else if (d.action === 'GREETING') {
+                d.actionTimer += delta * 1.4;
+                if (d.actionTimer < 1.0) {
+                    const bowAngle = Math.sin(d.actionTimer * Math.PI) * 0.38;
+                    pivot.rotation.x = -bowAngle;
+                    hands.position.y = 0.42 + Math.sin(d.actionTimer * Math.PI) * 0.15;
+                } else {
+                    pivot.rotation.x = 0;
+                    hands.position.set(0, 0.42, -0.32);
+                    d.action = 'IDLE';
+                }
+            }
+
+            // 4. Chiếu tọa độ đỉnh đầu 3D của nhân vật sang tọa độ màn hình 2D cho Nhãn Tên
+            if (d.labelEl) {
+                const headHeight = (d.posture === 'STANDING') ? 2.05 : 1.72;
+                projVec.set(av.position.x, av.position.y + headHeight, av.position.z);
+                projVec.project(camera);
+
+                if (projVec.z > 1.0) {
+                    d.labelEl.style.opacity = '0';
+                } else {
+                    const sx = (projVec.x * 0.5 + 0.5) * window.innerWidth;
+                    const sy = (-(projVec.y * 0.5) + 0.5) * window.innerHeight;
+                    d.labelEl.style.opacity = '1';
+                    d.labelEl.style.left = `${sx}px`;
+                    d.labelEl.style.top = `${sy}px`;
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+            const elapsed = clock.getElapsedTime();
+
+            // Hiệu ứng nhịp thở hào quang Mandala
+            const s = 1 + Math.sin(elapsed * 2.0) * 0.03;
+            outerHalo.scale.set(s, s, 1);
+
+            // Cập nhật chuyển động & nhãn tên của Người chơi, NPC và các Peer WebRTC
+            updateSingleAvatar(playerAvatar, delta);
+            npcAvatars.forEach(item => updateSingleAvatar(item.avatar, delta));
+            Object.values(remotePeersMap).forEach(item => updateSingleAvatar(item.avatar, delta));
+
+            // Cập nhật Camera mượt mà
+            if (isCamLerping) {
+                camera.position.lerp(targetCamPos, 0.08);
+                controls.target.lerp(targetLookAt, 0.08);
+                camera.lookAt(controls.target);
+                if (camera.position.distanceTo(targetCamPos) < 0.06) isCamLerping = false;
+            } else if (camMode === 'FIRST_PERSON') {
+                camera.position.set(playerAvatar.position.x, 1.3, playerAvatar.position.z - 0.15);
+                camera.lookAt(0, 3.8, -7.0);
+            } else {
+                controls.update();
+            }
+
+            // Cập nhật hạt ánh sao dâng lễ
+            for (let i = activeStarSystems.length - 1; i >= 0; i--) {
+                const sys = activeStarSystems[i];
+                sys.age++;
+                const arr = sys.pts.geometry.attributes.position.array;
+                for (let j = 0; j < sys.vels.length; j++) {
+                    arr[j * 3] += sys.vels[j].vx;
+                    arr[j * 3 + 1] += sys.vels[j].vy;
+                    arr[j * 3 + 2] += sys.vels[j].vz;
+                }
+                sys.pts.geometry.attributes.position.needsUpdate = true;
+                sys.pts.material.opacity = Math.max(0, 1 - sys.age / sys.maxAge);
+                if (sys.age >= sys.maxAge) {
+                    scene.remove(sys.pts);
+                    sys.pts.geometry.dispose();
+                    sys.pts.material.dispose();
+                    activeStarSystems.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
